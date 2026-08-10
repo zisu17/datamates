@@ -1,0 +1,62 @@
+version: 2
+
+models:
+  - name: dim_event_types
+    description: 이벤트 유형 차원. 유형별 분류·과금 여부.
+    columns:
+      - name: event_type
+        data_tests:
+          - not_null
+          - unique
+      - name: event_category
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["commerce", "engagement", "lifecycle"]
+      - name: is_billable
+        data_tests:
+          - not_null
+
+  - name: fct_events
+    description: |
+      event_id 단위 이벤트 팩트. Iceberg incremental merge 로 갱신된다.
+      같은 event_id 의 정정 배치가 도착하면 기존 행이 update 된다.
+    columns:
+      - name: event_id
+        description: 이벤트 식별자. 이 모델의 그레인이다.
+        data_tests:
+          - not_null
+          - unique
+
+      - name: event_date
+        data_tests:
+          - not_null
+
+      - name: event_type
+        data_tests:
+          - not_null
+          # 참조 무결성 — 디멘전에 없는 유형이 팩트에 들어오면 실패한다.
+          - relationships:
+              arguments:
+                to: ref('dim_event_types')
+                field: event_type
+
+      - name: amount
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: -1000
+                max_value: 10000
+
+      - name: batch_id
+        data_tests:
+          - not_null
+
+      - name: event_category
+        description: 디멘전 조인 결과. 매칭 실패 시 null 이 되므로 조인 유실 감시용으로 warn 을 건다.
+        data_tests:
+          - not_null:
+              config:
+                severity: warn

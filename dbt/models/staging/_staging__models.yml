@@ -1,0 +1,86 @@
+version: 2
+
+models:
+  - name: stg_events
+    description: |-
+      정규화된 이벤트. 그레인은 (event_id, batch_id).
+      정정 배치가 들어오면 같은 event_id 가 여러 행으로 존재하는 것이 정상이다. 
+    data_tests:
+      # 모델 단위 제네릭 테스트 — 그레인 보증
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - event_id
+              - batch_id
+      # where 로 검사 대상을 좁히는 예시. 환불은 음수 금액이 정상이므로 제외한다.
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "amount >= 0"
+          config:
+            where: "event_type <> 'refund'"
+
+    columns:
+      - name: event_id
+        description: 이벤트 식별자.
+        data_tests:
+          - not_null
+
+      - name: event_ts
+        description: 이벤트 발생 시각.
+        data_tests:
+          - not_null
+
+      - name: event_date
+        description: 이벤트 발생 일자.
+        data_tests:
+          - not_null
+          # 커스텀 제네릭 테스트 (tests/generic/not_in_future.sql)
+          - not_in_future:
+              arguments:
+                tolerance_days: "{{ var('event_date_tolerance_days') }}"
+
+      - name: event_type
+        description: 소문자로 정규화된 이벤트 유형.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["purchase", "refund", "page_view", "signup", "login"]
+
+      - name: user_id
+        description: |
+          사용자 식별자. 익명 이벤트(page_view 등)는 null 이 될 수 있어 error 가 아닌 warn 으로 둔다.
+          실패 행은 test_failures 스키마에 테이블로 남겨 사후 조회한다.
+        data_tests:
+          - not_null:
+              config:
+                severity: warn
+                store_failures: true
+
+      - name: amount
+        description: 거래 금액. 환불은 음수.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: -1000
+                max_value: 10000
+
+      - name: batch_id
+        description: 적재 배치 번호.
+        data_tests:
+          - not_null
+
+  - name: stg_event_types
+    description: 정규화된 이벤트 유형 마스터.
+    columns:
+      - name: event_type
+        data_tests:
+          - not_null
+          - unique
+      - name: event_category
+        data_tests:
+          - not_null
+      - name: is_billable
+        data_tests:
+          - not_null

@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="app.css"></head><body><meta charset="utf-8">
+<title>Data Mates — 데이터 플랫폼</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='24' height='24' rx='5' fill='%234356E0' stroke='none'/><g transform='translate(2.4 2.4) scale(0.8)'><path d='M2 20a2.4 2.4 0 0 0 2 1a2.4 2.4 0 0 0 2 -1a2.4 2.4 0 0 1 2 -1a2.4 2.4 0 0 1 2 1a2.4 2.4 0 0 0 2 1a2.4 2.4 0 0 0 2 -1a2.4 2.4 0 0 1 2 -1a2.4 2.4 0 0 1 2 1a2.4 2.4 0 0 0 2 1a2.4 2.4 0 0 0 2 -1'/><path d='M4 18l-1 -5h18l-2 4'/><path d='M5 13v-6h8l4 6'/><path d='M7 7v-4h-1'/></g></svg>">
+
+
+
+<svg style="display:none" aria-hidden="true">
+<symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.6 12 3.4l9 7.2V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"></path><path d="M9.5 21v-6.2h5V21"></path></symbol>
+<symbol id="i-book" viewBox="0 0 24 24"><path d="M4 4.5h6a2 2 0 0 1 2 2V20a2 2 0 0 0-2-1.8H4z"></path><path d="M20 4.5h-6a2 2 0 0 0-2 2V20a2 2 0 0 1 2-1.8h6z"></path></symbol>
+<symbol id="i-model" viewBox="0 0 24 24"><rect x="2.5" y="3" width="7" height="5.5" rx="1.5"></rect><rect x="14.5" y="3" width="7" height="5.5" rx="1.5"></rect><rect x="8.5" y="15.5" width="7" height="5.5" rx="1.5"></rect><path d="M6 8.5v3.5h12V8.5M12 12v3.5"></path></symbol>
+<symbol id="i-pipe" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2.4"></circle><circle cx="19" cy="12" r="2.4"></circle><path d="M7.4 12h9.2"></path><path d="M10.6 8.8 13.8 12l-3.2 3.2"></path></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.2l7.5 2.8v5.6c0 4.5-3.2 7.4-7.5 8.4-4.3-1-7.5-3.9-7.5-8.4V6z"></path><path d="m9 12 2.1 2.1L15.3 10"></path></symbol>
+<symbol id="i-set" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M12 2.6v2.8M12 18.6v2.8M4.9 4.9l2 2M17.1 17.1l2 2M2.6 12h2.8M18.6 12h2.8M4.9 19.1l2-2M17.1 6.9l2-2"></path></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4.3-4.3"></path></symbol>
+<symbol id="i-bell" viewBox="0 0 24 24"><path d="M6.2 9.6a5.8 5.8 0 0 1 11.6 0c0 4.4 1.9 5.4 1.9 5.4H4.3s1.9-1 1.9-5.4"></path><path d="M10.2 18.8a2 2 0 0 0 3.6 0"></path></symbol>
+<symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3.6 2.7 5.5 6 .9-4.35 4.2 1.03 6L12 17.4l-5.38 2.8 1.03-6L3.3 10l6-.9z"></path></symbol>
+<symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 5.5 6.5 6.5L9 18.5"></path></symbol>
+<symbol id="i-chevd" viewBox="0 0 24 24"><path d="m6 9.5 6 6 6-6"></path></symbol>
+<symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 4v16h16"></path><path d="M8 16v-5M12.5 16V7.5M17 16v-3"></path></symbol>
+<symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6"></path><path d="m20 4-8.5 8.5"></path><path d="M18.5 14.5V19a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19V7A1.5 1.5 0 0 1 5 5.5h4.5"></path></symbol>
+<symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"></circle><path d="M9.7 9.4a2.4 2.4 0 0 1 4.6.8c0 1.6-2.3 1.9-2.3 3.3"></path><path d="M12 17.2h.01"></path></symbol>
+<symbol id="i-chevl" viewBox="0 0 24 24"><path d="m15 5.5-6.5 6.5L15 18.5"></path></symbol>
+<symbol id="i-chevll" viewBox="0 0 24 24"><path d="m13 6-6 6 6 6"></path><path d="m19 6-6 6 6 6"></path></symbol>
+<symbol id="i-chevrr" viewBox="0 0 24 24"><path d="m11 6 6 6-6 6"></path><path d="m5 6 6 6-6 6"></path></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="m5 13 4.6 4.6L19 6.8"></path></symbol>
+<symbol id="i-checkc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"></circle><path d="m8.4 12.2 2.4 2.4 4.8-4.8"></path></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"></path></symbol>
+<symbol id="i-xc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"></circle><path d="m9.4 9.4 5.2 5.2M14.6 9.4l-5.2 5.2"></path></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4.4 21 19.6H3z"></path><path d="M12 10v4.2M12 17.1h.01"></path></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"></circle><path d="M12 11.2v5.4M12 7.9h.01"></path></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"></circle><path d="M12 7v5.3l3.4 2"></path></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M7.8 4.8 19 12 7.8 19.2z"></path></symbol>
+<symbol id="i-rot" viewBox="0 0 24 24"><path d="M20.4 12a8.4 8.4 0 1 1-2.9-6.3"></path><path d="M20.4 4v5.2h-5.2"></path></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5.4v13.2M5.4 12h13.2"></path></symbol>
+<symbol id="i-minus" viewBox="0 0 24 24"><path d="M5.4 12h13.2"></path></symbol>
+<symbol id="i-table" viewBox="0 0 24 24"><rect x="3" y="4.4" width="18" height="15.2" rx="2"></rect><path d="M3 10.2h18M9.4 10.2v9.4"></path></symbol>
+<symbol id="i-db" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7.6" ry="2.9"></ellipse><path d="M4.4 6v12c0 1.6 3.4 2.9 7.6 2.9s7.6-1.3 7.6-2.9V6"></path><path d="M4.4 12c0 1.6 3.4 2.9 7.6 2.9s7.6-1.3 7.6-2.9"></path></symbol>
+<symbol id="i-code" viewBox="0 0 24 24"><path d="m9 7.6-4.4 4.4L9 16.4"></path><path d="m15 7.6 4.4 4.4L15 16.4"></path></symbol>
+<symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="2.9"></circle></symbol>
+<symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.2" r="3.6"></circle><path d="M4.6 20.4c0-3.6 3.3-5.9 7.4-5.9s7.4 2.3 7.4 5.9"></path></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><circle cx="9.4" cy="8.4" r="3.3"></circle><path d="M2.6 20c0-3.2 3-5.2 6.8-5.2s6.8 2 6.8 5.2"></path><path d="M17.4 8.9a2.9 2.9 0 0 1 0 5"></path></symbol>
+<symbol id="i-flow" viewBox="0 0 24 24"><rect x="2.6" y="3.4" width="6.6" height="5.4" rx="1.4"></rect><rect x="14.8" y="15.2" width="6.6" height="5.4" rx="1.4"></rect><path d="M9.2 6.1h5.4a1.6 1.6 0 0 1 1.6 1.6v7.5"></path></symbol>
+<symbol id="i-git" viewBox="0 0 24 24"><circle cx="6.5" cy="5.5" r="2.3"></circle><circle cx="6.5" cy="18.5" r="2.3"></circle><circle cx="17.5" cy="9" r="2.3"></circle><path d="M6.5 7.8v8.4M15.4 10.6c-1.4 2.4-4.3 2.2-6.6 3.6"></path></symbol>
+<symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v11.4"></path><path d="m7.4 11 4.6 4.6L16.6 11"></path><path d="M4.4 20h15.2"></path></symbol>
+<symbol id="i-save" viewBox="0 0 24 24"><path d="M4.5 4.5h11l4 4v11h-15z"></path><path d="M8 4.5v5h6v-5M8 19.5v-6h8v6"></path></symbol>
+<symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13.8a4 4 0 0 0 5.7 0l2.6-2.6a4 4 0 0 0-5.7-5.7l-1.3 1.3"></path><path d="M14 10.2a4 4 0 0 0-5.7 0l-2.6 2.6a4 4 0 0 0 5.7 5.7l1.3-1.3"></path></symbol>
+<symbol id="i-filter" viewBox="0 0 24 24"><path d="M3.6 5.4h16.8l-6.6 7.6v5.6l-3.6-1.8v-3.8z"></path></symbol>
+<symbol id="i-cal" viewBox="0 0 24 24"><rect x="3.4" y="5.2" width="17.2" height="15.4" rx="2"></rect><path d="M8 3.4v3.6M16 3.4v3.6M3.4 10.6h17.2"></path></symbol>
+<symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 3.4h8l4 4v13.2H6z"></path><path d="M14 3.4v4h4M9 12h6M9 15.6h6"></path></symbol>
+<symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3.4 13.8 9l5.6 1.8-5.6 1.8L12 18.2l-1.8-5.6L4.6 10.8 10.2 9z"></path></symbol>
+</svg>
+
+<div id="app"></div>
+<div class="toasts" id="toasts"></div>
+
+<script src="js/b00.js"></script>
+
+<script src="js/b01.js"></script>
+
+<script src="js/b02.js"></script>
+
+<script src="js/b03.js"></script>
+
+<script src="js/b04.js"></script>
+
+<script src="js/b05.js"></script>
+
+
+<script src="js/b06.js"></script>
+
+<script src="js/b07.js"></script>
+
+<script src="js/b08.js"></script>
+
+
+<script src="js/b09.js"></script>
+
+<script src="js/b10.js"></script>
+
+<script src="js/b11.js"></script>
+
+
+<script src="js/b12.js"></script>
+
+<script src="js/b13.js"></script>
+
+<script src="js/b14.js"></script>
+
+<script src="js/b15.js"></script>
+
+<script src="js/b16.js"></script>
+
+
+<script src="js/b17.js"></script>
+
+<script src="js/b18.js"></script>
+
+<script src="js/b19.js"></script>
+
+<script src="js/b20.js"></script>
+
+
+<script src="js/b21.js"></script>
+
+<script src="js/b22.js"></script>
+
+<script src="js/b23.js"></script>
+
+<script src="js/b24.js"></script>
+
+<script src="js/b25.js"></script>
+
+
+<script src="js/b26.js"></script>
+
+<script src="js/b27.js"></script>
+
+<script src="js/b28.js"></script>
+
+<script src="js/b29.js"></script>
+
+<script src="js/b30.js"></script>
+
+
+<script src="js/b31.js"></script>
+
+<script src="js/b32.js"></script>
+
+<script src="js/b33.js"></script>
+
+<script src="js/b34.js"></script>
+
+<script src="js/b35.js"></script>
+
+<script src="js/b36.js"></script>
+
+<script src="js/b37.js"></script>
+
+
+<script src="js/b38.js"></script>
+
+<script src="js/b39.js"></script>
+
+<script src="js/b40.js"></script>
+
+
+<script src="js/b41.js"></script>
+
+<script src="js/b42.js"></script>
+
+<script src="js/b43.js"></script>
+
+<script src="js/b44.js"></script>
+
+<script src="js/b45.js"></script>
+
+<script src="js/b46.js"></script>
+
+
+<svg style="display:none" aria-hidden="true">
+<symbol id="i-folder" viewBox="0 0 24 24"><path d="M3.2 6.4a1.6 1.6 0 0 1 1.6-1.6h4l2 2.4h7.4a1.6 1.6 0 0 1 1.6 1.6v8.8a1.6 1.6 0 0 1-1.6 1.6H4.8a1.6 1.6 0 0 1-1.6-1.6z"></path></symbol>
+<symbol id="i-folderp" viewBox="0 0 24 24"><path d="M3.2 6.4a1.6 1.6 0 0 1 1.6-1.6h4l2 2.4h7.4a1.6 1.6 0 0 1 1.6 1.6v8.8a1.6 1.6 0 0 1-1.6 1.6H4.8a1.6 1.6 0 0 1-1.6-1.6z"></path><path d="M12 10.6v5M9.5 13.1h5"></path></symbol>
+<symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></symbol>
+<symbol id="i-dots" viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="1.4" fill="currentColor" stroke="none"></circle><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"></circle><circle cx="18.5" cy="12" r="1.4" fill="currentColor" stroke="none"></circle></symbol>
+</svg>
+
+<script src="js/b47.js"></script>
+
+<script src="js/b48.js"></script>
+
+<script src="js/b49.js"></script>
+<svg style="display:none" aria-hidden="true">
+<symbol id="i-pen" viewBox="0 0 24 24"><path d="M16.4 3.9a1.9 1.9 0 0 1 2.7 2.7L8.6 17.1 4.5 18.3l1.2-4.1z"></path></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 6.6h15M9.5 6.6V4.8h5v1.8M6.6 6.6l.9 12a1.6 1.6 0 0 0 1.6 1.5h5.8a1.6 1.6 0 0 0 1.6-1.5l.9-12"></path></symbol>
+</svg>
+
+<script src="js/b50.js"></script>
+
+<svg style="display:none" aria-hidden="true">
+<symbol id="i-eyeoff" viewBox="0 0 24 24"><path d="M4 4l16 16"></path><path d="M9.7 6.2A9.8 9.8 0 0 1 12 5.9c5.9 0 9.4 6.1 9.4 6.1a17.4 17.4 0 0 1-3.4 3.9"></path><path d="M6.5 8.2A17.2 17.2 0 0 0 2.6 12S6.1 18.1 12 18.1a9.6 9.6 0 0 0 3-.5"></path></symbol>
+<symbol id="i-folderopen" viewBox="0 0 24 24"><path d="M3.2 18.4V6.4a1.6 1.6 0 0 1 1.6-1.6h4l2 2.4h7.4a1.6 1.6 0 0 1 1.6 1.6v1.4"></path><path d="M3.2 18.4l2.4-6.6h16l-2.4 6.6z"></path></symbol>
+<symbol id="i-tbl" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="1.6"></rect><path d="M4 9.6h16M9.4 9.6V19"></path></symbol>
+<symbol id="i-cube" viewBox="0 0 24 24"><path d="M12 3.6l7.4 4.2v8.4L12 20.4 4.6 16.2V7.8z"></path><path d="M4.6 7.8L12 12l7.4-4.2M12 12v8.4"></path></symbol>
+<symbol id="i-move" viewBox="0 0 24 24"><path d="M12 3.6v16.8M3.6 12h16.8M12 3.6L9.4 6.2M12 3.6l2.6 2.6M12 20.4l-2.6-2.6M12 20.4l2.6-2.6M3.6 12l2.6-2.6M3.6 12l2.6 2.6M20.4 12l-2.6-2.6M20.4 12l-2.6 2.6"></path></symbol>
+</svg>
+
+
+<script src="js/b51.js"></script>
+
+<script src="js/b52.js"></script>
+
+
+
+
+<!-- 서버 연결. 이 스크립트가 화면의 예제 데이터를 실제 데이터로 갈아끼운다. -->
+<script src="js/api.js"></script>
+</body></html>

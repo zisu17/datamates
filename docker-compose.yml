@@ -1,0 +1,186 @@
+# 로컬 데이터 플랫폼 — 저장(MinIO) + 카탈로그(Iceberg REST)
+#
+#   docker-compose up -d          # 기동
+#   ./scripts/bootstrap_catalog.sh
+#   docker-compose down           # 종료 (데이터는 볼륨에 남는다)
+#
+# 저장소를 로컬 파일시스템에서 MinIO(S3 호환)로 옮겼다. 그 결과 이전 구성에서 필요했던
+# "컨테이너와 호스트가 동일한 절대경로를 봐야 한다"는 제약이 사라졌다.
+# 테이블 메타데이터에 기록되는 경로가 s3://warehouse/... 이고, 엔드포인트는 클라이언트마다
+# 따로 설정하기 때문이다 (컨테이너 → minio:9000, 호스트 Spark → localhost:9000).
+
+# 프로젝트 이름을 고정한다. 지정하지 않으면 compose 가 «디렉터리 이름» 을 쓰는데,
+# 그러면 저장소 폴더를 옮기거나 이름을 바꾸는 순간 볼륨 접두사가 달라져
+# 웨어하우스(minio-data)와 Airflow 메타DB(airflow-home)가 통째로 새로 만들어진다.
+name: datamates
+
+services:
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # 웹 콘솔
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # 버킷 생성용 1회성 컨테이너. 완료 후 종료된다.
+  minio-init:
+    image: minio/mc:latest
+    container_name: minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin} &&
+      mc mb --ignore-existing local/warehouse &&
+      mc mb --ignore-existing local/landing &&
+      echo '버킷 준비 완료: warehouse(Iceberg 테이블), landing(원천 CSV)'
+      "
+
+  iceberg-rest:
+    image: apache/iceberg-rest-fixture:1.10.1
+    container_name: iceberg-rest
+    depends_on:
+      minio:
+        condition: service_healthy
+    ports:
+      - "8181:8181"
+    environment:
+      CATALOG_WAREHOUSE: s3://warehouse/
+      # HadoopFileIO(로컬 파일) → S3FileIO(오브젝트 스토리지)
+      CATALOG_IO__IMPL: org.apache.iceberg.aws.s3.S3FileIO
+      CATALOG_S3_ENDPOINT: http://minio:9000
+      # MinIO 는 가상호스트 스타일(bucket.host)을 쓰지 않으므로 path-style 이 필요하다.
+      CATALOG_S3_PATH__STYLE__ACCESS: "true"
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      AWS_REGION: us-east-1
+      # 카탈로그 메타데이터(네임스페이스·테이블 포인터)는 sqlite 로 영속화한다.
+      #
+      # busy_timeout 이 없으면 기본값이 0 이라, 잠깐이라도 락이 잡혀 있으면 기다리지 않고
+      # 즉시 SQLITE_BUSY 로 떨어진다. 파이프라인이 모델을 병렬로 돌리면 카탈로그에
+      # 동시 DDL 이 들어와 이 상황이 바로 재현된다(태스크 2개만 겹쳐도 실패).
+      # 30초를 주면 뒤에 온 쪽이 기다렸다가 진행한다.
+      # `file:` 접두사를 붙이면 안 된다. 그러면 ? 뒤가 SQLite URI 파라미터로 넘어가는데
+      # busy_timeout 은 SQLite URI 파라미터가 아니라 JDBC 드라이버(xerial) 쪽 설정이라
+      # 조용히 무시된다. 접두사를 빼야 드라이버가 읽어 PRAGMA busy_timeout 을 걸어 준다.
+      CATALOG_URI: jdbc:sqlite:/catalog/catalog.db?busy_timeout=30000
+      # 커넥션 풀을 1로 묶는다.
+      # SQLite 는 쓰기 writer 가 하나뿐이라 풀을 넓혀도 처리량이 늘지 않는데,
+      # 풀 안의 커넥션들끼리 서로 락을 기다리다 물리는 일은 생긴다
+      # (증상: busy_timeout 주기마다 SQLITE_BUSY 가 반복되고, 재시작하면 잠깐 낫다).
+      # 1이면 카탈로그 요청이 큐로 직렬화돼 그 교착 자체가 없어진다.
+      CATALOG_JDBC_POOL__MAX__SIZE: "1"
+    volumes:
+      # 카탈로그 DB 는 named volume(= VM 내부 ext4)에 둔다. 호스트 디렉터리를 바인드하면
+      # SQLite 파일이 virtiofs 위에 놓이는데, 이 조합은 POSIX 파일 락이 제대로 동작하지 않아
+      # 한번 락이 물리면 풀리지 않는다. 증상은 SQLITE_BUSY(database is locked) 가 계속 나면서
+      # 단독 실행조차 실패하는 것이고, 컨테이너를 재시작하면 잠깐 낫다가 다시 재발한다.
+      # 호스트에서 들여다볼 필요가 있으면:
+      #   docker run --rm -v iceberg-catalog:/c alpine cat /c/catalog.db > catalog.db
+      - iceberg-catalog:/catalog
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8181/v1/config"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # -------------------------------------------------------------------------
+  # Airflow — 오케스트레이션. dbt 는 이미지 안 별도 venv(/opt/dbt-venv)에 있다.
+  #
+  # 컨테이너가 datamates_default 네트워크에 있으므로 MinIO·Iceberg REST 를 **서비스 이름**으로
+  # 부른다. profiles.yml 의 엔드포인트가 env_var 로 파라미터화돼 있어서
+  # 프로필 파일은 손대지 않고 환경변수만 바꿔 끼운다.
+  # -------------------------------------------------------------------------
+  airflow:
+    build:
+      context: ./docker/airflow
+    image: local/airflow-dbt:3.2.2
+    container_name: airflow
+    depends_on:
+      minio:
+        condition: service_healthy
+      iceberg-rest:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      # 메타DB 는 SQLite(기본). 태스크가 순차 실행된다.
+      # 병렬이 필요해지면 Postgres 서비스를 추가하고 executor 를 바꾼다.
+      # Admin→Config 화면. 기본값 False 면 /api/v2/config 가 403 으로 막힌다.
+      # non-sensitive-only 는 민감값(비밀번호·키)을 가리고 나머지만 노출한다.
+      AIRFLOW__API__EXPOSE_CONFIG: "non-sensitive-only"
+
+      # Data Mates API 가 파이프라인을 저장할 때마다 dags/ 에 DAG 파일을 새로 쓴다.
+      # Airflow 3 기본값 300초로는 «저장했는데 실행이 안 된다»가 5분간 이어진다.
+      # 여기서는 DAG 수가 적으니 15초로 줄여 저장 직후 바로 돌 수 있게 한다.
+      AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL: "15"
+
+      # --- dbt 가 컨테이너 안에서 볼 엔드포인트 ---
+      # 호스트에서는 localhost:8181 / localhost:9000 이지만 여기서는 서비스 이름이다.
+      ICEBERG_REST_URI: http://iceberg-rest:8181
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+
+      # dbt 프로젝트는 마운트한 저장소의 dbt/ 안에 있다.
+      # DBT_PROJECT_DIR 이 있으면 어느 워킹디렉터리에서 dbt 를 불러도 찾는다.
+      DBT_PROJECT_DIR: /opt/project/dbt
+      DBT_PROFILES_DIR: /opt/project/dbt/profiles
+      DBT_SCHEMA: analytics
+      DBT_TARGET: local
+      # 프로젝트를 읽기전용으로 마운트하므로 산출물은 컨테이너 쪽에 쓴다.
+      # 호스트에서 돌린 dbt 의 target/ 과 섞이지 않는 효과도 있다.
+      DBT_TARGET_PATH: /opt/airflow/dbt/target
+      DBT_LOG_PATH: /opt/airflow/dbt/logs
+      # 익명 사용 통계를 끄면 dbt 가 profiles 디렉터리에 .user.yml 을 쓰지 않는다.
+      # (읽기전용 마운트라 쓰기를 시도하면 안 된다)
+      DO_NOT_TRACK: "1"
+      JAVA_HOME: /opt/java-home
+      # profiles.yml 의 spark.eventLog.dir 기본값은 호스트 경로라 컨테이너에 없다.
+      # 없는 디렉터리를 가리키면 SparkContext 초기화 자체가 실패한다.
+      DBT_SPARK_EVENTLOG: /opt/spark-events
+    volumes:
+      - ./dags:/opt/airflow/dags
+      # 프로젝트는 읽기전용. 컨테이너가 호스트 파일을 건드리지 못하게 한다.
+      # 호스트의 .venv(macOS 바이너리)도 딸려오지만 쓰지 않는다.
+      - ./:/opt/project:ro
+      - airflow-home:/opt/airflow
+      # Iceberg jar 를 매 태스크마다 Maven 에서 새로 받지 않도록 캐시를 유지한다.
+      #
+      # 경로에 붙은 2.5.2 를 빼면 안 된다. Spark 4.0 이 번들한 Ivy 는 캐시 디렉터리를
+      # ~/.ivy2 가 아니라 ~/.ivy2.<ivy버전> 에 만든다(버전 간 캐시 오염을 막으려는 변경).
+      # ~/.ivy2 에 걸어두면 볼륨은 빈 채로 남고 태스크마다 210MB 를 다시 받는다 —
+      # 그 상태에서 태스크가 동시에 뜨면 다운로드가 경합해 실패하기까지 한다.
+      # Spark 를 올릴 때 컨테이너에서 `ls -d /home/airflow/.ivy*` 로 실제 경로를 확인할 것.
+      - ivy-cache:/home/airflow/.ivy2.5.2
+      # Airflow 가 돌린 Spark 잡도 History Server 로 볼 수 있게 남긴다.
+      - spark-events:/opt/spark-events
+      # dbt 실행 산출물(run_results.json)을 호스트에서 읽기 위한 통로.
+      # Data Mates API 가 모델별 상태·소요·행수를 여기서 읽는다. Airflow 의 태스크 상태만으로는
+      # "몇 건 처리했는지"를 알 수 없어서 dbt 쪽 산출물이 따로 필요하다.
+      - ./.datamates/runs:/opt/datamates/runs
+    command: standalone
+
+volumes:
+  minio-data:
+  airflow-home:
+  ivy-cache:
+  spark-events:
+  # 외부에서 만들어 기존 catalog.db 를 복사해 넣었다. compose 가 새로 만들지 않도록 external 로 둔다.
+  #   docker volume create iceberg-catalog
+  #   docker run --rm -v iceberg-catalog:/dst -v "$PWD/.iceberg-rest:/src:ro" alpine cp /src/catalog.db /dst/
+  iceberg-catalog:
+    external: true

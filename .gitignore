@@ -1,0 +1,35 @@
+.venv/
+target/
+dbt_packages/
+logs/
+
+# 로컬 Spark(session) 실행 부산물
+.spark-warehouse/
+metastore_db/
+derby.log
+spark-warehouse/
+
+# 로컬 Iceberg REST 카탈로그의 sqlite 메타데이터
+.iceberg-rest/
+
+# Spark 이벤트 로그 (History Server 용)
+.spark-events/
+
+# edr 리포트 산출물
+edr_target/
+
+# 런타임 상태 — 메타스토어(SQLite)와 dbt 실행 산출물. 로컬 상태라 공유하면 서로 덮어쓴다
+.datamates/
+
+# 생성물. API 서버가 기동할 때 메타스토어를 보고 다시 만든다 (손으로 만든 dbt_smoke.py 는 남는다)
+dags/datamates_*.py
+
+# IDE
+.idea/
+
+# 파이썬 바이트코드
+__pycache__/
+*.pyc
+
+.user.yml
+.DS_Store

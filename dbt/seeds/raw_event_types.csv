@@ -1,0 +1,6 @@
+event_type,event_category,is_billable
+purchase,commerce,true
+refund,commerce,true
+page_view,engagement,false
+signup,lifecycle,false
+login,lifecycle,false

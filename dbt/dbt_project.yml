@@ -1,0 +1,58 @@
+name: analytics
+version: "1.0.0"
+config-version: 2
+
+profile: analytics
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+
+clean-targets:
+  - target
+  - dbt_packages
+  - logs
+
+# elementary 매크로를 디스패치할 때 우리 프로젝트를 먼저 뒤지게 한다.
+# macros/spark__edr_make_temp_relation.sql 로 elementary 기본 구현을 교체하기 위함.
+dispatch:
+  - macro_namespace: elementary
+    search_order: ["analytics", "elementary"]
+
+vars:
+  # fct_events 가 취급할 최대 배치. 증분 merge 동작을 단계적으로 재현할 때 덮어쓴다.
+  #   dbt build --vars '{max_batch_id: 1}'
+  max_batch_id: 999
+  # 이벤트 일자가 오늘보다 앞서도 허용할 여유일수 (커스텀 제네릭 테스트 not_in_future).
+  event_date_tolerance_days: 1
+
+models:
+  analytics:
+    +file_format: iceberg
+    +tblproperties:
+      format-version: "2"
+    staging:
+      +materialized: table
+    marts:
+      +materialized: table
+
+  # Elementary 는 실행/테스트 결과를 자체 테이블에 적재한다. edr CLI 가 이걸 읽어 리포트를 만든다.
+  # on-run-start / on-run-end 훅은 elementary 패키지가 스스로 선언하므로 여기서 걸 필요 없다.
+  elementary:
+    +schema: elementary
+    # 기본 카탈로그가 Iceberg SparkCatalog 라 포맷을 명시하지 않으면 테이블 생성이 실패한다.
+    +file_format: iceberg
+
+seeds:
+  analytics:
+    +file_format: iceberg
+    +tblproperties:
+      format-version: "2"
+
+data_tests:
+  analytics:
+    # 실패 행을 테이블로 남기고 싶은 테스트에만 개별적으로 +store_failures: true 를 켠다.
+    # 전역으로 켜면 테스트 수만큼 테이블이 생겨 빌드가 느려진다.
+    +store_failures: false
+    +schema: test_failures

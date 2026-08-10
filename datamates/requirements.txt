@@ -1,0 +1,12 @@
+fastapi==0.121.2
+uvicorn[standard]==0.41.0
+pydantic==2.13.3
+httpx==0.28.1
+# 파일 업로드(데이터 수집)의 multipart 파싱. FastAPI 가 UploadFile 에 요구한다.
+python-multipart==0.0.20
+ruamel.yaml==0.18.16
+
+# 데이터 수집의 적재 엔진. Spark 를 띄우지 않고 Iceberg REST 카탈로그에 직접 쓴다
+# (dbt-spark 경로는 호출마다 JVM 기동에 약 15초가 고정으로 든다).
+pyiceberg==0.11.1
+pyarrow==25.0.0

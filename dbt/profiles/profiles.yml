@@ -1,0 +1,122 @@
+analytics:
+  target: "{{ env_var('DBT_TARGET', 'local') }}"
+
+  outputs:
+    # ------------------------------------------------------------------
+    # local: 로컬 PySpark 세션 + 로컬 Iceberg REST 카탈로그(docker-compose up -d).
+    #        원격과 같은 REST 카탈로그 구성이라 동작 차이가 없다.
+    #
+    # REST 카탈로그를 쓰는 이유: 파일 기반 hadoop 카탈로그는 뷰를 지원하지 않아
+    # ("Replacing a view is not supported by catalog") elementary 같이 뷰 모델을 쓰는
+    # 패키지가 통째로 깨진다. REST 카탈로그는 Iceberg 뷰 스펙을 지원한다.
+    # ------------------------------------------------------------------
+    local: &local_conn
+      type: spark
+      method: session
+      host: localhost
+      schema: "{{ env_var('DBT_SCHEMA', 'analytics') }}"
+      server_side_parameters:
+        spark.master: "local[2]"
+        spark.sql.shuffle.partitions: "4"
+        # Spark UI. method: session 이라 Spark 가 dbt 프로세스 안에서 돌고,
+        # dbt 명령이 끝나면 JVM 과 함께 UI 도 사라진다(실행 중에만 localhost:4040).
+        spark.ui.enabled: "{{ env_var('SPARK_UI', 'true') }}"
+        spark.ui.port: "4040"
+        # 이벤트 로그를 파일로 남겨 History Server(18080)로 사후 조회한다.
+        # 기본은 꺼둔다 — 지정한 디렉터리가 없으면 SparkContext 초기화 자체가 실패하므로,
+        # env.sh 가 경로를 만들고 SPARK_EVENTLOG_ENABLED=true 로 켜줄 때만 동작한다.
+        spark.eventLog.enabled: "{{ env_var('SPARK_EVENTLOG_ENABLED', 'false') }}"
+        spark.eventLog.dir: "file:{{ env_var('DBT_SPARK_EVENTLOG', '/tmp/spark-events') }}"
+        # Spark 4.0 은 Scala 2.13 이라 아티팩트 접미사가 _2.13 이다.
+        # Spark 4.0 용 Iceberg 런타임은 1.10.0 부터 배포된다 (1.9.x 에는 없다).
+        # iceberg-aws-bundle 이 S3FileIO 와 AWS SDK v2 를 담고 있다.
+        # hadoop-aws(s3a) 는 필요 없다 — Iceberg 가 자체 S3FileIO 로 읽고 쓴다.
+        spark.jars.packages: "org.apache.iceberg:iceberg-spark-runtime-4.0_2.13:1.10.1,org.apache.iceberg:iceberg-aws-bundle:1.10.1"
+        spark.sql.extensions: "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"
+        spark.sql.catalog.rest_local: "org.apache.iceberg.spark.SparkCatalog"
+        spark.sql.catalog.rest_local.type: "rest"
+        spark.sql.catalog.rest_local.uri: "{{ env_var('ICEBERG_REST_URI', 'http://localhost:8181') }}"
+        spark.sql.catalog.rest_local.warehouse: "s3://warehouse/"
+        # 저장소는 MinIO. 컨테이너는 minio:9000, 호스트 Spark 는 localhost:9000 으로
+        # 같은 s3://warehouse/... 경로를 각자 해석한다.
+        spark.sql.catalog.rest_local.io-impl: "org.apache.iceberg.aws.s3.S3FileIO"
+        spark.sql.catalog.rest_local.s3.endpoint: "{{ env_var('MINIO_ENDPOINT', 'http://localhost:9000') }}"
+        spark.sql.catalog.rest_local.s3.path-style-access: "true"
+        spark.sql.catalog.rest_local.s3.access-key-id: "{{ env_var('MINIO_ROOT_USER', 'minioadmin') }}"
+        spark.sql.catalog.rest_local.s3.secret-access-key: "{{ env_var('MINIO_ROOT_PASSWORD', 'minioadmin') }}"
+        spark.sql.catalog.rest_local.client.region: "us-east-1"
+        spark.sql.defaultCatalog: "rest_local"
+
+    # ------------------------------------------------------------------
+    # local_heavy: local 과 같은 카탈로그·저장소를 쓰지만 Spark 에 자원을 더 준다.
+    # 무거운 모델만 골라 이 타깃으로 돌린다:
+    #   dbt run --select fct_events --target local_heavy
+    # 기본 드라이버 힙은 512m 다. 데이터가 커지면 여기서 먼저 막힌다.
+    # ------------------------------------------------------------------
+    local_heavy:
+      <<: *local_conn
+      server_side_parameters:
+        spark.master: "local[*]"
+        spark.driver.memory: "{{ env_var('SPARK_DRIVER_MEMORY', '4g') }}"
+        spark.sql.shuffle.partitions: "16"
+        spark.ui.enabled: "{{ env_var('SPARK_UI', 'true') }}"
+        spark.ui.port: "4040"
+        spark.eventLog.enabled: "{{ env_var('SPARK_EVENTLOG_ENABLED', 'false') }}"
+        spark.eventLog.dir: "file:{{ env_var('DBT_SPARK_EVENTLOG', '/tmp/spark-events') }}"
+        spark.jars.packages: "org.apache.iceberg:iceberg-spark-runtime-4.0_2.13:1.10.1,org.apache.iceberg:iceberg-aws-bundle:1.10.1"
+        spark.sql.extensions: "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"
+        spark.sql.catalog.rest_local: "org.apache.iceberg.spark.SparkCatalog"
+        spark.sql.catalog.rest_local.type: "rest"
+        spark.sql.catalog.rest_local.uri: "{{ env_var('ICEBERG_REST_URI', 'http://localhost:8181') }}"
+        spark.sql.catalog.rest_local.warehouse: "s3://warehouse/"
+        spark.sql.catalog.rest_local.io-impl: "org.apache.iceberg.aws.s3.S3FileIO"
+        spark.sql.catalog.rest_local.s3.endpoint: "{{ env_var('MINIO_ENDPOINT', 'http://localhost:9000') }}"
+        spark.sql.catalog.rest_local.s3.path-style-access: "true"
+        spark.sql.catalog.rest_local.s3.access-key-id: "{{ env_var('MINIO_ROOT_USER', 'minioadmin') }}"
+        spark.sql.catalog.rest_local.s3.secret-access-key: "{{ env_var('MINIO_ROOT_PASSWORD', 'minioadmin') }}"
+        spark.sql.catalog.rest_local.client.region: "us-east-1"
+        spark.sql.defaultCatalog: "rest_local"
+
+    # ------------------------------------------------------------------
+    # remote: 사내 Spark 클러스터. Spark Thrift Server 를 경유한다.
+    #
+    # 주의 — 기존 ~/Documents/dbt 프로필의 `method: livy` 는 Python dbt Core 의
+    # dbt-spark 어댑터가 지원하지 않는다. 지원 메서드는 thrift / http / odbc / session
+    # 네 가지뿐이다. Livy 를 반드시 써야 하면 dbt Fusion CLI 로 가야 한다.
+    # ------------------------------------------------------------------
+    remote: &remote_conn
+      type: spark
+      method: thrift
+      host: "{{ env_var('SPARK_THRIFT_HOST', 'localhost') }}"
+      port: "{{ env_var('SPARK_THRIFT_PORT', '10000') | int }}"
+      user: "{{ env_var('SPARK_USER', '') }}"
+      auth: "{{ env_var('SPARK_AUTH', 'NOSASL') }}"
+      schema: "{{ env_var('DBT_SCHEMA', 'analytics') }}"
+      connect_timeout: "{{ env_var('DBT_CONNECT_TIMEOUT', '30') | int }}"
+      connect_retries: "{{ env_var('DBT_CONNECT_RETRIES', '3') | int }}"
+      server_side_parameters:
+        # 클러스터의 spark-defaults.conf 가 이미 rest_prod 를 정의하고 있다면
+        # defaultCatalog 한 줄만 남기고 나머지는 지워도 된다.
+        spark.sql.extensions: "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"
+        spark.sql.catalog.rest_prod: "org.apache.iceberg.spark.SparkCatalog"
+        spark.sql.catalog.rest_prod.type: "rest"
+        spark.sql.catalog.rest_prod.uri: "{{ env_var('ICEBERG_REST_URI', 'http://your-iceberg-rest-catalog:8181') }}"
+        spark.sql.catalog.rest_prod.warehouse: "{{ env_var('ICEBERG_WAREHOUSE', 'hdfs:///warehouse/iceberg') }}"
+        spark.sql.defaultCatalog: "{{ env_var('ICEBERG_CATALOG', 'rest_prod') }}"
+
+# ---------------------------------------------------------------------------
+# edr CLI 전용 프로필. 이름이 반드시 `elementary` 여야 edr 이 찾는다.
+# 접속 정보는 위와 동일하고 스키마만 elementary 적재 스키마로 바꾼다
+# (dbt 쪽 target.schema + '_elementary' 와 일치해야 한다).
+# ---------------------------------------------------------------------------
+elementary:
+  target: "{{ env_var('DBT_TARGET', 'local') }}"
+
+  outputs:
+    local:
+      <<: *local_conn
+      schema: "{{ env_var('DBT_SCHEMA', 'analytics') }}_elementary"
+
+    remote:
+      <<: *remote_conn
+      schema: "{{ env_var('DBT_SCHEMA', 'analytics') }}_elementary"
