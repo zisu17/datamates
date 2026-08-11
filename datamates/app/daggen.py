@@ -75,6 +75,9 @@ def _bash(select: str, env_target: str) -> str:
 
     `dbt build` 는 run 과 test 를 DAG 순서로 함께 돌리고, 테스트가 실패하면
     하류를 SKIP 한다 — 오염된 데이터가 번지지 않게 하는 기본기다.
+    간접 선택은 buildable 이어야 한다. 기본 eager 를 쓰면 상류 모델 하나만
+    실행해도 아직 만들어지지 않은 하류 모델을 함께 참조하는 singular test 가
+    선택되어, 빈 웨어하우스의 첫 스테이지 실행이 하류 테이블 부재로 실패한다.
     --target-path 를 실행마다 갈라 두어야 run_results.json 이 서로 덮어쓰지 않는다.
     """
     out_dir = f"{CONTAINER_RUNS_DIR}/{{{{ run_id {_SANITIZE} }}}}/{select.replace('+', '')}"
@@ -83,7 +86,7 @@ def _bash(select: str, env_target: str) -> str:
         f"mkdir -p '{out_dir}' && "
         f"cd {CONTAINER_DBT_DIR} && "
         f"DBT_TARGET={env_target} "
-        f"{CONTAINER_DBT_BIN} build --select {select} "
+        f"{CONTAINER_DBT_BIN} build --indirect-selection buildable --select {select} "
         f"--target-path '{out_dir}'"
     )
 
@@ -192,7 +195,10 @@ def data_event_watch(flow: dict[str, Any]) -> list[str]:
     watch = list(flow.get("inputs") or [])
     for nd in flow.get("nodes") or []:
         rtype = nd.get("dbt_type")
-        if nd["id"] in watch:
+        # 이 파이프라인이 직접 적재하는 seed 를 구독하면, 태스크의 outlet 이벤트가
+        # 같은 DAG 을 다시 깨우는 자기 재실행 고리가 생긴다. 읽기 전용 입력만
+        # 감시하고 실행 노드는 제외한다.
+        if nd["id"] in watch or nd.get("executable"):
             continue
         if rtype in _EVENT_KINDS or (rtype == "source" and nd["id"] in ingested):
             watch.append(nd["id"])

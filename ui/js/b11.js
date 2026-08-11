@@ -34,6 +34,12 @@ pageHome = function () {
   const okPipes = PIPES.filter(x => x.status === 'ok').length;
   const warnTests = TESTS.filter(t => t.status === 'warn').length;
   const passTests = TESTS.filter(t => t.status === 'ok').length;
+  const issueTest = failTests[0] || TESTS.find(t => t.status === 'warn');
+  const qualitySummary = failTests.length
+    ? '실패 · ' + ((byId(issueTest.target) || {}).name || issueTest.target || '')
+    : warnTests
+      ? '주의 · ' + ((byId(issueTest.target) || {}).name || issueTest.target || '')
+      : '모든 규칙 통과';
   const card = (title, sub, onclick) => {
     const c = el(`<section class="card" style="${onclick ? 'cursor:pointer' : ''}">
       <div class="card-h"><span class="card-t">${esc(title)}</span>
@@ -94,7 +100,7 @@ pageHome = function () {
         <span class="t12 f1">주의</span><span class="b6 t13">${warnTests}건</span></div>
       <div class="statrow"><span style="width:9px;height:9px;border-radius:2px;background:var(--ok)"></span>
         <span class="t12 f1">통과</span><span class="b6 t13">${passTests}건</span></div>
-      <span class="t11 fnt trunc">${failTests.length ? '실패 · ' + esc((byId(failTests[0].target) || {}).name || '') : '모든 규칙 통과'}</span>
+      <span class="t11 fnt trunc">${esc(qualitySummary)}</span>
     </div></div>`));
   grid.appendChild(c2);
 
