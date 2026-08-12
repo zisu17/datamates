@@ -26,6 +26,10 @@ ING_PREFIX = DAG_PREFIX
 # 적재 요청은 오래 걸릴 수 있다(원격 API 응답 + Iceberg 커밋).
 REQUEST_TIMEOUT = 900
 
+# 남은 구간이 있을 때 이어서 다시 부르는 최대 횟수. 무한 반복을 막는 안전장치이자,
+# 백필 한 번이 예약 주기를 통째로 잡아먹지 않게 하는 상한이다.
+MAX_ROUNDS = 40
+
 
 def dag_id_of(job_id: str) -> str:
     return f"{ING_PREFIX}{job_id}"
@@ -60,19 +64,35 @@ DEFAULT_ARGS = {{
 
 
 def ingest(**_):
-    """Data Mates API 에 적재를 시키고 결과를 로그로 남긴다."""
-    r = requests.post({url!r}, timeout={timeout})
-    body = r.text[:2000]
-    if r.status_code >= 400:
-        raise RuntimeError("적재 실패 (HTTP %s): %s" % (r.status_code, body))
+    """Data Mates API 에 적재를 시키고 결과를 로그로 남긴다.
 
-    result = r.json()
-    print("적재 결과:", body)
-    if not result.get("rows"):
+    한 번에 다 돌지 못하는 백필(지역 25곳 × 24개월처럼)은 API 가 돈 데까지만 하고
+    remaining=true 로 알린다. 남았다고 하면 이어서 다시 부른다 — 한 번 실행이
+    끝났는데 절반만 들어와 있는 상태로 «성공» 처리되면, 다음 예약이 돌아올 때까지
+    빠진 구간이 그대로 남는다.
+    """
+    total = calls = 0
+    for round_no in range(1, {max_rounds} + 1):
+        r = requests.post({url!r}, timeout={timeout})
+        body = r.text[:2000]
+        if r.status_code >= 400:
+            raise RuntimeError("적재 실패 (HTTP %s): %s" % (r.status_code, body))
+
+        result = r.json()
+        print("적재 결과 (%s회차):" % round_no, body)
+        total += result.get("rows") or 0
+        calls += result.get("calls") or 0
+        if not result.get("remaining"):
+            break
+    else:
+        print("남은 구간이 있지만 {max_rounds}회에서 멈춥니다. 다음 실행이 이어 갑니다.")
+
+    print("합계: 행 %s · 호출 %s" % (total, calls))
+    if not total:
         # 새로 들어온 행이 없으면 Asset 이벤트를 내지 않는다 —
         # 바뀐 게 없는데 후행 파이프라인을 깨우면 빈 실행만 쌓인다.
         raise AirflowSkipException("새로 들어온 행이 없어 건너뜁니다.")
-    return result
+    return {{"rows": total, "calls": calls}}
 
 
 with DAG(
@@ -121,6 +141,7 @@ def render(job: dict[str, Any]) -> str:
         task_id=task_id_of(job["target"]),
         url=f"{CONTAINER_API_BASE}/ingest/jobs/{jid}/execute",
         timeout=REQUEST_TIMEOUT,
+        max_rounds=MAX_ROUNDS,
         pool=POOL,
         asset_uri=model_asset_uri(job["target"]),
     )
