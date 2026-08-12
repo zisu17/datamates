@@ -170,6 +170,10 @@ services:
       # 프로젝트는 읽기전용. 컨테이너가 호스트 파일을 건드리지 못하게 한다.
       # 호스트의 .venv(macOS 바이너리)도 딸려오지만 쓰지 않는다.
       - ./:/opt/project:ro
+      # dbt 프로젝트는 이 저장소 밖에 있을 수 있다(DBT_PROJECT_DIR). 컨테이너 안의
+      # 같은 자리에 따로 걸어 준다 — 이게 없으면 Airflow 가 돌리는 dbt 가
+      # dbt_project.yml 을 못 찾아 파이프라인 실행만 조용히 실패한다.
+      - ${DBT_PROJECT_DIR:-./dbt}:/opt/project/dbt:ro
       - airflow-home:/opt/airflow
       # Iceberg jar 를 매 태스크마다 Maven 에서 새로 받지 않도록 캐시를 유지한다.
       #

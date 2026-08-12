@@ -6,9 +6,14 @@ dbt 프로젝트 파일이 단일 진실 원천(SSoT)이므로, 이 모듈이 �
 
 경로는 두 뿌리로 갈린다.
   PROJECT_DIR  저장소 루트. 플랫폼이 소유하는 것 — 화면·DAG·메타스토어·venv.
-  DBT_DIR      그 안의 dbt 프로젝트. dbt 가 소유하는 것 — 모델·프로필·산출물.
+  DBT_DIR      dbt 프로젝트. dbt 가 소유하는 것 — 모델·프로필·산출물.
 manifest 가 돌려주는 경로(`models/...`)는 전부 DBT_DIR 기준이고,
 dbt 서브프로세스도 DBT_DIR 에서 돌려야 dbt_project.yml 을 찾는다.
+
+DBT_DIR 은 이 저장소 안이 아니어도 된다. 콘솔은 제품이고 dbt 프로젝트는 그 제품이
+다루는 데이터라, 한 저장소에 묶을 이유가 없다. 경계는 DBT_PROJECT_DIR 환경변수다
+— dbt CLI 가 쓰는 것과 같은 변수라 따로 배울 것이 없다. 지정하지 않으면 관례상
+저장소 안의 dbt/ 를 본다(거기에 두거나 심볼릭 링크를 걸어도 된다).
 """
 
 from __future__ import annotations
@@ -20,7 +25,9 @@ from pathlib import Path
 
 # datamates/app/config.py → datamates/ → 저장소 루트
 PROJECT_DIR = Path(__file__).resolve().parents[2]
-DBT_DIR = PROJECT_DIR / "dbt"
+
+# dbt 프로젝트 위치. 저장소 밖을 가리켜도 된다 (위 머리말 참고).
+DBT_DIR = Path(os.environ.get("DBT_PROJECT_DIR") or (PROJECT_DIR / "dbt")).expanduser().resolve()
 
 MODELS_DIR = DBT_DIR / "models"
 TARGET_DIR = DBT_DIR / "target"
