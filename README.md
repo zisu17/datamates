@@ -1,308 +1,117 @@
 # Data Mates
 
-> dbt 프로젝트를 데이터 수집, 모델·컬럼 계보, 파이프라인 실행, 품질 관리, 분석 화면으로 연결하는 로컬 데이터 플랫폼 콘솔
+> 흩어진 데이터 작업을 하나의 흐름으로 연결하는 설치형 데이터 플랫폼
 
-Data Mates는 dbt 프로젝트를 단일 진실 원천(SSoT)으로 사용하는 설치형 애플리케이션입니다. 모델 SQL, 설명, 컬럼, 의존성, 품질 규칙은 dbt 프로젝트의 Git 저장소에서 계속 관리하고, Data Mates는 dbt 파일과 산출물을 읽어 카탈로그·계보·실행 상태로 보여줍니다.
+Data Mates는 데이터 수집부터 모델링, 계보, 파이프라인, 품질, 분석까지 한곳에서 관리할 수 있는 데이터 워크스페이스입니다.
 
-화면에서 모델이나 품질 규칙을 수정하면 외부 dbt 프로젝트에 다시 기록하고 `dbt parse`로 검증합니다. 실행은 Apache Airflow가, 모델 빌드와 테스트는 dbt·Spark가 담당하며, 결과 테이블은 Apache Iceberg 형식으로 MinIO에 저장합니다. 분석용 모델은 Apache Superset 데이터셋·대시보드로 이어집니다.
+데이터가 어디에서 왔는지, 어떤 과정을 거쳐 만들어졌는지, 지금 정상적으로 실행되고 있는지 확인하기 위해 여러 도구와 파일을 오갈 필요가 없습니다. Data Mates는 기존 데이터 프로젝트를 그대로 유지하면서 그 위에 탐색과 운영을 위한 시각적 인터페이스를 제공합니다.
 
-> 현재 구현은 인증과 멀티 테넌시가 없는 단일 사용자 로컬 환경을 대상으로 합니다.
+![수집부터 분석까지 이어지는 Data Mates 사용자 흐름](docs/images/datamates-demo-light.gif)
 
-![수집부터 모델링, 계보, 파이프라인, 품질, 분석까지 이어지는 Data Mates 사용자 흐름](docs/images/datamates-demo-light.gif)
+## 해결하려는 문제
+
+데이터를 운영하다 보면 간단한 질문에도 여러 도구를 확인해야 합니다.
+
+- 이 데이터는 어디에서 왔고 어떤 모델을 거쳤는가?
+- 컬럼 값은 원본의 어떤 필드에서 계산됐는가?
+- 이 모델을 바꾸면 어떤 데이터와 리포트가 영향을 받는가?
+- 어떤 파이프라인이 실패했고 어디부터 다시 실행해야 하는가?
+- 최근 품질 검사를 통과하지 못한 데이터는 무엇인가?
+- 분석에 사용할 수 있도록 준비된 데이터는 무엇인가?
+
+Data Mates는 이 질문들을 하나의 연결된 맥락 안에서 답할 수 있게 합니다.
+
+## 하나로 이어지는 데이터 흐름
+
+```text
+데이터 수집 → 데이터 모델 → 데이터 계보 → 데이터 마트
+           → 파이프라인 실행 → 품질 확인 → 데이터 분석
+```
+
+각 화면은 독립된 관리 메뉴가 아니라 같은 데이터의 다음 단계입니다. 원천 데이터를 등록하면 모델과 계보에 연결되고, 실행 결과는 품질과 이력에 반영되며, 준비된 데이터 마트는 분석 화면에서 바로 사용할 수 있습니다.
 
 ## 주요 기능
 
-| 영역 | 할 수 있는 일 |
-| --- | --- |
-| 데이터 수집 | HTTP `GET`·`POST` 응답과 CSV·JSON Lines 파일을 미리 보고 `raw` Iceberg 테이블로 적재 |
-| 데이터 카탈로그 | dbt 모델·seed·source 검색, 컬럼과 설명 확인, DuckDB 기반 데이터 미리보기 |
-| 모델 관리 | SQL·설명·컬럼·태그·materialization 수정, 저장 전 SQL 검사와 저장 후 `dbt parse` 검증 |
-| 모델·컬럼 계보 | manifest의 `ref()` 관계와 sqlglot의 SQL AST 분석을 결합해 상하류 모델과 컬럼 변환 추적 |
-| 데이터 마트 | 분석에 제공할 모델을 DATA MART로 지정하고 Superset 데이터셋과 동기화 |
-| 파이프라인 | dbt 의존성을 Airflow 태스크로 변환하고 수동·예약·선행 완료·데이터 이벤트 실행 지원 |
-| 데이터 품질 | dbt 테스트를 규칙으로 관리하고 최근 `run_results.json`, 실패 행, 추이를 함께 조회 |
-| 데이터 분석 | Superset 차트·대시보드 조회, 임베드, 모델 컬럼을 이용한 분석 구성 |
-| 실행 이력 | 파이프라인 실행, 모델별 소요 시간, 실패·테스트 추이와 변경 이력 확인 |
+### 데이터 수집
 
-컬럼을 선택하면 전체 그래프를 흐리게 하고 해당 컬럼이 거쳐 온 경로와 계산식만 강조합니다.
+HTTP API와 CSV·JSON Lines 파일을 미리 확인한 뒤 원천 데이터로 등록합니다. 수동 실행과 예약 실행을 지원하며, 적재가 완료되면 이후 모델링 흐름에서 바로 사용할 수 있습니다.
 
-![fct_events.event_category 컬럼 계보](docs/images/model-lineage.png)
+### 데이터 모델과 카탈로그
 
-## 설계 원칙
+조직의 데이터 모델을 검색하고 설명, 컬럼, 저장 위치, 사용 현황을 확인합니다. SQL과 메타데이터를 화면에서 편집할 수 있으며 변경 내용은 원래 프로젝트 파일에 반영됩니다.
 
-### 콘솔과 dbt 프로젝트를 분리합니다
+### 모델·컬럼 계보
 
-이 저장소에는 Data Mates 제품 코드만 있습니다. 실제 모델을 담은 dbt 프로젝트는 별도 저장소에 두고 `DBT_PROJECT_DIR`로 연결합니다. 콘솔 브랜치를 바꿔도 모델 저장소의 이력이 섞이지 않고, 하나의 콘솔에서 다른 dbt 프로젝트를 가리킬 수 있습니다.
+모델 사이의 상하류 관계뿐 아니라 컬럼 하나가 어떤 원본 컬럼과 변환식을 거쳐 만들어졌는지 추적합니다. 특정 컬럼을 선택하면 관련 경로만 강조해 변경 영향 범위를 빠르게 파악할 수 있습니다.
 
-```bash
-export DBT_PROJECT_DIR=/absolute/path/to/your-dbt-project
-```
+![선택한 컬럼의 상하류 경로를 강조한 데이터 계보](docs/images/model-lineage.png)
 
-지정하지 않으면 호환성을 위해 `<datamates>/dbt`를 찾습니다. 어느 경로를 사용하든 그 안에 `dbt_project.yml`과 `profiles/`가 있어야 합니다.
+### 데이터 마트
 
-### dbt가 모델 정보의 진실 원천입니다
+분석과 리포팅에 제공할 모델을 데이터 마트로 지정합니다. 운영 중인 모델과 실제 분석 자산 사이의 연결을 한곳에서 확인할 수 있습니다.
 
-Data Mates는 카탈로그를 위해 모델 정보를 별도 DB에 복제하지 않습니다.
+### 데이터 파이프라인
 
-| 데이터 | 진실 원천 | Data Mates의 역할 |
-| --- | --- | --- |
-| 모델 SQL·설명·컬럼·태그 | 외부 dbt 프로젝트의 SQL·YAML | 파일 읽기·수정, `dbt parse` |
-| 모델 의존성 | dbt `manifest.json` | `ref()` 관계 조회 |
-| 컬럼 의존성 | 모델 SQL + manifest | sqlglot 기반 정적 분석 |
-| 품질 규칙과 결과 | dbt YAML·SQL 테스트 + `run_results.json` | 규칙 편집, 최근 결과 조합 |
-| 파이프라인·수집·폴더·마트·변경 이력 | `.datamates/datamates.db` | SQLite 저장 |
-| 실행 상태와 스케줄 | Airflow | REST API 조회·제어 |
-| 분석 자산 | Superset | 데이터셋·차트·대시보드 조회와 임베드 |
-| 테이블 데이터 | MinIO의 Iceberg 파일 | dbt·PyIceberg 쓰기, DuckDB 읽기 |
+모델의 실제 의존 관계를 바탕으로 실행 순서를 구성합니다. 수동·예약·선행 파이프라인 완료·데이터 갱신 이벤트 실행을 지원하며, 실패 지점과 하류 작업만 선택해 다시 실행할 수 있습니다.
 
-모델 관계와 실행 관계도 구분합니다.
+### 데이터 품질
 
-```text
-모델 의존성       모델 ↔ 모델             SQL의 ref()로 결정
-파이프라인 의존성 파이프라인 ↔ 파이프라인  성공 후 실행·데이터 이벤트로 결정
-```
+필수값, 중복, 허용값, 참조 무결성, 범위 등 품질 규칙과 최근 검사 결과를 함께 보여줍니다. 실패 데이터가 저장된 규칙은 실제 위반 행까지 확인하고 내보낼 수 있습니다.
 
-모델 순서를 바꾸려면 SQL의 `ref()`를 수정하고, 실행 시점을 바꾸려면 파이프라인 트리거를 수정합니다.
+### 데이터 분석
 
-### 쓰기와 읽기 경로를 분리합니다
+준비된 데이터셋과 대시보드를 탐색하고 Data Mates 안에서 분석 결과를 확인합니다. 모델에서 분석 자산으로 이어지는 사용 관계도 함께 추적합니다.
 
-테이블 생성과 변경은 dbt·Spark 또는 PyIceberg가 담당합니다. 화면의 미리보기와 통계는 매번 Spark JVM을 시작하지 않고 DuckDB가 Iceberg REST 카탈로그와 MinIO를 직접 읽습니다.
+### 실행·변경 이력
 
-### 생성된 DAG는 다시 만들 수 있어야 합니다
+파이프라인 실행 결과, 모델별 소요 시간, 실패와 품질 추이, 모델 변경 이력을 기록합니다. 현재 상태만 보여주는 것이 아니라 언제 무엇이 달라졌는지 확인할 수 있습니다.
 
-파이프라인과 API 수집 작업을 저장하면 `dags/datamates_*.py`가 생성됩니다. 서버 기동 시 SQLite 메타스토어를 기준으로 다시 생성하므로 이 파일은 직접 수정하거나 Git에 저장하지 않습니다.
+## 제품 원칙
 
-## 아키텍처
+### 기존 데이터 프로젝트를 그대로 사용합니다
 
-```mermaid
-flowchart LR
-    User["사용자 / 브라우저"]
+Data Mates를 사용하기 위해 모델을 별도 형식으로 다시 등록할 필요가 없습니다. 기존 프로젝트의 SQL, 설명, 컬럼 정의, 테스트를 읽고 수정하므로 화면과 코드가 서로 다른 정의를 갖지 않습니다.
 
-    subgraph Host["Data Mates 호스트"]
-        App["FastAPI · Vanilla JavaScript UI"]
-        DbtFiles["외부 dbt 프로젝트<br/>SQL · YAML · artifacts"]
-        Meta[("SQLite 메타스토어")]
-        Preview["DuckDB 읽기"]
-        Ingest["PyArrow · PyIceberg 수집"]
-        DAGs["생성된 Airflow DAG"]
-    end
+### 데이터 관계와 실행 관계를 구분합니다
 
-    subgraph Runtime["Docker Compose"]
-        Airflow["Apache Airflow"]
-        Spark["dbt-spark · PySpark"]
-        Catalog["Iceberg REST 카탈로그"]
-        MinIO[("MinIO 오브젝트 스토리지")]
-        Superset["Apache Superset"]
-        SupersetDB[("PostgreSQL · Redis")]
-    end
+데이터가 만들어지는 순서는 모델의 참조 관계에서 결정하고, 작업이 시작되는 시점은 파이프라인 설정에서 관리합니다. 두 관계를 섞지 않아 모델 변경과 운영 스케줄 변경의 책임이 분명합니다.
 
-    User --> App
-    App <--> DbtFiles
-    App <--> Meta
-    App --> DAGs --> Airflow
-    App <--> Airflow
-    Airflow --> Spark --> Catalog --> MinIO
-    App --> Preview --> Catalog
-    Preview --> MinIO
-    App --> Ingest --> Catalog
-    Ingest --> MinIO
-    App <--> Superset --> Catalog
-    Superset --> SupersetDB
-```
+### 알 수 없는 관계를 추측하지 않습니다
 
-Data Mates와 Airflow는 같은 `DBT_PROJECT_DIR`를 봅니다. 호스트 애플리케이션은 파일을 수정하고 manifest를 읽으며, Airflow 컨테이너는 프로젝트를 읽기 전용으로 마운트해 dbt·Spark를 실행합니다. 실행별 `run_results.json`은 `.datamates/runs/`를 통해 다시 호스트에 전달됩니다.
+해석할 수 없는 SQL이나 템플릿은 임의의 계보를 만들지 않고 확인 불가 상태로 표시합니다. 보기 좋은 그래프보다 신뢰할 수 있는 정보를 우선합니다.
 
-현재 Iceberg REST fixture의 카탈로그 메타데이터가 SQLite이므로 모든 Iceberg 쓰기는 Airflow의 `iceberg_write` 풀 한 슬롯을 공유합니다.
+### 생성 정보는 다시 만들 수 있어야 합니다
 
-## 빠른 시작
+실행 정의와 화면용 메타데이터는 원본 프로젝트와 설정에서 다시 생성할 수 있도록 설계합니다. 사람이 직접 관리해야 하는 중복 정보를 최소화합니다.
 
-아래 절차는 macOS와 Colima를 기준으로 합니다. 상세한 새 머신 설치와 문제 해결은 [SETUP.md](SETUP.md)를 참고하세요.
+## 누구를 위한 제품인가
 
-### 1. 저장소와 dbt 프로젝트 준비
+- 모델 정의와 실행 흐름을 함께 관리하는 데이터 엔지니어
+- 컬럼 단위 영향 범위와 품질 결과가 필요한 애널리틱스 엔지니어
+- 분석 가능한 데이터가 어떻게 만들어졌는지 확인하려는 데이터 분석가
+- 여러 데이터 도구의 상태를 하나의 흐름으로 보고 싶은 소규모 데이터 팀
 
-```bash
-git clone https://github.com/zisu17/datamates.git
-cd datamates
+## 현재 범위
 
-export DBT_PROJECT_DIR=/absolute/path/to/your-dbt-project
-```
+Data Mates는 현재 단일 사용자 설치형 환경을 대상으로 개발하고 있습니다.
 
-### 2. 실행 환경 설치
+- 인증, 역할별 권한, 조직별 데이터 격리는 아직 제공하지 않습니다.
+- 수집 단계에서는 원본 보존을 위해 값을 문자열로 저장하며 타입 변환은 모델링 단계에서 수행합니다.
+- 메타데이터 저장소와 실행 환경은 소규모 설치를 전제로 구성되어 있습니다.
+- 운영 환경 확장과 다중 사용자 협업은 향후 범위입니다.
 
-```bash
-brew install python@3.11 openjdk@17 colima docker docker-compose
+## 설치와 개발
 
-python3.11 -m venv .venv
-.venv/bin/pip install --upgrade pip
-.venv/bin/pip install -r requirements.txt -r datamates/requirements.txt
-```
+환경 구성, 실행 방법, 데이터 프로젝트 연결, 문제 해결은 [SETUP.md](SETUP.md)를 참고하세요.
 
-`requirements.txt`는 dbt·Elementary·PySpark 실행 환경을, `datamates/requirements.txt`는 FastAPI·PyIceberg·DuckDB 등 애플리케이션 환경을 고정합니다.
-
-### 3. 로컬 데이터 스택 실행
-
-```bash
-colima start --cpu 6 --memory 8
-docker volume create iceberg-catalog
-
-docker-compose \
-  -f docker-compose.yml \
-  -f docker-compose.superset.yml \
-  up -d --build
-
-./scripts/bootstrap_catalog.sh
-```
-
-`iceberg-catalog`는 `external: true` 볼륨이므로 처음 한 번 직접 만들어야 합니다. Superset 분석 기능이 필요 없으면 기본 파일만 사용해 `docker-compose up -d --build`를 실행할 수 있습니다.
-
-### 4. dbt 프로젝트 초기화
-
-```bash
-source ./env.sh
-dbt deps
-dbt run --select elementary
-dbt build --full-refresh
-```
-
-`dbt run --select elementary`는 Elementary 결과 테이블을 만드는 최초 1회 작업입니다. 첫 dbt 실행에서는 Spark가 Iceberg 런타임 JAR를 내려받으므로 이후 실행보다 오래 걸릴 수 있습니다.
-
-### 5. Data Mates 실행
-
-```bash
-./datamates/run.sh
-```
-
-| 서비스 | 역할 | 주소 |
-| --- | --- | --- |
-| Data Mates | UI와 FastAPI | [http://localhost:8000](http://localhost:8000) |
-| OpenAPI | API 스키마 | [http://localhost:8000/docs](http://localhost:8000/docs) |
-| Airflow | DAG·스케줄·실행 로그 | [http://localhost:8080](http://localhost:8080) |
-| MinIO | Iceberg 오브젝트 스토리지 | [http://localhost:9001](http://localhost:9001) |
-| Superset | 로컬 관리 화면 | [http://localhost:8088](http://localhost:8088) |
-| Iceberg REST | 카탈로그 API | [http://localhost:8181/v1/config](http://localhost:8181/v1/config) |
-
-일반 사용자는 Superset의 `8088` 포트 대신 Data Mates의 분석 화면을 사용합니다. Data Mates가 `/superset/*` 프록시와 임베드 토큰을 처리합니다.
-
-연결 상태는 한 번에 확인할 수 있습니다.
-
-```bash
-curl -s http://localhost:8000/api/v1/health | python3 -m json.tool
-```
-
-정상 상태에서는 manifest 메타데이터가 표시되고 `airflowOk`가 `true`입니다. Airflow의 로컬 admin 비밀번호는 다음 명령으로 확인합니다.
-
-```bash
-docker exec airflow cat /opt/airflow/simple_auth_manager_passwords.json.generated
-```
-
-전체 스택을 종료할 때는 같은 Compose 파일 조합을 사용합니다. Named volume은 유지됩니다.
-
-```bash
-docker-compose \
-  -f docker-compose.yml \
-  -f docker-compose.superset.yml \
-  down
-```
-
-## 주요 API
-
-모든 Data Mates API 경로의 접두사는 `/api/v1`입니다. 정확한 요청·응답 스키마는 실행 중인 OpenAPI 문서를 기준으로 합니다.
-
-| 영역 | 주요 경로 |
-| --- | --- |
-| 상태·부팅 | `GET /health`, `GET /bootstrap`, `POST /reparse` |
-| 수집 | `/ingest/preview`, `/ingest/jobs`, `/ingest/jobs/{id}/runs`, `/ingest/jobs/{id}/upload` |
-| 카탈로그 | `/catalog`, `/catalog/{id}/preview`, `/graph`, `/folders` |
-| 모델 | `/models`, `/models/validate`, `/models/{id}/history`, `/models/{id}/mart` |
-| 계보 | `GET /lineage` |
-| 파이프라인 | `/pipelines`, `/pipelines/{id}/runs`, `/pipelines/flow` |
-| 품질 | `/quality/rules`, `/quality/dashboard`, `/quality/violations` |
-| 분석 | `/analytics/status`, `/analytics/datasets`, `/analytics/assets`, `/analytics/dashboards/{id}/embed` |
-| 이력 | `/history/runs`, `/history/models`, `/history/tests`, `/history/failures` |
-
-dbt 파일을 IDE나 Git 작업으로 직접 변경한 뒤에는 `POST /api/v1/reparse`를 호출하면 manifest 캐시와 화면 상태를 갱신할 수 있습니다.
-
-## 기술 스택
-
-| 영역 | 기술 |
-| --- | --- |
-| Frontend | HTML, CSS, Vanilla JavaScript, Superset Embedded SDK |
-| Backend | Python 3.11, FastAPI, Uvicorn, Pydantic |
-| Modeling | dbt-core, dbt-spark, dbt-utils, Elementary |
-| Processing | PySpark 4.0, Java 17 |
-| Orchestration | Apache Airflow 3.2 |
-| Storage | Apache Iceberg REST, MinIO |
-| Ingestion | PyArrow, PyIceberg |
-| Preview·Lineage | DuckDB, sqlglot |
-| Analytics | Apache Superset 5, PostgreSQL, Redis |
-| Metadata | SQLite |
-| Infrastructure | Colima, Docker Compose |
-
-정확한 버전은 `requirements.txt`, `datamates/requirements.txt`, `docker/`와 Compose 파일에서 고정합니다.
-
-## 프로젝트 구조
+주요 디렉터리의 역할은 다음과 같습니다.
 
 ```text
-datamates/
-├── datamates/app/          # FastAPI와 dbt·Airflow·Iceberg 연동
-│   ├── analytics/          # Superset API·프록시·질의·동기화
-│   ├── routers/            # 수집·모델·파이프라인·품질·분석 API
-│   ├── daggen.py           # 파이프라인 Airflow DAG 생성
-│   ├── ingestdag.py        # API 수집 Airflow DAG 생성
-│   ├── collineage.py       # sqlglot 기반 컬럼 계보 분석
-│   ├── warehouse.py        # DuckDB 기반 Iceberg 읽기
-│   └── store.py            # Data Mates SQLite 메타스토어
-├── ui/                     # 빌드 없는 HTML·CSS·Vanilla JavaScript UI
-├── dags/                   # 수동 DAG와 자동 생성 DAG
-├── docker/airflow/         # Java 17·dbt venv를 포함한 Airflow 이미지
-├── docker/superset/        # DuckDB·Iceberg 연결을 포함한 Superset 이미지
-├── scripts/                # Iceberg 네임스페이스 부트스트랩
-├── docs/images/            # README 이미지
-├── docker-compose.yml      # MinIO, Iceberg REST, Airflow
-├── docker-compose.superset.yml
-├── env.sh                  # 호스트 dbt·Spark 환경 설정
-└── README.md
+datamates/app/   제품 API와 서비스 연동
+ui/              웹 인터페이스
+dags/            실행 워크플로
+docker/          실행 환경 이미지
+scripts/         설치·운영 보조 스크립트
 ```
 
-외부 dbt 프로젝트와 실행 중 생성되는 상태는 Git이 관리하지 않습니다.
-
-```text
-$DBT_PROJECT_DIR/          # 별도 Git 저장소의 dbt 모델과 산출물
-.datamates/datamates.db   # 파이프라인·수집·폴더·마트·변경 이력
-.datamates/runs/          # Airflow가 실행한 dbt run_results
-dags/datamates_*.py       # 메타스토어에서 재생성되는 DAG
-```
-
-## 주요 환경 변수
-
-| 변수 | 기본값 | 역할 |
-| --- | --- | --- |
-| `DBT_PROJECT_DIR` | `<repo>/dbt` | Data Mates와 Airflow가 공유할 외부 dbt 프로젝트 |
-| `DBT_TARGET` | `local` | `local`, `local_heavy`, `remote` dbt 출력 선택 |
-| `DBT_SCHEMA` | `analytics` | dbt 대상 스키마 |
-| `DATUM_PORT` | `8000` | FastAPI와 UI 포트 |
-| `AIRFLOW_BASE_URL` | `http://localhost:8080` | FastAPI가 호출하는 Airflow 주소 |
-| `AIRFLOW_USER` | `admin` | Airflow Simple Auth 사용자 |
-| `AIRFLOW_PASSWORD` | 자동 탐색 | 지정하면 컨테이너가 생성한 비밀번호보다 우선 |
-| `ICEBERG_REST_URI` | `http://localhost:8181` | 호스트의 Iceberg REST 주소 |
-| `MINIO_ENDPOINT` | `http://localhost:9000` | 호스트의 MinIO S3 API 주소 |
-| `MINIO_ROOT_USER` | `minioadmin` | 로컬 MinIO 접근 키 |
-| `MINIO_ROOT_PASSWORD` | `minioadmin` | 로컬 MinIO 비밀 키 |
-| `SUPERSET_BASE_URL` | `http://localhost:8088` | Data Mates가 프록시할 Superset 주소 |
-| `SUPERSET_ADMIN_USER` | `admin` | Superset 로컬 관리자 |
-| `SUPERSET_ADMIN_PASSWORD` | `admin` | Superset 로컬 관리자 비밀번호 |
-| `DATAMATES_DUCKDB_TIMEZONE` | `Asia/Seoul` | 미리보기와 분석 질의의 시간대 |
-| `DATAMATES_CONTAINER_API` | `http://host.docker.internal:8000/api/v1` | 수집 DAG가 호출하는 Data Mates API |
-
-기본 비밀번호와 secret은 로컬 개발용입니다. 외부에 노출되는 환경에서는 반드시 교체해야 합니다.
-
-## 현재 제약
-
-- 인증·권한·조직별 데이터 격리는 아직 구현되어 있지 않습니다.
-- Data Mates 메타스토어와 Airflow 메타데이터, Iceberg REST fixture 카탈로그는 로컬 SQLite 기반입니다.
-- SQLite 카탈로그의 동시 커밋 문제를 피하기 위해 Iceberg 쓰기는 직렬 실행합니다.
-- API 수집은 JSON 응답 안의 객체 배열을, 파일 수집은 CSV·JSON Lines를 지원합니다. 업로드 한도는 32 MiB입니다.
-- 수집 데이터는 원본 보존을 위해 모든 값을 문자열로 적재합니다. 타입 변환은 dbt 모델이 담당합니다.
-- Superset의 `8088` 포트는 로컬 관리·프록시 연결을 위해 `127.0.0.1`에만 노출됩니다.
-- 사람의 조회 이력은 수집하지 않습니다. 사용 현황은 확인 가능한 파이프라인 실행 기록을 사용합니다.
-- `dags/datamates_*.py`는 생성물이므로 직접 수정하지 않습니다.
+Data Mates는 FastAPI 기반 API와 빌드 과정 없는 웹 UI로 구성되며, 기존 데이터 프로젝트와 실행·저장·분석 도구를 연결하는 역할을 합니다.
