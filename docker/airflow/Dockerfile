@@ -17,7 +17,7 @@ RUN apt-get update \
 ENV JAVA_HOME=/opt/java-home
 
 # .ivy2.5.2 를 여기서 미리 만들어 두는 이유:
-# docker-compose 가 이 경로에 named volume 을 건다. 이미지에 디렉터리가 없으면
+# Docker Compose가 이 경로에 named volume을 건다. 이미지에 디렉터리가 없으면
 # Docker 가 root 소유로 만들어 버리고, airflow 사용자가 못 써서 spark-submit 이
 # JAVA_GATEWAY_EXITED 로 죽는다. 경로의 2.5.2 는 Spark 4.0 번들 Ivy 의 버전이다
 # (Ivy 는 캐시를 ~/.ivy2 가 아니라 ~/.ivy2.<버전> 에 만든다).

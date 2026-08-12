@@ -149,11 +149,38 @@ docker volume create iceberg-catalog
 바인드하면 virtiofs 위에서 POSIX 파일 락이 제대로 안 걸려 `SQLITE_BUSY` 가 풀리지 않기 때문이다.
 
 ```bash
+docker-compose pull
 docker-compose up -d
 ```
 
-MinIO, Iceberg REST, Airflow 세 개가 올라온다. Airflow 이미지는 첫 실행 때 빌드된다
-(JDK 17 + dbt venv 설치로 몇 분 걸린다).
+MinIO, Iceberg REST, Airflow, Data Mates 네 개가 올라온다. 이미지는 도커허브에서 받는다 —
+`zisu17/datamates-airflow:3.2.2` 와 그것을 베이스로 만든 `zisu17/datamates-app:1.0.0` 이다.
+compose 에 `build:` 를 두지 않았으므로 `up` 이 빌드를 시작하는 일은 없다.
+
+Airflow 는 health check 를 통과할 때까지 1~2분 걸린다(첫 기동은 메타DB 마이그레이션까지
+한다). Data Mates 는 그 뒤에 뜬다 — 기동할 때 admin 비밀번호 파일을 읽어야 하기 때문이다.
+
+이미지를 직접 다시 만들려면 다음 명령을 쓴다. 앱 이미지가 Airflow 이미지를 베이스로 삼으므로
+순서를 지킨다. 앱 쪽은 `datamates/requirements.txt` 를 읽어야 해서 빌드 컨텍스트가 저장소
+루트이고, 그래서 `-f` 로 Dockerfile 을 지정한다.
+
+```bash
+docker build -t zisu17/datamates-airflow:3.2.2 docker/airflow
+docker build -f docker/datamates/Dockerfile -t zisu17/datamates-app:1.0.0 .
+```
+
+amd64 와 arm64 를 함께 담아 올릴 때는 buildx 를 쓴다. 기본 빌더는 `docker` 드라이버라
+여러 아키텍처를 한 번에 만들거나 `--push` 를 쓸 수 없어서 `docker-container` 드라이버를
+먼저 만든다.
+
+```bash
+docker buildx create --name datamates --driver docker-container --bootstrap --use
+docker buildx build --platform linux/amd64,linux/arm64 -t zisu17/datamates-airflow:3.2.2 --push docker/airflow
+docker buildx build --platform linux/amd64,linux/arm64 -t zisu17/datamates-app:1.0.0 --push -f docker/datamates/Dockerfile .
+```
+
+이 경로는 베이스를 레지스트리에서 가져오므로 Airflow 이미지가 먼저 올라가 있어야 한다.
+Apple Silicon 에서 amd64 는 에뮬레이션으로 만들어지므로 시간이 오래 걸린다.
 
 네임스페이스 부트스트랩:
 
@@ -203,15 +230,22 @@ Done. PASS=75 WARN=1 ERROR=0 SKIP=0 TOTAL=76
 
 ## 6. Data Mates 화면 기동
 
-여기까지는 dbt 와 Airflow 다. 콘솔은 별도 프로세스로 띄운다.
+4단계에서 이미 컨테이너로 떠 있다. http://localhost:8000 이 화면, `/docs` 가 API 다.
+
+화면이나 API 코드를 고치면서 개발할 때는 호스트에서 띄우는 편이 편하다 — `--reload` 가
+붙어서 컨테이너를 다시 만들 필요가 없다. 포트가 겹치므로 컨테이너 쪽을 먼저 멈춘다.
 
 ```bash
+docker-compose stop datamates
 ./datamates/run.sh
 ```
 
-http://localhost:8000 이 화면, `/docs` 가 API 다. `run.sh` 가 `env.sh` 를 먼저 읽는다 —
-이 서버가 `dbt parse` 를 서브프로세스로 부르기 때문에 `DBT_PROFILES_DIR` / `JAVA_HOME` /
-`SPARK_HOME` 이 필요하다.
+`run.sh` 가 `env.sh` 를 먼저 읽는다 — 이 서버가 `dbt parse` 를 서브프로세스로 부르기
+때문에 `DBT_PROFILES_DIR` / `JAVA_HOME` / `SPARK_HOME` 이 필요하다. 컨테이너에서는 그 역할을
+이미지의 `DATAMATES_DBT_BIN`(이미지 안 dbt venv)과 compose 의 환경변수가 대신한다.
+
+두 방식을 번갈아 써도 된다. 생성되는 DAG 은 앱이 기동할 때 자기 기준으로 다시 쓰므로,
+수집 DAG 이 부르는 API 주소(`host.docker.internal` ↔ `datamates`)가 자동으로 맞춰진다.
 
 기동할 때 서버가 두 가지를 스스로 맞춘다. 손으로 할 일은 없다.
 
@@ -223,6 +257,8 @@ http://localhost:8000 이 화면, `/docs` 가 API 다. `run.sh` 가 `env.sh` 를
 
 Airflow 가 아직 안 떠 있으면 풀 생성만 건너뛰고 기동은 계속한다. 그 상태로 파이프라인을
 돌리면 태스크가 큐에서 안 나오니, Airflow 를 올린 뒤 서버를 한 번 다시 띄운다.
+컨테이너로 띄울 때는 이 상황이 없다 — compose 가 Airflow 의 health check 를 기다린 뒤에야
+Data Mates 를 올린다.
 
 ---
 

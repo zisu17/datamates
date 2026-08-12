@@ -1,0 +1,31 @@
+# Docker 빌드 컨텍스트에서 뺄 것.
+#
+# 이 파일이 없으면 컨텍스트가 1.4GB 로 잡혀 buildx 로 통째로 전송된다.
+# 그중 1.1GB 가 .venv(호스트 macOS 바이너리라 리눅스 이미지에서 쓸 수도 없다)이고
+# 200MB 는 .datamates(메타스토어·실행 산출물)다.
+#
+# 이미지가 실제로 필요한 것은 requirements 파일뿐이다. 앱 코드와 dbt 프로젝트는
+# 런타임에 마운트한다 — docker/datamates/Dockerfile 의 설명을 볼 것.
+
+.venv/
+.git/
+.gitignore
+.idea/
+.claude/
+
+# 런타임에 만들어지고 볼륨·마운트로 들어오는 것들.
+.datamates/
+.spark-events/
+.iceberg-rest/
+
+# dbt 프로젝트는 이 저장소의 것이 아니다(config.py 머리말 · DBT_PROJECT_DIR).
+# 여기에 두거나 심볼릭 링크를 걸어 둔 경우에도 이미지에 들어갈 이유는 없다.
+dbt/
+
+# 문서. 이미지에 들어갈 이유가 없다.
+docs/
+*.md
+
+__pycache__/
+*.pyc
+*.pyo

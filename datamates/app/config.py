@@ -34,7 +34,14 @@ TARGET_DIR = DBT_DIR / "target"
 PROFILES_DIR = DBT_DIR / "profiles"
 
 DAGS_DIR = PROJECT_DIR / "dags"
-DBT_BIN = PROJECT_DIR / ".venv" / "bin" / "dbt"
+
+# dbt 실행 파일. 호스트에서는 저장소의 .venv 를 쓴다.
+# 컨테이너에서는 이 값을 이미지 안의 dbt venv(/opt/dbt-venv/bin/dbt)로 갈아 끼운다 —
+# 저장소를 통째로 마운트하므로 .venv 도 같이 들어오지만 그 안은 macOS 바이너리라
+# 리눅스 컨테이너에서 실행되지 않는다. 조용히 «dbt 를 못 찾는다»로 끝나지 않도록
+# 경로 자체를 환경변수로 분기한다.
+DBT_BIN = Path(os.environ.get("DATAMATES_DBT_BIN")
+               or PROJECT_DIR / ".venv" / "bin" / "dbt")
 
 MANIFEST_PATH = TARGET_DIR / "manifest.json"
 RUN_RESULTS_PATH = TARGET_DIR / "run_results.json"
@@ -95,28 +102,39 @@ CONTAINER_PROJECT_DIR = "/opt/project"
 CONTAINER_DBT_DIR = CONTAINER_PROJECT_DIR + "/dbt"
 
 
+# standalone Airflow 가 기동할 때 admin 비밀번호를 적어 두는 파일. Airflow 홈 안이다.
+PASSWORD_FILE = os.environ.get(
+    "AIRFLOW_PASSWORD_FILE",
+    "/opt/airflow/simple_auth_manager_passwords.json.generated")
+
+
 def airflow_password() -> str:
     """standalone Airflow 가 생성한 admin 비밀번호를 읽는다.
 
-    환경변수가 있으면 그쪽이 우선이다. 없으면 컨테이너가 기동할 때 만든
-    simple_auth_manager_passwords.json.generated 를 docker exec 로 읽는다.
-    비밀번호는 컨테이너를 다시 만들면 바뀌므로 파일에 박아두지 않는다.
+    환경변수 → 파일 → docker exec 순으로 찾는다.
+    파일이 중간에 끼는 이유: 컨테이너 안에는 docker CLI 가 없어서 마지막 수단을 쓸 수
+    없다. compose 가 airflow-home 볼륨을 읽기전용으로 걸어 주면 Airflow 가 쓴 파일을
+    그대로 읽으면 된다. 호스트에서 띄웠을 때는 그 경로가 없으니 docker exec 로 내려간다.
+    비밀번호는 컨테이너를 다시 만들면 바뀌므로 어느 경로에서도 파일에 박아두지 않는다.
     """
     env = os.environ.get("AIRFLOW_PASSWORD")
     if env:
         return env
 
+    path = Path(PASSWORD_FILE)
+    if path.exists():
+        return json.loads(path.read_text())[AIRFLOW_USER]
+
     import subprocess
 
     out = subprocess.run(
-        ["docker", "exec", "airflow", "cat",
-         "/opt/airflow/simple_auth_manager_passwords.json.generated"],
+        ["docker", "exec", "airflow", "cat", PASSWORD_FILE],
         capture_output=True, text=True, timeout=15,
     )
     if out.returncode != 0:
         raise RuntimeError(
-            "Airflow 비밀번호를 읽지 못했습니다. AIRFLOW_PASSWORD 를 직접 지정하거나 "
-            "airflow 컨테이너가 떠 있는지 확인하세요."
+            "Airflow 비밀번호를 읽지 못했습니다. AIRFLOW_PASSWORD 를 직접 지정하거나, "
+            f"airflow 컨테이너가 떠서 {PASSWORD_FILE} 을 만들었는지 확인하세요."
         )
     return json.loads(out.stdout)[AIRFLOW_USER]
 
