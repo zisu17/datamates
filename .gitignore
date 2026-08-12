@@ -34,10 +34,11 @@ __pycache__/
 .user.yml
 .DS_Store
 
-# 데모 녹화 도구·산출물. node_modules 에 ffmpeg 43MB 와 Playwright 가 들어 있고,
-# 녹화 결과는 다시 만들 수 있다. 공개용 데모 파일은 docs/images/ 에만 둔다.
-scripts/demo/node_modules/
-scripts/demo/output/
+# 데모 녹화 도구와 산출물은 로컬에만 둔다.
+# 도구 쪽은 소스가 9개뿐이지만 node_modules 에 ffmpeg 43MB 와 Playwright 가 딸려
+# 오고(합쳐 71MB), 녹화 결과는 언제든 다시 만들 수 있다. 공개용 데모 파일은
+# docs/images/ 에만 두고, 원본 mp4·gif 는 docs/assets/ 에 로컬로 남긴다.
+scripts/demo/
 docs/assets/
 
 # 손으로 만든 백업 묶음
