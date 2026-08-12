@@ -167,7 +167,7 @@ docker-compose -f docker-compose.yml -f docker-compose.superset.yml up -d
 [![Docker Image Version](https://img.shields.io/docker/v/zisu17/datamates?style=flat-square&logo=docker&logoColor=white&label=zisu17%2Fdatamates&color=2496ED)](https://hub.docker.com/r/zisu17/datamates)
 [![Docker Image Size](https://img.shields.io/docker/image-size/zisu17/datamates?style=flat-square&logo=docker&logoColor=white&label=size&color=2496ED)](https://hub.docker.com/r/zisu17/datamates)
 
-Data Mates는 **이미지 하나**로 배포됩니다. 애플리케이션, 오케스트레이션, 분석 컨테이너가 같은 이미지를 서로 다른 실행 명령으로 사용합니다. `up` 하면 Docker Hub에서 자동으로 내려받으며 **로컬 빌드 과정은 없습니다.**
+Data Mates는 애플리케이션, Airflow, Superset을 하나의 이미지로 배포합니다. 각 컨테이너는 같은 이미지를 서로 다른 명령으로 실행하며, Docker Compose가 이미지를 자동으로 내려받습니다.
 
 | 계층 | 구성 |
 | --- | --- |
@@ -176,11 +176,7 @@ Data Mates는 **이미지 하나**로 배포됩니다. 애플리케이션, 오�
 | Transformation | dbt Core 1.12.0 · dbt-spark 1.11.0 · PySpark 4.0.4 · Elementary · Java 17 |
 | Analytics | Apache Superset 5.0.0 · duckdb-engine |
 
-네 계층은 이미지 안에서 격리된 가상환경으로 나뉩니다. Airflow는 FastAPI와 pydantic을, Superset은 Flask 계열과 별도 pyarrow·sqlglot을, 애플리케이션은 또 다른 버전을 각자 고정하기 때문에 하나의 환경에 합칠 수 없습니다. 네 계층이 서로를 import하지 않고 프로세스로만 갈라져 있어 분리에 따르는 비용은 없습니다.
-
-이미지를 하나로 두는 실질적인 이유는 버전 정합성입니다. 같은 dbt 프로젝트를 애플리케이션은 파싱하고 Airflow는 실행하므로 dbt 버전이 갈리면 메타데이터가 어긋납니다. DuckDB 역시 미리보기와 차트가 같은 테이블을 읽기 때문에 버전이 다르면 타임존과 소수 정밀도에서 값이 달라집니다. 이미지가 하나면 두 문제가 발생할 수 없습니다.
-
-나머지 서비스(MinIO, Iceberg REST, PostgreSQL, Redis)는 각 프로젝트의 공식 이미지를 그대로 사용합니다. 현재 **linux/arm64** 빌드만 게시되어 있으며, x86 환경에서 사용하거나 이미지를 직접 다시 만들려면 [SETUP.md](docs/SETUP.md)의 빌드 명령을 참고하세요.
+MinIO, Iceberg REST, PostgreSQL, Redis는 공식 이미지를 사용합니다. 현재 Data Mates 이미지는 **linux/arm64**만 지원하며, 직접 빌드하는 방법은 [SETUP.md](docs/SETUP.md)를 참고하세요.
 
 ## 🎯 Current Scope
 
