@@ -30,7 +30,7 @@ Data Mates는 이러한 흐름을 하나의 서비스 안에서 연결하는 것
 
 ## Demo
 
-![Data Mates 사용자 흐름](docs/images/user-flow.gif)
+![Data Mates 사용자 흐름](docs/images/IMG_7171gif)
 
 ## Key Features
 
