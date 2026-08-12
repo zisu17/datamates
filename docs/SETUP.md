@@ -160,30 +160,35 @@ docker-compose up -d
 MinIO, Iceberg REST, Airflow, Data Mates 네 개가 올라온다. 이미지는 도커허브에서 받는다.
 compose 에 `build:` 를 두지 않았으므로 `up` 이 빌드를 시작하는 일은 없다.
 
-| 이미지 | 안에 든 것 |
-| --- | --- |
-| `zisu17/datamates-runtime:1.0.0` | Airflow 3.2.2 · Java 17 · dbt-core 1.12.0 · dbt-spark 1.11.0 · PySpark 4.0.4 · Elementary 0.25.1 |
-| `zisu17/datamates-app:1.0.0` | 위 이미지 + FastAPI 0.121.2 · PyIceberg 0.11.1 · DuckDB 1.5.5 · sqlglot 30.14.0 |
+이미지는 **하나**다 — `zisu17/datamates:1.0.0`. Airflow, Data Mates, Superset 세 서비스가
+같은 이미지를 서로 다른 command 로 돌린다. 받을 것이 하나뿐이고, 세 쪽의 dbt·DuckDB 버전이
+구조적으로 어긋날 수 없다.
 
-이름이 `airflow` 가 아닌 이유 — 저 이미지에는 Airflow 말고도 Java 와 Spark, dbt 가 함께
-들어 있고 앱 이미지도 그것을 베이스로 쓴다. 실행에 필요한 것 전부라는 뜻으로 runtime 이다.
-같은 이유로 태그도 Airflow 버전(3.2.2)이 아니라 스택 버전을 따른다 — 안에 든 버전은
-위 표에서 확인한다.
+| 계층 | 위치 | 안에 든 것 |
+| --- | --- | --- |
+| Airflow | (base) | Airflow 3.2.2 · Java 17 |
+| dbt | `/opt/dbt-venv` | dbt-core 1.12.0 · dbt-spark 1.11.0 · PySpark 4.0.4 · Elementary 0.25.1 |
+| Data Mates | `/opt/datamates-venv` | FastAPI 0.121.2 · PyIceberg 0.11.1 · DuckDB 1.5.5 · sqlglot 30.14.0 |
+| Superset | `/opt/superset-venv` | Superset 5.0.0 · duckdb-engine 0.17.0 · psycopg2 2.9.12 |
 
-이미지가 세 겹의 venv 로 갈려 있는 것에 주의한다. Airflow 본체, dbt(`/opt/dbt-venv`),
-Data Mates(`/opt/datamates-venv`) 다. Airflow 3 이 자기 API 서버를 FastAPI 로 만들어
-fastapi·pydantic 을 고정해 두기 때문에 한 환경에 합칠 수 없다.
+venv 를 네 개로 가르는 것은 타협이 아니라 제약이다. Airflow 3 은 자기 API 서버를 FastAPI 로
+만들어 fastapi·pydantic 을 고정하고, Superset 은 Flask 계열 전체와 **자기 버전의
+pyarrow(14.0.2)·sqlglot(26.33)** 을 고정한다 — 앱이 쓰는 25.0.0 / 30.14.0 과 정면으로
+충돌한다. 한 환경에 합치는 것은 불가능하다. 네 쪽이 서로를 import 하지 않고 프로세스로만
+갈라져 있으므로 잃는 것은 없다.
+
+태그는 개별 도구 버전이 아니라 스택 버전이다. Airflow 는 3.2.2 이고 Superset 은 5.0.0 인데
+이미지가 하나이므로 어느 쪽 버전도 태그가 될 수 없다.
 
 Airflow 는 health check 를 통과할 때까지 1~2분 걸린다(첫 기동은 메타DB 마이그레이션까지
 한다). Data Mates 는 그 뒤에 뜬다 — 기동할 때 admin 비밀번호 파일을 읽어야 하기 때문이다.
 
-이미지를 직접 다시 만들려면 다음 명령을 쓴다. 앱 이미지가 런타임 이미지를 베이스로 삼으므로
-순서를 지킨다. 앱 쪽은 `datamates/requirements.txt` 를 읽어야 해서 빌드 컨텍스트가 저장소
-루트이고, 그래서 `-f` 로 Dockerfile 을 지정한다.
+이미지를 직접 다시 만들려면 다음 명령을 쓴다. 빌드 컨텍스트가 저장소 루트인 이유는
+`datamates/requirements.txt` 와 `docker/superset/requirements-local.txt` 를 읽어야 해서다.
+그래서 `-f` 로 Dockerfile 을 지정한다.
 
 ```bash
-docker build -t zisu17/datamates-runtime:1.0.0 docker/runtime
-docker build -f docker/datamates/Dockerfile -t zisu17/datamates-app:1.0.0 .
+docker build -f docker/datamates/Dockerfile -t zisu17/datamates:1.0.0 .
 ```
 
 amd64 와 arm64 를 함께 담아 올릴 때는 buildx 를 쓴다. 기본 빌더는 `docker` 드라이버라
@@ -192,11 +197,8 @@ amd64 와 arm64 를 함께 담아 올릴 때는 buildx 를 쓴다. 기본 빌더
 
 ```bash
 docker buildx create --name datamates --driver docker-container --bootstrap --use
-docker buildx build --platform linux/amd64,linux/arm64 -t zisu17/datamates-runtime:1.0.0 --push docker/runtime
-docker buildx build --platform linux/amd64,linux/arm64 -t zisu17/datamates-app:1.0.0 --push -f docker/datamates/Dockerfile .
+docker buildx build --platform linux/amd64,linux/arm64 -t zisu17/datamates:1.0.0 --push -f docker/datamates/Dockerfile .
 ```
-
-이 경로는 베이스를 레지스트리에서 가져오므로 런타임 이미지가 먼저 올라가 있어야 한다.
 Apple Silicon 에서 amd64 는 에뮬레이션으로 만들어지므로 시간이 오래 걸린다.
 
 네임스페이스 부트스트랩:

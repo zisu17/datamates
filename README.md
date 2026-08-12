@@ -162,18 +162,25 @@ docker-compose -f docker-compose.yml -f docker-compose.superset.yml up -d
 
 스택이 준비되면 로컬 환경에서 Data Mates를 확인할 수 있습니다. Python 환경 구성, dbt 초기화와 문제 해결 방법은 [SETUP.md](docs/SETUP.md), 브랜치 운영과 변경 검증 기준은 [BRANCHING.md](docs/BRANCHING.md)를 참고하세요.
 
-### 🐳 Container Images
+### 🐳 Container Image
 
-`docker-compose.yml`이 아래 두 이미지를 참조하므로 `up` 하면 Docker Hub에서 자동으로 내려받습니다. 별도의 빌드 과정은 필요하지 않습니다.
+[![Docker Image Version](https://img.shields.io/docker/v/zisu17/datamates?style=flat-square&logo=docker&logoColor=white&label=zisu17%2Fdatamates&color=2496ED)](https://hub.docker.com/r/zisu17/datamates)
+[![Docker Image Size](https://img.shields.io/docker/image-size/zisu17/datamates?style=flat-square&logo=docker&logoColor=white&label=size&color=2496ED)](https://hub.docker.com/r/zisu17/datamates)
 
-| 이미지 | 구성 |
+Data Mates는 **이미지 하나**로 배포됩니다. 애플리케이션, 오케스트레이션, 분석 컨테이너가 같은 이미지를 서로 다른 실행 명령으로 사용합니다. `up` 하면 Docker Hub에서 자동으로 내려받으며 **로컬 빌드 과정은 없습니다.**
+
+| 계층 | 구성 |
 | --- | --- |
-| [![datamates-app](https://img.shields.io/docker/v/zisu17/datamates-app?style=flat-square&logo=docker&logoColor=white&label=zisu17%2Fdatamates-app&color=2496ED)](https://hub.docker.com/r/zisu17/datamates-app) | 아래 런타임 위에 FastAPI, 웹 UI, PyIceberg, DuckDB, sqlglot을 더한 애플리케이션 계층 |
-| [![datamates-runtime](https://img.shields.io/docker/v/zisu17/datamates-runtime?style=flat-square&logo=docker&logoColor=white&label=zisu17%2Fdatamates-runtime&color=017CEE)](https://hub.docker.com/r/zisu17/datamates-runtime) | 실행에 필요한 전체 런타임 — Airflow 3.2.2, Java 17, dbt Core 1.12.0, PySpark 4.0.4 |
+| Application | FastAPI · 웹 UI · PyIceberg · DuckDB · sqlglot |
+| Orchestration | Apache Airflow 3.2.2 |
+| Transformation | dbt Core 1.12.0 · dbt-spark 1.11.0 · PySpark 4.0.4 · Elementary · Java 17 |
+| Analytics | Apache Superset 5.0.0 · duckdb-engine |
 
-런타임 이미지는 오케스트레이션과 변환 실행에 필요한 것을 모두 담고 있으며, Airflow 컨테이너와 애플리케이션 컨테이너가 함께 사용합니다. 두 컨테이너가 같은 베이스를 공유하므로 dbt와 Spark 버전이 어긋날 수 없습니다. 같은 dbt 프로젝트를 한쪽은 파싱하고 다른 쪽은 실행하기 때문에, 버전이 갈리면 메타데이터가 어긋납니다.
+네 계층은 이미지 안에서 격리된 가상환경으로 나뉩니다. Airflow는 FastAPI와 pydantic을, Superset은 Flask 계열과 별도 pyarrow·sqlglot을, 애플리케이션은 또 다른 버전을 각자 고정하기 때문에 하나의 환경에 합칠 수 없습니다. 네 계층이 서로를 import하지 않고 프로세스로만 갈라져 있어 분리에 따르는 비용은 없습니다.
 
-현재 **linux/arm64** 빌드만 게시되어 있습니다. x86 환경에서 사용하거나 이미지를 직접 다시 만들려면 [SETUP.md](docs/SETUP.md)의 빌드 명령을 참고하세요.
+이미지를 하나로 두는 실질적인 이유는 버전 정합성입니다. 같은 dbt 프로젝트를 애플리케이션은 파싱하고 Airflow는 실행하므로 dbt 버전이 갈리면 메타데이터가 어긋납니다. DuckDB 역시 미리보기와 차트가 같은 테이블을 읽기 때문에 버전이 다르면 타임존과 소수 정밀도에서 값이 달라집니다. 이미지가 하나면 두 문제가 발생할 수 없습니다.
+
+나머지 서비스(MinIO, Iceberg REST, PostgreSQL, Redis)는 각 프로젝트의 공식 이미지를 그대로 사용합니다. 현재 **linux/arm64** 빌드만 게시되어 있으며, x86 환경에서 사용하거나 이미지를 직접 다시 만들려면 [SETUP.md](docs/SETUP.md)의 빌드 명령을 참고하세요.
 
 ## 🎯 Current Scope
 

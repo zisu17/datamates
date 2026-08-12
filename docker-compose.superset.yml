@@ -2,7 +2,7 @@
 #
 # 기본 compose 와 **같은 프로젝트(datamates)** 로 묶인다. 항상 두 파일을 함께 넘긴다:
 #
-#   docker-compose -f docker-compose.yml -f docker-compose.superset.yml up -d --build
+#   docker-compose -f docker-compose.yml -f docker-compose.superset.yml up -d
 #   docker-compose -f docker-compose.yml -f docker-compose.superset.yml logs -f superset
 #   docker-compose -f docker-compose.yml -f docker-compose.superset.yml down
 #
@@ -51,15 +51,20 @@ services:
   # 이미 초기화된 볼륨에 다시 돌려도 안전하다 (db upgrade 는 멱등,
   # create-admin 은 중복이면 경고만 내므로 `|| true` 로 넘긴다).
   superset-init:
-    build:
-      context: ./docker/superset
-    image: local/superset-duckdb:5.0.0
+    # 스택 전체가 쓰는 단일 이미지다(docker/datamates/Dockerfile). Superset 은 그 안의
+    # /opt/superset-venv 에 있으므로 실행 파일을 절대경로로 부른다 — 베이스가 Airflow 라
+    # PATH 상의 python 은 Superset 을 모른다.
+    #
+    # ENTRYPOINT 를 덮는 이유: 베이스의 /entrypoint 는 airflow 하위 명령을 해석하는
+    # 스크립트다. 여기서 그대로 두면 `bash -c ...` 를 airflow 명령으로 보려 든다.
+    image: &image zisu17/datamates:1.0.0
+    entrypoint: &entrypoint ["/usr/bin/dumb-init", "--"]
     container_name: superset-init
     depends_on:
       superset-db:
         condition: service_healthy
     environment: &superset-env
-      SUPERSET_CONFIG_PATH: /app/pythonpath/superset_config.py
+      SUPERSET_CONFIG_PATH: /opt/superset/pythonpath/superset_config.py
       SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:-datamates-dev-only-change-me}
       SUPERSET_METADB_URI: postgresql+psycopg2://superset:superset@superset-db:5432/superset
       SUPERSET_REDIS_HOST: superset-redis
@@ -80,7 +85,7 @@ services:
     volumes:
       # 파일 하나만 마운트한다. 폴더를 통째로 걸면 Dockerfile 까지 pythonpath 에 들어간다.
       # 파일로 두면 재빌드 없이 설정을 고쳐 P0 을 반복할 수 있다.
-      - ./docker/superset/superset_config.py:/app/pythonpath/superset_config.py:ro
+      - ./docker/superset/superset_config.py:/opt/superset/pythonpath/superset_config.py:ro
     # 들여쓰기를 한 칸도 더 넣지 말 것.
     #
     # YAML folded scalar(>)는 «더 깊게 들여쓴 줄» 의 개행을 그대로 보존한다.
@@ -97,17 +102,16 @@ services:
     # init 컨테이너가 실패로 끝나고 superset 이 아예 뜨지 않는다.
     command: >
       bash -c "
-      superset db upgrade &&
-      (superset fab create-admin --username ${SUPERSET_ADMIN_USER:-admin} --firstname Data --lastname Mates --email admin@datamates.local --password ${SUPERSET_ADMIN_PASSWORD:-admin} || true) &&
-      superset init &&
-      superset fab list-users | grep -q '${SUPERSET_ADMIN_USER:-admin}' &&
+      /opt/superset-venv/bin/superset db upgrade &&
+      (/opt/superset-venv/bin/superset fab create-admin --username ${SUPERSET_ADMIN_USER:-admin} --firstname Data --lastname Mates --email admin@datamates.local --password ${SUPERSET_ADMIN_PASSWORD:-admin} || true) &&
+      /opt/superset-venv/bin/superset init &&
+      /opt/superset-venv/bin/superset fab list-users | grep -q '${SUPERSET_ADMIN_USER:-admin}' &&
       echo '초기화 완료 — 관리자 계정 확인됨'
       "
 
   superset:
-    build:
-      context: ./docker/superset
-    image: local/superset-duckdb:5.0.0
+    image: *image
+    entrypoint: *entrypoint
     container_name: superset
     depends_on:
       superset-init:
@@ -130,12 +134,12 @@ services:
       # SUPERSET_BASE_URL=http://superset:8088 로 바꾼다.
       - "127.0.0.1:8088:8088"
     volumes:
-      - ./docker/superset/superset_config.py:/app/pythonpath/superset_config.py:ro
+      - ./docker/superset/superset_config.py:/opt/superset/pythonpath/superset_config.py:ro
     # 이미지의 부트스트랩 스크립트에 의존하지 않고 gunicorn 을 직접 부른다.
     # 워커 4개는 의도적이다 — 워커마다 DuckDB 인스턴스가 따로 생기므로
     # P0 ③(동시 질의)에서 그 영향을 실제로 보게 된다.
     command: >
-      gunicorn
+      /opt/superset-venv/bin/gunicorn
       --bind 0.0.0.0:8088
       --workers 4
       --worker-class gthread
