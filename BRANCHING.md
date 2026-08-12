@@ -117,16 +117,14 @@ git rebase main          # 커밋이 아직 공유되지 않았으므로 rebase 
 ```bash
 # 1) 문법
 for f in ui/js/*.js; do node --check "$f" || echo "FAIL $f"; done
-# 2) 사슬이 늘지 않았는지
-NODE_PATH=tools/ui-refactor/node_modules node tools/ui-refactor/inventory.js | head -1
-NODE_PATH=tools/ui-refactor/node_modules node tools/ui-refactor/loadorder.js
-# 3) 브라우저에서 tools/ui-refactor/checklist.js 본문을 실행해 baseline.json 과 대조
+# 2) 수정한 이름의 정의와 호출을 전체 확인
+rg -n '\b<수정한 함수명>\b' ui/js
+# 3) 브라우저에서 수정 화면과 직접 연결된 앞·뒤 화면을 스모크 테스트
 # 4) 콘솔 에러 0  ← 반드시 새 탭에서. 콘솔 버퍼는 이전 로드 것까지 들고 있다
 ```
 
-`baseline.json` 이 회귀 계약이다. 값이 달라졌으면 둘 중 하나다 —
-회귀를 냈거나, 의도한 변화다. **의도한 변화면 baseline 을 갱신하고 커밋 본문에
-무엇이 왜 달라졌는지 적는다.** 조용히 갱신하면 계약이 사라진다.
+덮어쓰기 정의가 남은 영역은 로드 순서상 마지막 정의가 이긴다. 정의 하나를 지웠다면
+그보다 앞선 파일이 로드 중에 해당 이름을 호출하지 않는지도 함께 확인한다.
 
 ### dbt 프로젝트를 만졌다
 
@@ -142,10 +140,6 @@ curl -s -X POST localhost:8000/api/v1/reparse     # 콘솔에 반영
 
 모델을 추가·삭제했으면 기준 숫자가 바뀐다 — 새 숫자를 그 프로젝트 저장소의 커밋 본문에
 적어 다음 기준으로 삼는다.
-
-**주의** — 화면 회귀 체크리스트(`baseline.json`)는 «어떤 dbt 프로젝트를 가리키고 있었는지»
-에 딸린 값이다(모델 수·원천 수·파이프라인 수). 프로젝트를 갈아타면 그 값들이 달라지는 것이
-정상이므로, 대조하기 전에 어느 프로젝트 기준의 baseline 인지 먼저 맞춰야 한다.
 
 ### `datamates/app/` 을 만졌다
 
