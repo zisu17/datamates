@@ -84,13 +84,17 @@ dbt-core==1.12.0
 dbt-spark==1.11.0
 elementary-data==0.25.1
 pyspark==4.0.4
-sqlglot==30.14.0        # 컬럼 계보를 SQL AST 로 뽑는다
 ```
 
 `datamates/requirements.txt` 는 화면·API 쪽이다. `pyiceberg`/`pyarrow` 는 데이터 수집이
 Spark 를 띄우지 않고 Iceberg 에 직접 쓰는 데 필요하고(호출마다 JVM 기동 15초를 안 낸다),
 `python-multipart` 는 파일 올리기의 multipart 파싱에 필요하다 — 없으면 서버가
 `RuntimeError: Form data requires "python-multipart"` 로 **기동 자체를 못 한다**.
+`duckdb` 는 미리보기·이력 조회의 읽기 엔진이고, `sqlglot` 은 컬럼 계보를 SQL AST 로 뽑는다.
+
+이 둘이 dbt 쪽이 아니라 여기 있어야 하는 이유는 컨테이너다. 이미지에서는 dbt 와 앱이 서로
+다른 venv 에 들어가고, 이것들을 import 하는 것은 앱 프로세스다 — 저쪽에 두면 앱 이미지에
+설치되지 않아 해당 화면만 조용히 죽는다.
 
 > **pyspark 를 4.0.x 로 고정한 이유** — 최신은 4.2 지만 Iceberg 는 **Spark 4.0 용 런타임만**
 > 배포한다. `iceberg-spark-runtime-4.1_2.13` / `4.2_2.13` 은 Maven Central 에 없다.
@@ -178,7 +182,7 @@ Airflow 는 health check 를 통과할 때까지 1~2분 걸린다(첫 기동은 
 루트이고, 그래서 `-f` 로 Dockerfile 을 지정한다.
 
 ```bash
-docker build -t zisu17/datamates-runtime:1.0.0 docker/airflow
+docker build -t zisu17/datamates-runtime:1.0.0 docker/runtime
 docker build -f docker/datamates/Dockerfile -t zisu17/datamates-app:1.0.0 .
 ```
 
@@ -188,7 +192,7 @@ amd64 와 arm64 를 함께 담아 올릴 때는 buildx 를 쓴다. 기본 빌더
 
 ```bash
 docker buildx create --name datamates --driver docker-container --bootstrap --use
-docker buildx build --platform linux/amd64,linux/arm64 -t zisu17/datamates-runtime:1.0.0 --push docker/airflow
+docker buildx build --platform linux/amd64,linux/arm64 -t zisu17/datamates-runtime:1.0.0 --push docker/runtime
 docker buildx build --platform linux/amd64,linux/arm64 -t zisu17/datamates-app:1.0.0 --push -f docker/datamates/Dockerfile .
 ```
 

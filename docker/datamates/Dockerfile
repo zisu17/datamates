@@ -2,7 +2,7 @@
 #
 #   docker build -f docker/datamates/Dockerfile -t zisu17/datamates-app:1.0.0 .
 #
-# 컨텍스트가 저장소 루트다(requirements 파일을 읽어야 한다). docker/airflow 쪽과 달리
+# 컨텍스트가 저장소 루트다(requirements 파일을 읽어야 한다). docker/runtime 쪽과 달리
 # -f 로 Dockerfile 을 지정해야 하는 이유가 이것이다.
 #
 # 앱 코드와 dbt 프로젝트는 이미지에 넣지 않고 런타임에 마운트한다.

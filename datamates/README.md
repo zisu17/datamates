@@ -215,7 +215,7 @@ ref 존재)로 즉답하고, 정확한 의존관계는 저장 후 manifest 가 �
 
 ## 이 작업에서 함께 고친 스택 문제
 
-`docker-compose.yml` / `docker/airflow/Dockerfile` 에 반영했다. 원인과 근거는 각
+`docker-compose.yml` / `docker/runtime/Dockerfile` 에 반영했다. 원인과 근거는 각
 파일의 주석에 남겼다.
 
 1. **ivy 캐시 볼륨이 빈 경로에 붙어 있었다** — Spark 4.0 의 Ivy 는 `~/.ivy2` 가 아니라

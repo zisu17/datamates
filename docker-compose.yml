@@ -110,7 +110,7 @@ services:
   # 프로필 파일은 손대지 않고 환경변수만 바꿔 끼운다.
   # -------------------------------------------------------------------------
   airflow:
-    # docker/airflow/Dockerfile 로 만들어 도커허브에 올린 이미지다.
+    # docker/runtime/Dockerfile 로 만들어 도커허브에 올린 이미지다.
     # 이름이 airflow 가 아닌 이유 — 이 이미지에는 Airflow 말고도 Java 17, Spark, dbt-core
     # 가 함께 들어 있고, datamates 서비스도 이걸 베이스로 쓴다. 실행에 필요한 것 전부라는
     # 뜻으로 runtime 이다. 태그도 Airflow 버전이 아니라 스택 버전을 따른다.
