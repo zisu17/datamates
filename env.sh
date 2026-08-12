@@ -17,7 +17,7 @@ export DBT_PROFILES_DIR="${DBT_PROJECT_DIR}/profiles"
 # 경로가 비어 있으면 dbt·콘솔이 «dbt_project.yml 없음» 으로 죽는다. 미리 말해 준다.
 if [ ! -f "${DBT_PROJECT_DIR}/dbt_project.yml" ]; then
   echo "경고: dbt 프로젝트가 없습니다 — ${DBT_PROJECT_DIR}" >&2
-  echo "      DBT_PROJECT_DIR 로 dbt 프로젝트를 가리키세요 (SETUP.md 참고)." >&2
+  echo "      DBT_PROJECT_DIR 로 dbt 프로젝트를 가리키세요 (docs/SETUP.md 참고)." >&2
 fi
 
 # Spark 4.0 은 Java 17/21 만 지원한다. 기본 java 가 그보다 높으면 기동이 실패한다.

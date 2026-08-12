@@ -160,7 +160,7 @@ docker-compose -f docker-compose.yml -f docker-compose.superset.yml up -d
 ./scripts/bootstrap_catalog.sh
 ```
 
-스택이 준비되면 로컬 환경에서 Data Mates를 확인할 수 있습니다. Python 환경 구성, dbt 초기화와 문제 해결 방법은 [SETUP.md](SETUP.md)를 참고하세요.
+스택이 준비되면 로컬 환경에서 Data Mates를 확인할 수 있습니다. Python 환경 구성, dbt 초기화와 문제 해결 방법은 [SETUP.md](docs/SETUP.md), 브랜치 운영과 변경 검증 기준은 [BRANCHING.md](docs/BRANCHING.md)를 참고하세요.
 
 ### 🐳 Container Images
 
@@ -173,7 +173,7 @@ docker-compose -f docker-compose.yml -f docker-compose.superset.yml up -d
 
 런타임 이미지는 오케스트레이션과 변환 실행에 필요한 것을 모두 담고 있으며, Airflow 컨테이너와 애플리케이션 컨테이너가 함께 사용합니다. 두 컨테이너가 같은 베이스를 공유하므로 dbt와 Spark 버전이 어긋날 수 없습니다. 같은 dbt 프로젝트를 한쪽은 파싱하고 다른 쪽은 실행하기 때문에, 버전이 갈리면 메타데이터가 어긋납니다.
 
-현재 **linux/arm64** 빌드만 게시되어 있습니다. x86 환경에서 사용하거나 이미지를 직접 다시 만들려면 [SETUP.md](SETUP.md)의 빌드 명령을 참고하세요.
+현재 **linux/arm64** 빌드만 게시되어 있습니다. x86 환경에서 사용하거나 이미지를 직접 다시 만들려면 [SETUP.md](docs/SETUP.md)의 빌드 명령을 참고하세요.
 
 ## 🎯 Current Scope
 
