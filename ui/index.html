@@ -192,6 +192,14 @@
 
 <script src="js/b52.js"></script>
 
+<!-- 데이터 분석 (P2). api.js 보다 먼저 둔다 — api.js 가 「데이터 수집」을
+     MENUS 1번 자리에 끼워 넣으므로, 분석은 그 뒤 순서대로 마지막에 온다.
+     SDK 는 설치형이라 CDN 대신 저장소에 둔다 — ui/vendor/README.md 참고. -->
+<script src="vendor/superset-embedded-sdk.js"></script>
+<script src="js/b53.js"></script>
+<!-- 분석 만들기 (화면 C). b53 의 화면 전환에서 부른다. -->
+<script src="js/b54.js"></script>
+
 
 
 
