@@ -11,33 +11,17 @@ function edgeCfg(e) { if (!e.cfg) e.cfg = edgeDefaults(); return e.cfg; }
 function edgeKey(e) { return e.from + '>' + e.to; }
 function findEdge(k) { return S.edges.find(e => edgeKey(e) === k); }
 
-/* ── 워크 스페이스 ── */
-const WS_BASE = [
-  { id: 'all', name: '전체', icon: 'db', desc: '플랫폼에 등록된 모든 데이터를 한곳에서 확인합니다.', pick: () => D },
-  { id: 'src', name: '원천', icon: 'down', desc: '운영시스템에서 그대로 들어온 원본 데이터입니다. 가공 전이라 분석에는 정제 데이터를 권장합니다.', pick: () => D.filter(d => d.layer === '원천') },
-  { id: 'stg', name: '정제', icon: 'filter', desc: '표기와 단위를 통일하고 오류를 정리한 중간 데이터입니다.', pick: () => D.filter(d => d.layer === '정제') },
-  { id: 'mart', name: '분석', icon: 'chart', desc: '분석과 보고에 바로 사용할 수 있는 데이터를 모아둔 공간입니다.', pick: () => D.filter(d => d.layer === '분석용') },
-];
-const WS_USER = [
-  { id: 'w1', name: '건강검진 분석', desc: '검진 실적 보고에 쓰는 데이터 모음입니다.', owner: '박서연', vis: '팀 공개',
-    tables: ['stg_health_checkup', 'agg_checkup_summary', 'dim_patient'] },
-  { id: 'w2', name: '검사 운영 현황', desc: '일일 검사 운영 보고에 사용합니다.', owner: '김수현', vis: '팀 공개',
-    tables: ['stg_examination_result', 'fct_patient_examination', 'agg_daily_examination'] },
-  { id: 'w3', name: '즐겨찾는 데이터', desc: '자주 여는 데이터를 모아둔 개인 공간입니다.', owner: '김수현', vis: '나만 보기',
-    tables: ['dim_patient', 'fct_patient_examination'] },
-  { id: 'w4', name: '2026년 경영지표', desc: '경영보고용 지표 산출에 사용하는 데이터입니다.', owner: '박민재', vis: '전체 공개',
-    tables: ['agg_daily_examination', 'agg_checkup_summary'] },
-];
-function wsTables(ws) {
-  if (!ws) return [];
-  if (ws.pick) return ws.pick();
-  return (ws.tables || []).map(byId).filter(Boolean);
-}
-function wsById(id) { return WS_BASE.find(w => w.id === id) || WS_USER.find(w => w.id === id); }
+/* ── 워크 스페이스 (제거) ──
+   홈의 두 번째 탭에서만 쓰던 묶음이다. 기본 4개(전체·원천·정제·분석)는 층 필터였고,
+   내 워크 스페이스 4개는 의료 데모 시절 테이블 id(dim_patient · agg_checkup_summary …)를
+   들고 있어 지금 데이터에서는 하나도 찾히지 않았다 — 넷 다 «0개 파이프라인» 만 그렸다.
+   홈을 한 화면으로 정리하며 WS_BASE · WS_USER · wsTables · wsById 를 걷어냈고,
+   화면 쪽(homeWsView 등)은 b11, 만들기 모달(wsCreateModal)은 b07 에서 함께 지웠다.
+   딸려 있던 상태 키(ws · wsTable · wsTab · wsQ · wsSort)도 읽는 곳이 없어 뺀다. */
 /* ── 상태 확장 ── */
 Object.assign(S, {
-  selEdge: null, ws: null, wsTable: null, wsTab: '개요', wsQ: '', wsSort: '이름순',
-  pipeNode: null, pipeTab: '실행 정보',
+  selEdge: null,
+  pipeNode: null, pipeTab: '빌드 정보',
 });
 
 /* ============================================================

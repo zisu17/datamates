@@ -6,6 +6,8 @@ Airflow 태스크 의존성으로 옮길 뿐이다. 화면에도 읽기 전용�
 
 from __future__ import annotations
 
+import logging
+import threading
 import time
 from typing import Any, Literal
 
@@ -15,6 +17,7 @@ from pydantic import BaseModel, Field
 from .. import airflow_client as af
 from .. import daggen, graph, manifest, state, store
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
 
 class PipelineIn(BaseModel):
@@ -136,13 +139,26 @@ def _sync_dag(p: dict[str, Any]) -> dict[str, Any]:
 
 @router.get("")
 def list_pipelines() -> list[dict[str, Any]]:
+    """목록 — **실행 상태를 함께 내려보낸다.**
+
+    예전에는 snapshot 에서 paused 만 꺼내 쓰고 status·latestRun 을 버렸다. 화면은
+    그 둘을 읽게 돼 있어서(toPipe) 목록만으로는 언제나 «대기» 였고, 실제 상태는
+    사용자가 연 파이프라인 하나만 폴링으로 따라잡았다. 그래서 파이프라인 흐름
+    화면이 실패한 실행을 계속 붙들고 있었다 — 그 사이 성공했는데도.
+
+    비용은 없다. snapshot 이 이미 계산해 캐시해 둔 값을 그대로 옮기는 것뿐이다.
+    """
+    snap = {x["id"]: x for x in state.snapshot()["pipelines"]}
     out = []
     for p in store.pipelines():
         flow = _flow(p)
+        s = snap.get(p["id"]) or {}
         out.append({**p, "dag_id": daggen.dag_id_of(p["id"]),
                     "model_count": len(flow["order"]),
-                    "paused": next((x["paused"] for x in state.snapshot()["pipelines"]
-                                    if x["id"] == p["id"]), None),
+                    "paused": s.get("paused"),
+                    "status": s.get("status", "wait"),
+                    "latestRun": s.get("latestRun"),
+                    "nextRun": s.get("nextRun"),
                     "cron": daggen.FREQ_CRON.get(p["freq"])})
     return out
 
@@ -154,8 +170,39 @@ def create_pipeline(body: PipelineIn) -> dict[str, Any]:
     p = store.pipeline_upsert(pid, body.model_dump())
     state.invalidate()
     out = {**p, **_sync_dag(p)}
+    out["autoStart"] = _autostart(p, out["dag_id"])
     out["suggestion"] = _suggestion(p, out["flow"])
     return out
+
+
+def _autostart(p: dict[str, Any], dag_id: str) -> bool:
+    """스스로 도는 파이프라인이면 만들자마자 깨운다. 켤 예정이면 True.
+
+    Airflow 는 새 DAG 을 **정지 상태로 만든다**(dags_are_paused_at_creation=True).
+    그래서 예약이나 데이터 이벤트로 만들어 두면 시각이 와도, 원천이 갱신돼도
+    아무 일이 일어나지 않는다. 화면에는 「데이터 이벤트」라고 적혀 있는데 실제로는
+    멈춰 있는 것이라, 사용자가 알아챌 방법이 없다 — 실제로 이 프로젝트에서
+    수집이 Asset 을 발행했는데 구독 파이프라인이 정지 상태라 그냥 지나갔다.
+
+    수동 실행은 깨우지 않는다. 그건 사람이 누를 때 실행 경로가 알아서 깨운다.
+    수정할 때도 깨우지 않는다 — 사용자가 일부러 멈춰 둔 것을 되돌리면 안 된다.
+
+    **응답을 붙잡지 않는다.** DAG 프로세서가 파일을 읽는 데 15초쯤 걸리는데
+    그동안 저장 버튼이 멈춰 있으면 안 된다. 뒤에서 기다렸다 켜고, 실패하면
+    로그만 남긴다 — 화면의 일시정지 토글로 언제든 켤 수 있다.
+    """
+    if (p.get("trigger_type") or "schedule") == "manual":
+        return False
+
+    def run() -> None:
+        try:
+            _wait_for_dag(dag_id)
+            af.dag_unpause(dag_id)
+        except Exception:      # noqa: BLE001
+            logger.warning("파이프라인 DAG 을 깨우지 못했습니다: %s", dag_id)
+
+    threading.Thread(target=run, daemon=True).start()
+    return True
 
 
 @router.get("/{pid}")

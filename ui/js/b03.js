@@ -83,7 +83,7 @@ function sqlView(node) {
       <span class="t11 fnt sp">${ic14('info')} <b>ref()</b> 로 다른 데이터를 부르면 캔버스에 연결선이 자동으로 그려집니다.</span>
     </div>
     <textarea class="inp mono" id="sqlBox" spellcheck="false"
-      style="flex:1;min-height:0;border:0;border-radius:0;font-size:12.5px;line-height:1.7;resize:none">${esc(d.sql)}</textarea>
+      style="flex:1;min-height:0;border:0;border-radius:0;font-size:var(--fs-sm);line-height:1.7;resize:none">${esc(d.sql)}</textarea>
     <div class="row g6" style="padding:9px 14px;border-top:1px solid var(--line-2)">
       <span class="t11 fnt">저장하면 연결 관계와 데이터 검증 규칙이 함께 등록됩니다.</span>
       <button class="btn sm sp" id="sqlFmt">정렬</button>
@@ -101,6 +101,26 @@ function sqlView(node) {
   $('#sqlFmt', w).onclick = () => toast('SQL을 정렬했습니다.');
   return w;
 }
+/* SQL 안에서 이 데이터를 부르는 표현. parseRefs 의 역함수다.
+
+   수집이 적재한 원천은 dbt source 라서 source('스키마','테이블') 로 불러야 한다.
+   ref() 는 모델과 seed 만 가리키므로, 원천에 ref() 를 쓰면
+   «depends on a node named 'apt_trade' which was not found» 로 parse 가 통째로
+   깨진다.
+
+   seed 도 화면에서는 원천(kind=source)으로 보이지만 dbt 노드라서 ref() 가 맞다
+   (stg_events 참고). 둘을 가르는 것은 manifest 가 알려주는 __dbtType 이다 —
+   화면용 mat 은 둘 다 «—» 로 뭉개져 쓸 수 없다. __dbtType 이 없는 예시 데이터는
+   kind 로 판단한다. */
+function dbtRef(d) {
+  const isSource = d && (d.__dbtType ? d.__dbtType === 'source' : d.kind === 'source');
+  if (isSource) {
+    const i = (d.phys || '').indexOf('.');
+    if (i > 0) return `{{ source('${d.phys.slice(0, i)}', '${d.phys.slice(i + 1)}') }}`;
+  }
+  return `{{ ref('${d.id}') }}`;
+}
+
 function parseRefs(sql) {
   const out = [];
   const re = /\{\{\s*ref\(\s*['"]([^'"]+)['"]\s*\)\s*\}\}/g;

@@ -29,7 +29,7 @@ import re
 import threading
 from typing import Any
 
-from .config import DBT_DIR, MANIFEST_PATH
+from .config import DBT_DIR, DBT_PROJECT_NAME, MANIFEST_PATH
 from . import manifest
 
 _lock = threading.Lock()
@@ -73,6 +73,33 @@ def _substitute(raw: str, entry: dict[str, Any],
     return s, None
 
 
+def _compiled(entry: dict[str, Any]) -> str | None:
+    """dbt 가 이미 만들어 둔 «Jinja 가 다 풀린» SQL. 없으면 None.
+
+    dbt 는 build/run 때마다 target/compiled/ 에 완성된 SQL 을 남긴다. 매크로도
+    루프도 전부 펼쳐진, dbt 가 실제로 실행한 바로 그 문장이다. 그것을 읽으면
+    치환을 흉내 낼 필요가 없다 — 추측이 아니라 dbt 의 답을 그대로 쓰는 것이다.
+
+    그렇다고 dbt compile 을 부르지는 않는다(모듈 첫머리의 이유 그대로 15초가 든다).
+    **있으면 쓰고 없으면 직접 치환한다.** 한 번도 빌드하지 않은 모델은 여전히
+    치환 규칙으로 처리되고, 매크로가 남으면 확인 불가로 표시된다.
+
+    원본보다 오래된 산출물은 쓰지 않는다. SQL 을 고치고 아직 빌드하지 않았다면
+    컴파일본은 «지금 파일» 이 아니어서, 그대로 쓰면 화면이 옛 계보를 보여 준다.
+    """
+    path = entry.get("path") or ""
+    if not path:
+        return None
+    comp = DBT_DIR / "target" / "compiled" / DBT_PROJECT_NAME / path
+    try:
+        src = (DBT_DIR / path).stat().st_mtime_ns
+        if comp.stat().st_mtime_ns < src:
+            return None
+        return comp.read_text()
+    except OSError:
+        return None
+
+
 def _fingerprint() -> Any:
     try:
         st = MANIFEST_PATH.stat()
@@ -113,6 +140,12 @@ def _build() -> dict[str, Any]:
     for e in entries.values():
         if e["dbt_type"] != "model":
             continue
+        # dbt 가 펼쳐 둔 SQL 이 있으면 그것이 가장 정확하다. ref/source 는 이미
+        # 물리 이름으로 바뀌어 있으므로 치환할 것이 남지 않는다.
+        done = _compiled(e)
+        if done is not None:
+            prepared[e["id"]] = (done, None)
+            continue
         try:
             raw = (DBT_DIR / e["path"]).read_text()
         except OSError:
@@ -126,9 +159,18 @@ def _build() -> dict[str, Any]:
     # 컬럼이 없다. 그 상태로 두면 스키마에 «컬럼 0개 테이블»이 생기는데,
     # sqlglot 은 그런 스키마를 통째로 거부한다(SchemaError: must have at least one
     # column). 모델 하나 때문에 전체 컬럼 계보가 죽으므로 반드시 메운다.
+    # **일부만 문서화한 모델이 더 위험하다.** manifest 의 cols 에는 yml 에 적은 컬럼만
+    # 들어 있다. 컬럼이 하나도 없으면 여기서 채우지만, 18개 중 5개만 적어 둔 모델은
+    # 「컬럼을 아는 테이블」로 보여서 그대로 스키마가 된다. 그러면 그 모델을 참조하는
+    # 다음 모델에서 sqlglot 이 `Unknown column: sigungu_name` 으로 멈추고,
+    # **그 모델의 컬럼 계보가 통째로 사라진다** — 원인은 두 단계 위의 yml 인데
+    # 화면에는 아래 모델이 「확인 불가」로 뜨므로 이유를 찾기 어렵다.
+    #
+    # 그래서 문서화 여부와 무관하게 SQL 의 출력 이름을 항상 합친다. 라벨·타입은
+    # 문서화된 쪽이 이기고, 문서에 없는 컬럼은 이름만 채워 스키마를 완성한다.
     derived: dict[str, list[list[str]]] = {}
     for e in entries.values():
-        if e["cols"] or e["dbt_type"] != "model":
+        if e["dbt_type"] != "model":
             continue
         sql, _why = prepared.get(e["id"], (None, None))
         if not sql:
@@ -137,10 +179,14 @@ def _build() -> dict[str, Any]:
             sel = sqlglot.parse_one(sql, dialect="spark").named_selects
         except Exception:      # noqa: BLE001 — 못 읽으면 그냥 비워 둔다
             continue
-        derived[e["id"]] = [[c, c, "", "선택"] for c in sel if c and c != "*"]
+        known = {c[0] for c in e["cols"]}
+        extra = [[c, c, "", "선택"] for c in sel
+                 if c and c != "*" and c not in known]
+        if extra:
+            derived[e["id"]] = list(e["cols"]) + extra
 
     def cols_of(e: dict[str, Any]) -> list[list[str]]:
-        return e["cols"] or derived.get(e["id"], [])
+        return derived.get(e["id"]) or e["cols"]
 
     # sqlglot 이 select * 와 무접두 컬럼을 풀려면 스키마가 필요하다.
     # 컬럼을 끝내 모르는 테이블은 아예 넣지 않는다 — 빈 항목이 스키마를 무효화한다.
@@ -159,10 +205,19 @@ def _build() -> dict[str, Any]:
     transforms: dict[str, dict[str, Any]] = {}
     seen_edges: set[tuple[str, str, str, str]] = set()
 
+    # 계보 상자의 구분 라벨도 카탈로그와 같아야 한다 — DATA MART 로 지정된
+    # 모델은 계보에서도 마트로 보인다. 상태 하나가 두 화면에서 갈리면
+    # 「이게 분석에 쓰이는 데이터인가」를 화면마다 다시 확인해야 한다.
+    from . import store as _store
+    marts = _store.marts()
+
     for e in entries.values():
+        is_mart = e["id"] in marts
         node = {
             "id": e["id"], "name": e["name"], "phys": e["phys"],
-            "kind": e["kind"], "group": e["group"], "dbtType": e["dbt_type"],
+            "kind": e["kind"],
+            "group": "DATA MART" if is_mart else e["group"],
+            "baseGroup": e["group"], "isMart": is_mart, "dbtType": e["dbt_type"],
             "cols": [{"col": c[0], "label": c[1], "type": c[2],
                       "tx": False, "status": "ok"} for c in cols_of(e)],
             "lineageStatus": "ok", "reason": None,

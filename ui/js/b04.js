@@ -7,7 +7,15 @@ let NEWN = 0;
 function openNewModel() {
   seedCanvas();
   if (!R().canModel) { toast('이 역할에서는 데이터 모델을 만들 수 없습니다.', 'warn'); return; }
-  const pool = S.nodes.map(n => n.ref);
+  /* DATA MART 는 입력 후보에서 뺀다. 마트는 «분석으로 내보내는 최종 결과» 라
+     다른 모델이 이어 쓰지 못한다(서버도 ref() 를 거절한다). 목록에 두고 저장할
+     때 거절하면, 사용자는 폼을 다 채운 뒤에야 안 된다는 것을 알게 된다. */
+  const pool = S.nodes.map(n => n.ref).filter(d => d && !d.isMart);
+  if (!pool.length) {
+    toast('입력으로 쓸 SOURCE 나 데이터 모델을 관계도에 먼저 올려 주세요. '
+        + '(DATA MART 는 다른 모델의 입력으로 쓸 수 없습니다)', 'warn');
+    return;
+  }
   const cfg = { mode: 'form', base: pool[pool.length - 1].id, cols: [], filter: '', join: '', joinOn: '',
     group: [], agg: 'count', aggCol: '', name: '', phys: '' };
   const b0 = byId(cfg.base); cfg.cols = b0.cols.slice(0, 3).map(c => c[0]);
@@ -46,6 +54,9 @@ function openNewModel() {
       name = ($('#nmName', body) || {}).value || cfg.name;
       phys = ($('#nmPhys', body) || {}).value || cfg.phys;
       if (!name) { toast('결과 데이터 이름을 입력해 주세요.', 'warn'); return; }
+      // 전체 해제가 한 번에 되니 컬럼 없이 저장되는 길이 생겼다. 그대로 두면
+      // select 절이 빈 SQL 이 만들어진다.
+      if (!cfg.cols.length) { toast('사용할 컬럼을 하나 이상 선택해 주세요.', 'warn'); return; }
       sql = genSQL(cfg);
       ups = [cfg.base].concat(cfg.join ? [cfg.join] : []);
     } else {
@@ -55,6 +66,14 @@ function openNewModel() {
       if (!name) { toast('데이터 모델 이름을 입력해 주세요.', 'warn'); return; }
       ups = parseRefs(sql);
       if (!ups.length) { toast('SQL 안에서 ref() 로 부른 데이터를 찾지 못했습니다.', 'warn'); return; }
+    }
+    /* 마트를 입력으로 부르면 서버가 거절한다(MART_AS_INPUT). 저장을 눌러 배우게
+       하지 않고 여기서 먼저 막는다 — 서버 규칙과 같은 문장으로. */
+    const martUps = ups.filter(id => (byId(id) || {}).isMart);
+    if (martUps.length) {
+      toast(`${martUps.join(', ')} 은(는) DATA MART 라 다른 모델의 입력으로 쓸 수 없습니다. `
+          + '그 마트의 입력 모델을 참조하거나, 먼저 DATA MART 지정을 해제해 주세요.', 'warn');
+      return;
     }
     const nd = buildModel({ name, phys, sql, ups, cfg });
     close();
@@ -70,9 +89,30 @@ function formMode(cfg, paint, pool) {
   const L = el(`<div class="frm"></div>`);
   L.appendChild(el(`<div class="fr"><span class="fr-l">기준 데이터</span>
     <select class="inp" id="fBase">${pool.map(d => `<option value="${d.id}" ${d.id === cfg.base ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select>
-    <span class="fr-h">새로 만들 데이터의 출발점이 되는 데이터입니다.</span></div>`));
+    <span class="fr-h">새로 만들 데이터의 출발점이 되는 데이터입니다. SOURCE 와 DATA MODEL 만 고를 수 있습니다 — DATA MART 는 최종 모델이라 입력이 될 수 없습니다.</span></div>`));
+  /* 컬럼은 칩이 아니라 목록으로 둔다. 칩은 이름이 길거나 개수가 많아지면 줄바꿈이
+     들쭉날쭉해 무엇이 켜져 있는지 한눈에 안 들어온다. 목록은 한 줄에 하나씩이라
+     체크 상태·컬럼명·타입이 세로로 정렬돼 훑기 쉽다. */
+  // 설명과 타입은 있을 때만 붙인다. dbt manifest 로 들어온 모델은 한글명 자리에
+  // 컬럼명이 그대로 들어와 있어서, 그대로 찍으면 같은 이름이 두 번 나온다.
+  const colRow = (c) => {
+    const label = c[1] && c[1] !== c[0] ? c[1] : '';
+    return `<label class="chkrow" data-c="${esc(c[0])}" style="font-size:var(--fs-sm);gap:8px">
+      <input type="checkbox" class="chk" ${cfg.cols.includes(c[0]) ? 'checked' : ''}>
+      <span class="${label ? 'f1' : 'f1 mono'} trunc">${esc(label || c[0])}</span>
+      ${label ? `<span class="t12 fnt mono trunc" style="max-width:46%">${esc(c[0])}</span>` : ''}
+      ${c[2] ? `<span class="t11 fnt" style="flex:none">${esc(c[2])}</span>` : ''}</label>`;
+  };
+
   L.appendChild(el(`<div class="fr"><span class="fr-l">사용할 컬럼</span>
-    <div class="pick" id="fCols">${base.cols.map(c => `<button class="pk ${cfg.cols.includes(c[0]) ? 'on' : ''}" data-c="${c[0]}">${esc(c[1])} <span class="fnt">${esc(c[0])}</span></button>`).join('')}</div></div>`));
+    <div style="border:1px solid var(--line);border-radius:var(--r-s);overflow:hidden">
+      <div class="row g10" style="padding:6px 10px;border-bottom:1px solid var(--line-2);background:var(--surface-2)">
+        <label class="chkrow f1" style="font-size:var(--fs-sm);gap:8px">
+          <input type="checkbox" class="chk" id="fColAll"><b>전체 선택</b></label>
+        <span class="t12 fnt" id="fColN" style="flex:none">${cfg.cols.length} / ${base.cols.length}</span></div>
+      <div id="fCols" style="max-height:198px;overflow:auto;padding:3px 10px 5px">
+        ${base.cols.map(colRow).join('')}</div></div>
+    <span class="fr-h">체크한 컬럼만 새 데이터에 들어갑니다.</span></div>`));
   L.appendChild(el(`<div class="fr"><span class="fr-l">필터 조건 <span class="fr-h">(선택)</span></span>
     <input class="inp mono" id="fFilter" placeholder="예) examination_date >= '2026-01-01'" value="${esc(cfg.filter)}"></div>`));
   L.appendChild(el(`<div class="fr"><span class="fr-l">연결할 데이터 <span class="fr-h">(선택)</span></span>
@@ -95,7 +135,7 @@ function formMode(cfg, paint, pool) {
     <span class="fr-l">집계 대상 컬럼</span>
     <select class="inp" id="fAggCol">${base.cols.map(c => `<option value="${c[0]}" ${cfg.aggCol === c[0] ? 'selected' : ''}>${esc(c[1])}</option>`).join('')}</select></div>`));
   R2.appendChild(el(`<div class="fr"><span class="fr-l">결과 데이터 이름</span>
-    <input class="inp" id="nmName" placeholder="예) 검사 종류별 일별 건수" value="${esc(cfg.name)}"></div>`));
+    <input class="inp" id="nmName" placeholder="예) 유형별 일별 건수" value="${esc(cfg.name)}"></div>`));
   R2.appendChild(el(`<div class="fr"><span class="fr-l">저장 이름 <span class="fr-h">실제 테이블명</span></span>
     <input class="inp mono" id="nmPhys" value="${esc(cfg.phys || 'marts.agg_custom_' + (NEWN + 1))}"></div>`));
   R2.appendChild(el(`<div class="fr"><span class="fr-l">만들어질 SQL</span>
@@ -105,12 +145,40 @@ function formMode(cfg, paint, pool) {
 
   const sync = () => { $('#fSql', w).innerHTML = hlSQL(genSQL(cfg)); };
   $('#fBase', w).onchange = (e) => { cfg.base = e.target.value; const nb = byId(cfg.base);
-    cfg.cols = nb.cols.slice(0, 3).map(c => c[0]); cfg.group = []; cfg.aggCol = ''; paint(); };
-  $$('[data-c]', w).forEach(b => b.onclick = () => {
-    const c = b.dataset.c; const i = cfg.cols.indexOf(c);
-    if (i >= 0) { cfg.cols.splice(i, 1); cfg.group = cfg.group.filter(g => g !== c); } else cfg.cols.push(c);
+    cfg.cols = nb.cols.slice(0, 3).map(c => c[0]); cfg.group = []; cfg.aggCol = '';
+    cfg.colScroll = 0;      // 다른 데이터의 컬럼 목록이니 스크롤도 처음부터
+    paint(); };
+  const colBox = $('#fCols', w), allBox = $('#fColAll', w);
+
+  // 컬럼을 하나 켤 때마다 폼을 통째로 다시 그리므로(그룹 기준·SQL 이 함께 바뀐다)
+  // 목록이 길면 스크롤이 맨 위로 튄다. 위치를 들고 다니며 되돌린다.
+  colBox.scrollTop = cfg.colScroll || 0;
+  colBox.onscroll = () => { cfg.colScroll = colBox.scrollTop; };
+
+  const syncAll = () => {
+    const n = cfg.cols.length, all = base.cols.length;
+    allBox.checked = n > 0 && n === all;
+    // 일부만 고른 상태를 «전체 선택» 이 켜진 것으로 보이게 두면 안 된다.
+    allBox.indeterminate = n > 0 && n < all;
+    $('#fColN', w).textContent = `${n} / ${all}`;
+  };
+  syncAll();
+
+  colBox.onchange = (e) => {
+    const row = e.target.closest('[data-c]');
+    if (!row) return;
+    const c = row.dataset.c, i = cfg.cols.indexOf(c);
+    // 그룹 기준은 고른 컬럼 중에서만 고를 수 있다. 컬럼을 빼면 같이 빠져야
+    // group by 에 select 에 없는 컬럼이 남는 일이 없다.
+    if (i >= 0) { cfg.cols.splice(i, 1); cfg.group = cfg.group.filter(g => g !== c); }
+    else cfg.cols.push(c);
     paint();
-  });
+  };
+  allBox.onchange = () => {
+    if (allBox.checked) cfg.cols = base.cols.map(c => c[0]);
+    else { cfg.cols = []; cfg.group = []; }
+    paint();
+  };
   $$('[data-g]', w).forEach(b => b.onclick = () => {
     const c = b.dataset.g; const i = cfg.group.indexOf(c);
     if (i >= 0) cfg.group.splice(i, 1); else cfg.group.push(c);
@@ -120,8 +188,10 @@ function formMode(cfg, paint, pool) {
   $('#fJoin', w).onchange = (e) => {
     cfg.join = e.target.value;
     if (cfg.join) { const j = byId(cfg.join);
-      const key = (base.cols.map(c => c[0]).filter(c => j.cols.some(x => x[0] === c))[0]) || 'patient_id';
-      cfg.joinOn = `j.${key} = b.${key}`; }
+      /* 양쪽에 같은 이름으로 있는 컬럼을 기준으로 추천한다. 없으면 비워 둔다 —
+         실재하지 않는 컬럼명을 채워 두면 그대로 저장돼 실행 때 깨진다. */
+      const key = (base.cols.map(c => c[0]).filter(c => j.cols.some(x => x[0] === c))[0]) || '';
+      cfg.joinOn = key ? `j.${key} = b.${key}` : ''; }
     paint();
   };
   const jo = $('#fJoinOn', w); if (jo) jo.oninput = (e) => { cfg.joinOn = e.target.value; sync(); };
@@ -146,8 +216,13 @@ function genSQL(cfg) {
   if (cfg.agg === 'avg') sel.push(`    avg(${pre}${cfg.aggCol || base.cols[0][0]}) as avg_value`);
   lines.push('select');
   lines.push(sel.join(',\n'));
-  lines.push(`from {{ ref('${base.id}') }}${j ? ' as b' : ''}`);
-  if (j) { lines.push(`left join {{ ref('${j.id}') }} as j`); lines.push(`    on ${cfg.joinOn || 'j.patient_id = b.patient_id'}`); }
+  lines.push(`from ${dbtRef(base)}${j ? ' as b' : ''}`);
+  if (j) {
+    lines.push(`left join ${dbtRef(j)} as j`);
+    /* 기준 컬럼을 아직 못 정했으면 자리를 비우고 무엇을 채워야 하는지 적는다.
+       그럴듯한 컬럼명을 지어 넣으면 사용자가 맞는 값으로 착각한다. */
+    lines.push(`    on ${cfg.joinOn || '/* 연결 기준 컬럼을 지정하세요 */'}`);
+  }
   if (cfg.filter.trim()) lines.push(`where ${cfg.filter.trim()}`);
   if (cfg.agg && groupCols.length) lines.push(`group by ${groupCols.map((_, i) => i + 1).join(', ')}`);
   return lines.join('\n');
@@ -166,12 +241,12 @@ group by
     <div class="note info">${ic('info')}<span>SQL 안에서 <b class="mono">ref('데이터모델')</b> 또는 <b class="mono">source('스키마','테이블')</b> 로 다른 데이터를 부르면,
       캔버스에 연결선이 자동으로 그려지고 실행 순서도 그에 맞춰 정해집니다.</span></div>
     <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px">
-      <div class="fr"><span class="fr-l">데이터 모델 이름</span><input class="inp" id="nmSName" placeholder="예) 일별 검사 건수"></div>
+      <div class="fr"><span class="fr-l">데이터 모델 이름</span><input class="inp" id="nmSName" placeholder="예) 일별 집계"></div>
       <div class="fr"><span class="fr-l">저장 이름 <span class="fr-h">실제 테이블명</span></span>
         <input class="inp mono" id="nmSPhys" value="marts.agg_custom_${NEWN + 1}"></div>
     </div>
     <div class="fr"><span class="fr-l">SQL</span>
-      <textarea class="inp mono" id="nmSql" rows="12" spellcheck="false" style="font-size:12.5px;line-height:1.7">${esc(sample)}</textarea></div>
+      <textarea class="inp mono" id="nmSql" rows="12" spellcheck="false" style="font-size:var(--fs-sm);line-height:1.7">${esc(sample)}</textarea></div>
     <div class="fr"><span class="fr-l">함께 등록되는 정보</span>
       <div class="col g4 t12 mut" style="border:1px solid var(--line);border-radius:6px;padding:10px">
   

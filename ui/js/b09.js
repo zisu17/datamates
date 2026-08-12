@@ -50,12 +50,12 @@ function genModelSQL(d) {
   if (t.aggFn === 'count') sel.push('    count(*) as row_count');
   if (t.aggFn === 'sum') sel.push(`    sum(${pre}${cols[cols.length - 1]}) as total_value`);
   if (t.aggFn === 'avg') sel.push(`    avg(${pre}${cols[cols.length - 1]}) as avg_value`);
-  const L = ['select', sel.join(',\n'), `from {{ ref('${base.id}') }}${joins.length ? ' as a' : ''}`];
+  const L = ['select', sel.join(',\n'), `from ${dbtRef(base)}${joins.length ? ' as a' : ''}`];
   joins.forEach((e, i) => {
     const j = byId(e.from); if (!j) return;
     const alias = 'j' + (i + 1);
     const key = t.joinOn || guessKey(base, j);
-    L.push(`${t.joinType} {{ ref('${j.id}') }} as ${alias}`);
+    L.push(`${t.joinType} ${dbtRef(j)} as ${alias}`);
     L.push(`    on ${alias}.${key} = a.${key}`);
   });
   const wh = [];
@@ -65,9 +65,13 @@ function genModelSQL(d) {
   if (t.aggFn && group.length) L.push(`group by ${group.map((_, i) => i + 1).join(', ')}`);
   return L.join('\n');
 }
+/* 양쪽에 같은 이름으로 있는 컬럼을 연결 기준으로 추천한다.
+   찾지 못하면 **비워 둔다.** 예전에는 특정 도메인의 컬럼명을 기본값으로 넣었는데,
+   그 이름이 이 데이터에 없으면 사용자가 «있는 값» 으로 착각해 그대로 저장한다.
+   빈 값이면 자리표시자가 무엇을 넣어야 하는지 말한다. */
 function guessKey(a, b) {
   const k = (a.cols || []).map(x => x[0]).find(x => (b.cols || []).some(y => y[0] === x));
-  return k || 'patient_id';
+  return k || '';
 }
 /* ── 연결선 설정: 역할만 ── */
 openEdgeCfg = function (key) {
@@ -153,7 +157,7 @@ function openTransform(id) {
       const row = el(`<div class="statrow"><span class="swatch" style="background:${LAYER[s.layer].color}"></span>
         <span class="col f1" style="gap:0;min-width:0"><span class="t12 trunc">${esc(s.name)}</span>
           <span class="sub trunc">${esc(s.phys)}</span></span>
-        <button class="chip ${w.base === e.from ? 'on' : ''}" data-base="${e.from}" style="height:24px;font-size:11.5px">${w.base === e.from ? '기준 데이터' : '기준으로'}</button>
+        <button class="chip ${w.base === e.from ? 'on' : ''}" data-base="${e.from}" style="height:24px;font-size:var(--fs-cap)">${w.base === e.from ? '기준 데이터' : '기준으로'}</button>
         <span class="tag">${esc(edgeRole(e))}</span></div>`);
       box.appendChild(row);
     });
@@ -164,7 +168,7 @@ function openTransform(id) {
       <span class="tfsec-t">${ic14('flow', 'fnt')}조인</span>
       ${joins.length ? `<div class="row g6">
         <select class="inp" id="tfJT" style="width:150px">${['left join', 'inner join', 'full outer join'].map(x => `<option ${w.joinType === x ? 'selected' : ''}>${x}</option>`).join('')}</select>
-        <input class="inp mono f1" id="tfJO" placeholder="연결 기준 컬럼 (예: patient_id)" value="${esc(w.joinOn || guessKey(byId(w.base) || {}, byId(joins[0].from) || {}))}"></div>
+        <input class="inp mono f1" id="tfJO" placeholder="양쪽에 공통으로 있는 컬럼 이름" value="${esc(w.joinOn || guessKey(byId(w.base) || {}, byId(joins[0].from) || {}))}"></div>
         <span class="t11 fnt">${joins.map(e => esc(byId(e.from).name)).join(' · ')} 와(과) 연결합니다.</span>`
       : '<span class="t12 fnt">조인할 입력이 없습니다. 입력을 하나 더 연결하면 설정할 수 있습니다.</span>'}</div>`);
     L.appendChild(sec2);
@@ -176,7 +180,7 @@ function openTransform(id) {
 
     const sec4 = el(`<div class="tfsec"><span class="tfsec-t">${ic14('filter', 'fnt')}필터 · 정제</span>
       <input class="inp mono" id="tfF" placeholder="예) examination_date >= '2026-01-01'" value="${esc(w.filter)}">
-      <div class="col" style="gap:2px">${CLEAN_RULES.map(r => `<label class="chkrow" style="font-size:12.5px">
+      <div class="col" style="gap:2px">${CLEAN_RULES.map(r => `<label class="chkrow" style="font-size:var(--fs-sm)">
         <input type="checkbox" class="chk" data-cl="${esc(r)}" ${w.clean.includes(r) ? 'checked' : ''}> ${esc(r)}</label>`).join('')}</div></div>`);
     Rr.appendChild(sec4);
 
@@ -192,16 +196,16 @@ function openTransform(id) {
       <div class="fr"><span class="fr-l">결과 데이터 이름</span><input class="inp" id="tfN" value="${esc(w.name || d.name)}"></div>
       <div class="fr"><span class="fr-l">데이터 검증 규칙</span>
         <div class="col" style="gap:2px">
-          <label class="chkrow" style="font-size:12.5px"><input type="checkbox" class="chk" id="tfT1" checked> 필수값 검사</label>
-          <label class="chkrow" style="font-size:12.5px"><input type="checkbox" class="chk" id="tfT2" checked> 중복 검사</label>
-          <label class="chkrow" style="font-size:12.5px"><input type="checkbox" class="chk" id="tfT3"> 참조 무결성 검사</label>
+          <label class="chkrow" style="font-size:var(--fs-sm)"><input type="checkbox" class="chk" id="tfT1" checked> 필수값 검사</label>
+          <label class="chkrow" style="font-size:var(--fs-sm)"><input type="checkbox" class="chk" id="tfT2" checked> 중복 검사</label>
+          <label class="chkrow" style="font-size:var(--fs-sm)"><input type="checkbox" class="chk" id="tfT3"> 참조 무결성 검사</label>
         </div></div></div>`);
     Rr.appendChild(sec6);
 
     const sec7 = el(`<div class="tfsec"><span class="tfsec-t">${ic14('code', 'fnt')}만들어질 SQL
-        <label class="chkrow sp" style="font-size:11.5px"><input type="checkbox" class="chk" id="tfUse" ${w.useSql ? 'checked' : ''}> 직접 작성</label></span>
+        <label class="chkrow sp" style="font-size:var(--fs-cap)"><input type="checkbox" class="chk" id="tfUse" ${w.useSql ? 'checked' : ''}> 직접 작성</label></span>
       <div class="code" id="tfSql" style="max-height:170px;display:${w.useSql ? 'none' : 'block'}">${hlSQL(preview())}</div>
-      <textarea class="inp mono" id="tfSqlE" rows="8" spellcheck="false" style="display:${w.useSql ? 'block' : 'none'};font-size:12px">${esc(w.sql || preview())}</textarea></div>`);
+      <textarea class="inp mono" id="tfSqlE" rows="8" spellcheck="false" style="display:${w.useSql ? 'block' : 'none'};font-size:var(--fs-sm)">${esc(w.sql || preview())}</textarea></div>`);
     Rr.appendChild(sec7);
 
     // 이벤트

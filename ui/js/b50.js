@@ -115,7 +115,7 @@
     items.forEach(it => {
       if (it[0] === 'sep') { pop.appendChild(el('<div style="height:1px;background:var(--line-2);margin:4px 6px"></div>')); return; }
       const b = el('<button class="row g8" style="width:100%;padding:7px 9px;border:0;background:none;cursor:pointer;'
-        + 'border-radius:6px;font-size:12.5px;color:' + (it[0] === 'x' ? 'var(--err)' : 'var(--text)') + ';text-align:left">'
+        + 'border-radius:6px;font-size:var(--fs-sm);color:' + (it[0] === 'x' ? 'var(--err)' : 'var(--text)') + ';text-align:left">'
         + ic14(it[0] === 'x' ? 'trash' : it[0]) + '<span>' + it[1] + '</span></button>');
       b.onmouseenter = () => b.style.background = 'var(--surface-3)';
       b.onmouseleave = () => b.style.background = 'none';
@@ -132,7 +132,7 @@
       + '<button class="iconbtn sp" data-close>' + ic('x') + '</button></div>'
       + '<div class="modal-b"><div class="frm">'
       + '<div class="fr"><span class="fr-l">폴더 이름</span>'
-      + '<input class="inp" id="fdName" placeholder="예) 검사 · 환자 · 검진"></div>'
+      + '<input class="inp" id="fdName" placeholder="예) 매출 · 고객 · 재고"></div>'
       + '<div class="fr"><span class="fr-l">만들 위치</span><select class="inp" id="fdWhere">'
       + ['SOURCE', 'DATA MODEL'].map(g => '<option value="' + g + '" ' + (g === grp && !parent ? 'selected' : '') + '>' + g + '</option>'
           + FOLDERS.filter(f => f.grp === g).map(f => {
@@ -183,7 +183,7 @@
     if (q) {
       const res = D.filter(match);
       host.appendChild(el('<div class="ct-res">검색 결과 ' + res.length + '건</div>'));
-      if (!res.length) { host.appendChild(el('<div class="ct-none">일치하는 항목이 없습니다.</div>')); return; }
+      if (!res.length) { host.appendChild(el('<div class="ct-none">일치하는 항목이 없습니다. 검색어를 줄여 보세요.</div>')); return; }
       ['SOURCE', 'DATA MODEL'].forEach(g => {
         const list = res.filter(d => grpOf(d) === g);
         if (!list.length) return;
@@ -253,7 +253,7 @@
       + '</span></div>'
       + '<div class="mod-l-body f1 col" style="min-height:0">'
       + '<div style="padding:8px 10px"><div class="srch">' + ic14('search')
-      + '<input class="inp" id="mQ" placeholder="이름으로 검색" value="' + esc(S.ctQ || '') + '" style="height:29px;font-size:12.5px;padding-left:28px"></div></div>'
+      + '<input class="inp sm" id="mQ" placeholder="이름으로 검색" value="' + esc(S.ctQ || '') + '" style="padding-left:28px"></div></div>'
       + '<div class="f1" style="overflow:auto" id="mList"></div>'
       + '<div style="padding:9px 11px;border-top:1px solid var(--line-2)">'
       + '<div class="t11 fnt">SOURCE ' + D.filter(d => d.kind === 'source').length
@@ -277,7 +277,7 @@
       + '<button class="iconbtn sp" id="pLTgl" title="' + (S.pipeLeftOpen ? '접기' : '펼치기') + '">' + ic14(S.pipeLeftOpen ? 'chevl' : 'chev') + '</button></div>'
       + '<div class="mod-l-body f1 col" style="min-height:0">'
       + '<div style="padding:8px 10px"><div class="srch">' + ic14('search')
-      + '<input class="inp" id="pQ" placeholder="이름으로 검색" value="' + esc(S.ctPQ || '') + '" style="height:29px;font-size:12.5px;padding-left:28px"></div></div>'
+      + '<input class="inp sm" id="pQ" placeholder="이름으로 검색" value="' + esc(S.ctPQ || '') + '" style="padding-left:28px"></div></div>'
       + '<div class="f1" style="overflow:auto" id="pcList"></div>'
       + '<div style="padding:9px 11px;border-top:1px solid var(--line-2)">'
       + '<div class="t11 fnt">카드를 끌어다 놓거나 + 를 누르세요. 같은 모델을 여러 번 놓을 수 있습니다.</div></div>'

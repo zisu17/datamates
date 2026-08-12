@@ -33,7 +33,7 @@ function folderModal(fid, grp) {
       <button class="iconbtn sp" data-close>${ic('x')}</button></div>
     <div class="modal-b"><div class="frm">
       <div class="fr"><span class="fr-l">폴더 이름</span>
-        <input class="inp" id="fdName" value="${esc(f ? f.name : '')}" placeholder="예) 검사 · 환자 · 검진"></div>
+        <input class="inp" id="fdName" value="${esc(f ? f.name : '')}" placeholder="예) 매출 · 고객 · 재고"></div>
       <div class="fr"><span class="fr-l">위치</span>
         <select class="inp" id="fdGrp" ${f ? 'disabled' : ''}>
           ${['SOURCE', 'DATA MODEL'].map(g => `<option ${(f ? f.grp : grp) === g ? 'selected' : ''}>${g}</option>`).join('')}</select>

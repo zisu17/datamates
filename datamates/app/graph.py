@@ -19,7 +19,8 @@ COL_W, ROW_H = 308, 124
 
 
 def build(targets: list[str], include_seeds: bool = False,
-          stop_at: set[str] | None = None) -> dict[str, Any]:
+          stop_at: set[str] | None = None,
+          task_mode: str = "per_model") -> dict[str, Any]:
     """실행 대상 + 그 상류로 DAG 을 만든다.
 
     상류를 끌어오는 이유: fct_events 만 대상으로 지정해도 stg_events 가 갱신되지
@@ -104,7 +105,7 @@ def build(targets: list[str], include_seeds: bool = False,
     for n in nodes:
         n["seq"] = seq.get(n["key"])
 
-    return {
+    flow = {
         "nodes": nodes,
         "edges": edges,
         "order": order,
@@ -112,6 +113,85 @@ def build(targets: list[str], include_seeds: bool = False,
         "inputs": [n["key"] for n in nodes if n["read_only"]],
         "missing": [t for t in targets if t not in entries],
     }
+    flow.update(tasks_of(flow, task_mode, targets))
+    return flow
+
+
+# ---------------------------------------------------------------- Task 그래프
+#
+# 위의 nodes/edges 는 **모델 관계** 다 — 무엇이 무엇에서 나오는지. 실행 순서를
+# 계산하려면 그게 필요하지만, 그것 자체가 파이프라인 화면이 그릴 그림은 아니다.
+# 화면이 그리는 것은 **Task 그래프** 다:
+#
+#   노드 = 실제 실행 단위(Task) 하나
+#   간선 = 선행 → 후행 실행 순서. 데이터가 흐른다는 뜻이 아니다.
+#
+# 둘을 갈라 두는 이유는 셋이다.
+#
+#  1. 원천과 조회 전용 입력은 **Task 가 아니다.** 이 파이프라인이 실행하지 않는다.
+#     모델 관계에는 있어야 하지만 실행 그래프에는 없어야 한다.
+#  2. task_mode=single 이면 모델이 열둘이라도 **Task 는 하나** 다. 모델 관계를
+#     그대로 그리면 화면은 열두 칸을 보여 주는데 Airflow 에는 태스크가 하나뿐이라,
+#     화면이 실행을 잘못 설명하게 된다.
+#  3. 계보는 데이터 모델 화면이 이미 그린다. 같은 그림을 두 화면에 두면
+#     둘 중 어느 것이 실행 순서인지 사용자가 매번 다시 판단해야 한다.
+#
+# daggen 도 이 결과를 그대로 쓴다. 화면과 DAG 이 같은 자료를 읽어야 둘이 어긋나지 않는다.
+
+DONE_TASK = "_done"           # 완료 표식 Task. 파이프라인 Asset 을 여기서 낸다.
+
+
+def tasks_of(flow: dict[str, Any], task_mode: str,
+             targets: list[str]) -> dict[str, Any]:
+    """모델 그래프 → Task 그래프. {tasks, task_edges} 를 돌려준다."""
+    order: list[str] = flow["order"]
+    by_key = {n["key"]: n for n in flow["nodes"]}
+
+    def node(key: str, name: str, models: list[str], kind: str,
+             depth: int, row: int, seq: int | None) -> dict[str, Any]:
+        return {
+            "key": key, "name": name, "kind": kind,
+            # 이 Task 가 만드는 모델들. 화면이 상세로 들어갈 때 쓴다.
+            "models": models,
+            "is_target": any(m in targets for m in models),
+            "depth": depth, "x": 40 + depth * COL_W, "y": 40 + row * ROW_H,
+            "seq": seq,
+        }
+
+    if not order:
+        return {"tasks": [], "task_edges": []}
+
+    if task_mode == "single":
+        # 한 번의 dbt 호출로 전부 만든다. 모델이 몇이든 Task 는 하나다.
+        return {
+            "tasks": [node("all", f"모델 {len(order)}개 일괄 빌드", list(order),
+                           "build", 0, 0, 1),
+                      node(DONE_TASK, "완료", [], "marker", 1, 0, None)],
+            "task_edges": [{"from": "all", "to": DONE_TASK}],
+        }
+
+    # 모델 하나 = Task 하나. 간선은 **양쪽이 모두 Task 일 때만** 남는다 —
+    # 원천이나 조회 전용을 거쳐 가는 선은 실행 순서가 아니라 계보다.
+    runnable = set(order)
+    task_edges = [{"from": e["from"], "to": e["to"]} for e in flow["edges"]
+                  if e["from"] in runnable and e["to"] in runnable]
+
+    has_down = {e["from"] for e in task_edges}
+    rows: dict[int, int] = {}
+    tasks = []
+    for i, mid in enumerate(order):
+        n = by_key[mid]
+        d = n["depth"]
+        row = rows.get(d, 0)
+        rows[d] = row + 1
+        tasks.append(node(mid, n["name"], [mid], "build", d, row, i + 1))
+
+    # 끝 Task 들이 모두 끝나야 파이프라인이 끝난다. 이 표식이 있어야 «완료»
+    # 라는 사건이 하나로 모이고, 선행 트리거가 그것을 구독할 수 있다.
+    last_depth = max((t["depth"] for t in tasks), default=0) + 1
+    tasks.append(node(DONE_TASK, "완료", [], "marker", last_depth, 0, None))
+    task_edges += [{"from": m, "to": DONE_TASK} for m in order if m not in has_down]
+    return {"tasks": tasks, "task_edges": task_edges}
 
 
 # ---------------------------------------------------------------- 적재 소유권
@@ -148,7 +228,8 @@ def flow_for(pipeline: dict[str, Any], pipelines: list[dict[str, Any]],
     if owner is None:
         owner = ownership(pipelines)
     return build(pipeline.get("targets") or [], bool(pipeline.get("include_seeds")),
-                 stop_at=stops_for(pipeline["id"], owner))
+                 stop_at=stops_for(pipeline["id"], owner),
+                 task_mode=pipeline.get("task_mode") or "per_model")
 
 
 def downstream_of(order: list[str], start: str, edges: list[dict[str, str]]) -> list[str]:

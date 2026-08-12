@@ -55,7 +55,7 @@ modelList = function (r) {
         <button class="iconbtn" id="mLTgl" title="${S.leftOpen ? '접기' : '펼치기'}">${ic14(S.leftOpen ? 'chevl' : 'chev')}</button></span></div>
     <div class="mod-l-body f1 col" style="min-height:0">
       <div style="padding:8px 10px"><div class="srch">${ic14('search')}
-        <input class="inp" id="mQ" placeholder="이름으로 검색" style="height:29px;font-size:12.5px;padding-left:28px"></div></div>
+        <input class="inp sm" id="mQ" placeholder="이름으로 검색" style="padding-left:28px"></div></div>
       <div class="f1" style="overflow:auto;padding:0 6px 8px" id="mList"></div>
       <div style="padding:9px 11px;border-top:1px solid var(--line-2)">
         <div class="t11 fnt">SOURCE ${D.filter(d => d.kind === 'source').length} · DATA MODEL ${D.filter(d => d.kind !== 'source').length} · 폴더 ${FOLDERS.length}</div></div>
@@ -78,7 +78,7 @@ modelList = function (r) {
         ml.appendChild(folderRow({ id: '', name: '폴더 없음', grp: g }, loose.length, ml, graph));
         if (fdrOpen('') || q) loose.forEach(d => ml.appendChild(catRow(d, graph)));
       }
-      if (q && !all.length) ml.appendChild(el('<div class="t11 fnt" style="padding:6px 10px">일치하는 항목이 없습니다.</div>'));
+      if (q && !all.length) ml.appendChild(el('<div class="t11 fnt" style="padding:6px 10px">일치하는 항목이 없습니다. 검색어를 줄여 보세요.</div>'));
       const add = el(`<button class="fdr-add" data-newf="${g}">${ic14('plus')}폴더 추가</button>`);
       add.onclick = () => folderModal(null, g);
       ml.appendChild(add);
@@ -100,7 +100,7 @@ pipeCatalog = function (pp) {
       <button class="iconbtn sp" id="pLTgl" title="${S.pipeLeftOpen ? '접기' : '펼치기'}">${ic14(S.pipeLeftOpen ? 'chevl' : 'chev')}</button></div>
     <div class="mod-l-body f1 col" style="min-height:0">
       <div style="padding:8px 10px"><div class="srch">${ic14('search')}
-        <input class="inp" id="pQ" placeholder="이름으로 검색" style="height:29px;font-size:12.5px;padding-left:28px"></div></div>
+        <input class="inp sm" id="pQ" placeholder="이름으로 검색" style="padding-left:28px"></div></div>
       <div class="f1" style="overflow:auto;padding:0 6px 8px" id="pcList"></div>
       <div style="padding:9px 11px;border-top:1px solid var(--line-2)">
         <div class="t11 fnt">카드를 끌어다 놓거나 + 를 누르세요. 같은 모델을 여러 번 놓을 수 있습니다.</div></div>

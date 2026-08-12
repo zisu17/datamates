@@ -17,29 +17,26 @@ pageHome = function () {
   const stale = D.filter(d => d.stale);
   const failTests = TESTS.filter(t => t.status === 'err');
   const p = el('<div class="page"></div>');
-  p.appendChild(el(`<div class="page-h">
-    <div><h1 class="page-t">홈</h1>
-      <p class="page-d">${nowLabel()} 기준</p></div>
-    </div>`));
+  /* 워크 스페이스 탭을 걷어내 홈은 한 화면이다. 탭이 하나뿐이면 탭 줄은 고르는
+     자리가 아니라 장식이라 함께 없앤다.
 
-  if (!S.homeTab) S.homeTab = 'status';
-  const tabs = el(`<div class="tabs" style="margin:-2px 0 16px">
-    <button class="tab ${S.homeTab === 'status' ? 'on' : ''}" data-ht="status">데이터셋 현황</button>
-    <button class="tab ${S.homeTab === 'ws' ? 'on' : ''}" data-ht="ws">워크 스페이스</button></div>`);
-  $$('[data-ht]', tabs).forEach(b => b.onclick = () => { S.homeTab = b.dataset.ht; S.homeWs = null; render(); });
-  p.appendChild(tabs);
+     대신 이 화면이 무엇인지 제목으로 말한다. 탭 이름(「데이터셋 현황」)이 유일한
+     설명이었는데 탭 줄과 함께 사라져, 들어온 사람이 아래 카드들이 무엇의 현황인지
+     알 수 없었다. 기준 시각은 그 줄 오른쪽에 둔다 — 이 화면 숫자가 언제 것인지
+     말하는 값이라 제목과 같은 줄에 있어야 함께 읽힌다.
+     제목줄(.page-h)은 b01 이 홈에서 걷어가므로 여기서 직접 그린다. */
+  p.appendChild(el(`<div class="home-h">
+    <h1 class="page-t">데이터셋 현황</h1>
+    <span class="home-when">${esc(nowLabel())} 기준</span></div>`));
+  /* 데이터 생애주기 — 이 서비스가 다섯 개의 도구가 아니라 하나의 흐름이라는 것을
+     첫 화면이 먼저 말한다. (flowRail 은 b31 이 정의한다 — 호출은 렌더 시점이라
+     로드 순서와 무관하다) */
+  p.appendChild(flowRail());
 
-  if (S.homeTab === 'status') {
   /* ── 대시보드 그래프 ── */
   const okPipes = PIPES.filter(x => x.status === 'ok').length;
   const warnTests = TESTS.filter(t => t.status === 'warn').length;
   const passTests = TESTS.filter(t => t.status === 'ok').length;
-  const issueTest = failTests[0] || TESTS.find(t => t.status === 'warn');
-  const qualitySummary = failTests.length
-    ? '실패 · ' + ((byId(issueTest.target) || {}).name || issueTest.target || '')
-    : warnTests
-      ? '주의 · ' + ((byId(issueTest.target) || {}).name || issueTest.target || '')
-      : '모든 규칙 통과';
   const card = (title, sub, onclick) => {
     const c = el(`<section class="card" style="${onclick ? 'cursor:pointer' : ''}">
       <div class="card-h"><span class="card-t">${esc(title)}</span>
@@ -100,7 +97,7 @@ pageHome = function () {
         <span class="t12 f1">주의</span><span class="b6 t13">${warnTests}건</span></div>
       <div class="statrow"><span style="width:9px;height:9px;border-radius:2px;background:var(--ok)"></span>
         <span class="t12 f1">통과</span><span class="b6 t13">${passTests}건</span></div>
-      <span class="t11 fnt trunc">${esc(qualitySummary)}</span>
+      <span class="t11 fnt trunc">${failTests.length ? '실패 · ' + esc((byId(failTests[0].target) || {}).name || '') : '모든 규칙 통과'}</span>
     </div></div>`));
   grid.appendChild(c2);
 
@@ -152,11 +149,12 @@ pageHome = function () {
     <div class="card-b col g4" style="padding:8px"></div></section>`);
   const db = $('.card-b', dc);
   recent.forEach(d => {
-    const ws = WS_USER.find(w => (w.tables || []).includes(d.id));
+    /* 워크 스페이스가 있던 시절에는 «그 모델이 속한 사용자 워크 스페이스 이름» 을
+       먼저 보여주고 없으면 층으로 떨어졌다. 워크 스페이스를 걷어냈으니 층만 쓴다. */
     const b = el(`<button class="list-i taskline" title="${esc(d.name)} · ${esc(d.desc)}">
       <span class="ic-lead"><span class="swatch" style="background:${LAYER[d.layer].color};width:9px;height:9px;display:block"></span></span>
       <span class="tl-b"><span class="row g6"><span class="tl-t trunc">${esc(d.name)}</span></span>
-        <span class="tl-d trunc">${esc(ws ? ws.name : d.layer)} · ${esc(d.updated)} 업데이트</span></span>
+        <span class="tl-d trunc">${esc(d.layer)} · ${esc(d.updated)} 업데이트</span></span>
       ${qBadge(d.quality)}</button>`);
     b.onclick = () => go('catalog', d.id);
     db.appendChild(b);
@@ -164,11 +162,8 @@ pageHome = function () {
   right.appendChild(dc);
   g.appendChild(right);
   p.appendChild(g);
-    $('#hAllPipe', p).onclick = () => go('pipeline');
-    $('#hAllCat', p).onclick = () => { S.ws = null; go('catalog'); };
-  } else {
-    p.appendChild(homeWsView());
-  }
+
+  $('#hAllPipe', p).onclick = () => go('pipeline');
 
   /* 카탈로그 화면이 데이터 모델로 합쳐진 뒤(v2.1) 링크 이름·행선지를 맞춘다 */
   const aCat = $('#hAllCat', p);
@@ -188,8 +183,10 @@ pageHome = function () {
           </div></div>`);
 
   /* 원천 최신성 데이터가 아직 없어(원천이 seed) 그 카드는
-     실제로 아는 것 — 모델별 빌드 시간 비중 — 으로 바꾼다 */
-  const c3 = swapCard(p, '원천 데이터 수집 지연', !d ? loadingHtml : `
+     실제로 아는 것 — 모델별 빌드 시간 비중 — 으로 바꾼다.
+     위쪽 예제 카드도 이름이 c3 이었는데, 홈 탭을 걷어내며 두 이름이 같은 스코프에
+     놓였다. 가리키는 것이 다르므로(예제 카드 / 갈아끼운 카드) 여기를 cBuild 로 나눈다. */
+  const cBuild = swapCard(p, '원천 데이터 수집 지연', !d ? loadingHtml : `
         <div class="col g8">
           ${!d.slowest.length ? '<div class="empty" style="padding:24px">아직 실행 이력이 없습니다.</div>'
             : d.slowest.map(x => `<div class="col" style="gap:4px">
@@ -201,8 +198,8 @@ pageHome = function () {
             </div>`).join('')}
           <span class="t11 fnt" style="padding-top:2px">최근 7일 기준 · 총 소요가 큰 순서</span>
         </div>`);
-  if (c3) {
-    const t = $('.card-t', c3);
+  if (cBuild) {
+    const t = $('.card-t', cBuild);
     if (t) t.textContent = '모델별 빌드 시간 비중';
     const sub = t && t.nextElementSibling;
     if (sub && sub.classList.contains('t12')) sub.textContent = '최근 7일';
@@ -211,77 +208,10 @@ pageHome = function () {
   return p;
 };
 
-/* 워크 스페이스 탭 — 카탈로그와 같은 구성, 상세는 파이프라인 목록 */
-function wsPipesOf(ws) {
-  const ids = wsTables(ws).map(d => d.id);
-  return PIPES.filter(pp => (pp.targets || []).some(t => ids.includes(t)));
-}
-function homeWsCard(ws, user) {
-  const ps = wsPipesOf(ws);
-  const errN = ps.filter(x => x.status === 'err').length;
-  const c = el(`<button class="wscard">
-    <span class="wscard-t">${ic(user ? 'book2' : (ws.icon || 'db'), 'fnt')}${esc(ws.name)}
-      ${user ? `<span class="tag" title="공개 범위">${esc(ws.vis)}</span>` : ''}</span>
-    <span class="wscard-d">${esc(ws.desc)}</span>
-    <span class="wscard-m"><b class="num" style="color:var(--ink)">${ps.length}</b>개 파이프라인
-      ${errN ? `<span class="bdg err" style="height:18px">실패 ${errN}</span>` : '<span>·</span><span>모두 정상</span>'}
-      <span class="sp"></span></span></button>`);
-  c.onclick = () => { S.homeWs = ws.id; render(); };
-  return c;
-}
-function homeWsView() {
-  const w = el('<div class="col g14"></div>');
-  const sel = S.homeWs && wsById(S.homeWs);
-  if (sel) {
-    const ps = wsPipesOf(sel);
-    const head = el(`<div class="col" style="gap:6px">
-      <div class="crumbs"><button id="hwsBack">워크 스페이스</button>${ic14('chev', 'fnt')}<span>${esc(sel.name)}</span></div>
-      <div class="row t"><div class="col" style="gap:3px;min-width:0">
-        <h1 class="page-t">${esc(sel.name)}</h1>
-        <p class="page-d">${esc(sel.desc)} · 파이프라인 ${ps.length}개</p></div></div></div>`);
-    w.appendChild(head);
-    $('#hwsBack', head).onclick = () => { S.homeWs = null; render(); };
-    const card = el(`<section class="card"><div class="card-h"><span class="card-t">파이프라인</span>
-      <button class="lnk sp" id="hwsAll">전체 파이프라인</button></div>
-      <div class="card-b tight"></div></section>`);
-    const cb = $('.card-b', card);
-    if (!ps.length) cb.appendChild(el(`<div class="empty" style="padding:32px">${ic('pipe')}
-      <span class="empty-t">이 워크 스페이스의 데이터를 만드는 파이프라인이 없습니다.</span></div>`));
-    else {
-      const t = el('<div class="tbl" style="--cols:minmax(0,1.5fr) 96px 120px 110px 96px"></div>');
-      t.appendChild(el('<div class="th"><span>파이프라인</span><span>상태</span><span>실행 일정</span><span>최근 실행</span><span>소요</span></div>'));
-      ps.forEach(pp => {
-        const tr = el(`<div class="tr">
-          <span class="c2"><span class="b6 trunc">${esc(pp.name)}</span>
-            <span class="t11 fnt trunc">모델 ${(pp.targets || []).length}개</span></span>
-          <span>${pipeBadge(pp.status)}</span>
-          <span class="t12 mut">${esc(pp.freq)}</span>
-          <span class="t12 mut">${esc(pp.last)}</span>
-          <span class="t12 mut">${esc(pp.dur)}</span></div>`);
-        tr.onclick = () => go('pipeline', pp.id);
-        t.appendChild(tr);
-      });
-      cb.appendChild(t);
-    }
-    $('#hwsAll', card).onclick = () => go('pipeline');
-    w.appendChild(card);
-    return w;
-  }
-  w.appendChild(el('<div class="row"><span class="b6 t15">기본 워크 스페이스</span></div>'));
-  const g1 = el('<div class="wsgrid"></div>');
-  WS_BASE.forEach(ws => g1.appendChild(homeWsCard(ws, false)));
-  w.appendChild(g1);
-  w.appendChild(el('<div class="row" style="margin-top:8px"><span class="b6 t15">내 워크 스페이스</span></div>'));
-  const g2 = el('<div class="wsgrid"></div>');
-  WS_USER.forEach(ws => g2.appendChild(homeWsCard(ws, true)));
-  const add = el(`<button class="wscard" style="align-items:center;justify-content:center;border-style:dashed;color:var(--muted);min-height:150px">
-    ${ic('plus')}<span class="t13 b6">워크 스페이스 만들기</span>
-    <span class="t11 fnt">자주 보는 파이프라인을 모아두세요.</span></button>`);
-  add.onclick = () => wsCreateModal();
-  g2.appendChild(add);
-  w.appendChild(g2);
-  return w;
-}
+/* (워크 스페이스 — 홈의 두 번째 탭이었다. 기본 4개는 층 필터, 내 워크 스페이스 4개는
+   의료 데모 시절 테이블 id 를 들고 있어 어느 것도 실제 데이터에 닿지 않았다.
+   홈을 한 화면으로 정리하면서 wsPipesOf · homeWsCard · homeWsView 를 걷어냈다.
+   묶음 정의(WS_BASE/WS_USER)는 b06, 만들기 모달은 b07 에서 함께 제거) */
 
 /* 화면 전환 시 상태 정리 */
 
@@ -329,7 +259,7 @@ function openHelp() {
       <button class="iconbtn sp" data-close>${ic('x')}</button></div>
     <div class="modal-b">
       <ol style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:10px">
-        ${h.items.map(x => `<li style="font-size:13px;line-height:1.65;color:var(--text)">${esc(x)}</li>`).join('')}
+        ${h.items.map(x => `<li style="font-size:var(--fs-body);line-height:1.65;color:var(--text)">${esc(x)}</li>`).join('')}
       </ol></div>
     <div class="modal-f"><button class="btn pri sp" data-close>확인</button></div>`;
   const { close } = modal(body, { sm: true });

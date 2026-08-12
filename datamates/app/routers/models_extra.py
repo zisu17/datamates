@@ -74,9 +74,14 @@ def _columns_of(mid: str) -> list[list[str]]:
 def models_graph() -> dict[str, Any]:
     g = manifest.graph()
     pos = store.layout_get()
+    marts = store.marts()
     for n in g["nodes"]:
         p = pos.get(n["id"])
         n["x"], n["y"] = (p["x"], p["y"]) if p else (None, None)
+        n["baseGroup"] = n["group"]
+        n["isMart"] = n["id"] in marts
+        if n["isMart"]:
+            n["group"] = "DATA MART"
     return g
 
 
@@ -190,6 +195,8 @@ def put_transform(model_id: str, body: TransformIn) -> dict[str, Any]:
     if not v["ok"]:
         raise ApiError(models_router.sql_error_code(v), v["message"],
                        {"errors": v["errors"]})
+    # 마트를 입력으로 부르는 것은 여기서도 막는다 — SQL 을 쓰는 경로가 둘이다.
+    models_router._validate_or_400(sql, self_id=model_id)
 
     store.transform_set(model_id, cfg)
     dbtproj.write_model(model_id, sql=sql)

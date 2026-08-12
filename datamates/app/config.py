@@ -53,6 +53,27 @@ DAG_PREFIX = "datamates_"
 AIRFLOW_BASE_URL = os.environ.get("AIRFLOW_BASE_URL", "http://localhost:8080")
 AIRFLOW_USER = os.environ.get("AIRFLOW_USER", "admin")
 
+# ── 분석(Superset) ─────────────────────────────────────────────
+#
+# 사용자는 Superset 주소를 모른다. 브라우저는 이 서버의 /superset/* 만 부르고,
+# 그 요청을 analytics/proxy.py 가 아래 주소로 중계한다.
+#
+# 기본값이 localhost 인 것은 **이 서버가 호스트에서 돌기 때문**이다(datamates/run.sh).
+# 그래서 compose 는 8088 을 127.0.0.1 에만 묶어 둔다 — 다른 기기에서는 닿지 않지만
+# 같은 기기에서는 닿는다. 이 서버까지 컨테이너로 옮기면
+# SUPERSET_BASE_URL=http://superset:8088 로 바꾸고 포트 바인딩을 지울 수 있다.
+SUPERSET_BASE_URL = os.environ.get("SUPERSET_BASE_URL", "http://localhost:8088")
+SUPERSET_USER = os.environ.get("SUPERSET_ADMIN_USER", "admin")
+
+# 프록시가 브라우저에게 노출하는 접두사. Superset 이 만드는 절대 경로도
+# 이 값이 붙어 나오도록 X-Forwarded-Prefix 로 함께 넘긴다.
+SUPERSET_PREFIX = "/superset"
+
+
+def superset_password() -> str:
+    """서비스 계정 비밀번호. 권한 모델이 없으므로 계정은 이 하나뿐이다."""
+    return os.environ.get("SUPERSET_ADMIN_PASSWORD", "admin")
+
 # 컨테이너 안에서 dbt 를 실행할 때 쓰는 경로. dags/ 가 생성하는 DAG 이 이 값을 쓴다.
 CONTAINER_DBT_BIN = "/opt/dbt-venv/bin/dbt"
 

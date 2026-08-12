@@ -18,14 +18,23 @@ from ..errors import ApiError
 router = APIRouter(tags=["catalog"])
 
 
-GROUPS = ("SOURCE", "DATA MODEL")
+GROUPS = ("SOURCE", "DATA MODEL", "DATA MART")
+
+# 흐름 순서. 카탈로그 목록은 데이터가 지나가는 순서대로 정렬한다.
+GROUP_ORDER = {g: i for i, g in enumerate(GROUPS)}
 
 
 def _item(e: dict[str, Any], folder_id: str | None,
-          rs: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+          rs: list[dict[str, Any]] | None = None,
+          marts: set[str] | None = None) -> dict[str, Any]:
+    is_mart = e["id"] in (marts if marts is not None else store.marts())
     return {
         "id": e["id"], "name": e["name"], "phys": e["phys"],
-        "group": e["group"], "kind": e["kind"], "mat": e["mat"],
+        # DATA MART 는 별도 객체가 아니라 데이터 모델에 부여된 상태다.
+        # 다만 카탈로그에서는 그 상태가 곧 영역이라 group 으로 내보낸다.
+        "group": "DATA MART" if is_mart else e["group"],
+        "baseGroup": e["group"], "isMart": is_mart,
+        "kind": e["kind"], "mat": e["mat"],
         "desc": e["desc"], "tags": e["tags"], "folderId": folder_id,
         # 설계서 5.1 — 카탈로그 자체 속성이 아니라 활성 품질 규칙의 집계 결과다.
         "qualityStatus": state.quality_of(e["id"], rs),
@@ -38,6 +47,7 @@ def _item(e: dict[str, Any], folder_id: str | None,
 def catalog(q: str | None = Query(None, description="이름·경로·설명 부분일치")) -> dict[str, Any]:
     entries = manifest.all_entries()
     placed = store.model_folders()
+    marts = store.marts()
     rs = state.rules()
     needle = (q or "").strip().lower()
 
@@ -45,8 +55,8 @@ def catalog(q: str | None = Query(None, description="이름·경로·설명 부�
     for e in entries.values():
         if needle and needle not in f"{e['name']} {e['phys']} {e['desc']}".lower():
             continue
-        items.append(_item(e, placed.get(e["id"]), rs))
-    items.sort(key=lambda x: (x["group"] != "SOURCE", x["name"]))
+        items.append(_item(e, placed.get(e["id"]), rs, marts))
+    items.sort(key=lambda x: (GROUP_ORDER.get(x["group"], 9), x["name"]))
 
     counted = {f["id"]: sum(1 for i in items if i["folderId"] == f["id"])
                for f in store.folders()}
@@ -192,10 +202,15 @@ def graph() -> dict[str, Any]:
     """
     g = manifest.graph()
     pos = store.layout_get()
+    marts = store.marts()
     for n in g["nodes"]:
         p = pos.get(n["id"])
         if p:
             n.update(x=p["x"], y=p["y"])
+        n["baseGroup"] = n["group"]
+        n["isMart"] = n["id"] in marts
+        if n["isMart"]:
+            n["group"] = "DATA MART"
     return g
 
 
