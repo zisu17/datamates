@@ -26,7 +26,15 @@ router = APIRouter(prefix="/history", tags=["history"])
 EL = "ice.analytics_elementary"
 
 # 시각 컬럼은 VARCHAR 다. 매번 쓰기 번거로워 표현을 하나로 모은다.
-TS = "CAST({} AS TIMESTAMP)"
+#
+# `AT TIME ZONE 'UTC'` 가 붙는 이유. 이 값들은 dbt·elementary 가 **UTC 로** 적어
+# 둔 문자열인데 시간대 표시가 없다. 그대로 TIMESTAMP 로 캐스팅하면 시간대 없는
+# 값이 되어 세 곳이 한꺼번에 어긋난다 —
+#   ① 화면 표시: 시간대 없는 문자열을 화면이 자기 지역 시각으로 읽어 9시간 이르게 그린다.
+#   ② 기간 필터: now() 는 시간대가 있는 값이라 비교 기준이 9시간 밀린다.
+#   ③ 일자 집계: cast(... as date) 가 UTC 날짜로 끊겨 한국 자정과 어긋난다.
+# UTC 임을 명시하면 세션 시간대(KST)가 실려 셋 다 같은 기준이 된다.
+TS = "(CAST({} AS TIMESTAMP) AT TIME ZONE 'UTC')"
 # execution_time 은 FLOAT 라 그대로 반올림하면 17.9 가 17.90999984741211 로 나온다.
 SEC = "CAST({} AS DOUBLE)"
 

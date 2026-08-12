@@ -87,6 +87,17 @@ CREATE TABLE IF NOT EXISTS model_transform (
     cfg      TEXT NOT NULL DEFAULT '{}'
 );
 
+-- DATA MART 지정. 마트는 별도의 객체가 아니라 데이터 모델에 부여하는 «역할»이라
+-- 여기에는 어떤 모델이 마트인지만 둔다. 이름·SQL·컬럼은 그대로 dbt 것이다.
+--
+-- dbt 가 모르는 사실이라 메타스토어에 둔다. dbt 태그로 둘 수도 있지만 그러면
+-- 지정·해제가 schema.yml 쓰기 + dbt parse(약 5초)가 되고, 해제 차단(분석에서
+-- 사용 중)을 파일 쓰기 전에 판단해야 해서 흐름이 뒤집힌다.
+CREATE TABLE IF NOT EXISTS model_mart (
+    model_id  TEXT PRIMARY KEY,
+    marked_at REAL NOT NULL
+);
+
 -- 실행 이력의 원본은 Airflow 다. 여기에는 어떤 의도로 눌렀는지(전체/부분 재실행)만 남긴다.
 -- (Airflow 의 dag_run 은 from_node 같은 우리 쪽 개념을 모른다)
 CREATE TABLE IF NOT EXISTS ingest_job (
@@ -101,6 +112,8 @@ CREATE TABLE IF NOT EXISTS ingest_job (
     retry       INTEGER NOT NULL DEFAULT 1,
     -- 수집은 파이프라인과 달리 선행 트리거가 없다. 예약과 수동뿐이다.
     trigger_type TEXT NOT NULL DEFAULT 'manual' CHECK (trigger_type IN ('schedule', 'manual')),
+    scope       TEXT NOT NULL DEFAULT '{}',    -- JSON: 수집 범위(전체/증분)
+    watermark   TEXT,                          -- 증분 수집이 덮은 마지막 시점 (ISO)
     created_at  REAL NOT NULL,
     updated_at  REAL NOT NULL
 );
@@ -119,6 +132,23 @@ CREATE TABLE IF NOT EXISTS run_log (
     from_node   TEXT,
     created_at  REAL NOT NULL
 );
+
+-- 데이터 모델 ↔ Superset 데이터셋. 분석 기능의 «관계를 따로 저장하지 않는다» 예외다.
+--
+-- dbt manifest 가 단일 원천이라는 원칙은 그대로다 — 이 표는 원천이 아니라
+-- «플랫폼이 만든 Superset 객체의 주소록» 이다. 없으면 물리명으로 매칭해야 하고,
+-- 그러면 모델 이름이 바뀌는 순간 연결이 끊긴다.
+--
+-- embed_uuid 는 대시보드용이 아니라 데이터셋용이 아니므로 두지 않는다.
+CREATE TABLE IF NOT EXISTS superset_dataset (
+    model_id   TEXT PRIMARY KEY,
+    dataset_id INTEGER NOT NULL,
+    phys       TEXT NOT NULL,      -- 동기화 당시의 물리 위치. 바뀌면 다시 만든다
+    synced_at  REAL NOT NULL,
+    state      TEXT NOT NULL DEFAULT 'ok'   -- ok | stale | orphan
+);
+CREATE INDEX IF NOT EXISTS idx_superset_dataset_id
+    ON superset_dataset(dataset_id);
 """
 
 
@@ -151,6 +181,11 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
     # 실행 트리거 — schedule(예약) / manual(수동) / upstream(선행 파이프라인 완료 후)
     ("pipelines", "trigger_type", "TEXT NOT NULL DEFAULT 'schedule'"),
     ("pipelines", "upstream_pipeline_id", "TEXT"),
+    # 수집 범위 — JSON. 전체 수집이면 비어 있고, 증분 수집이면 기준·파라미터가 들어간다.
+    ("ingest_job", "scope", "TEXT NOT NULL DEFAULT '{}'"),
+    # 증분 수집이 어디까지 가져왔는지. 사람이 고치는 값이 아니라 실행이 남기는 값이라
+    # config 가 아니라 별도 컬럼에 둔다 — 설정을 수정해도 지워지면 안 된다.
+    ("ingest_job", "watermark", "TEXT"),
 ]
 
 
@@ -168,13 +203,15 @@ def init() -> None:
 # ------------------------------------------------------------ 데이터 수집
 
 _ING_COLS = ("id", "name", "kind", "target", "mode", "config", "columns",
-             "freq", "retry", "trigger_type", "created_at", "updated_at")
+             "freq", "retry", "trigger_type", "scope", "watermark",
+             "created_at", "updated_at")
 
 
 def _ing_row(r: sqlite3.Row) -> dict[str, Any]:
     d = dict(r)
     d["config"] = json.loads(d["config"])
     d["columns"] = json.loads(d["columns"])
+    d["scope"] = json.loads(d.get("scope") or "{}")
     return d
 
 
@@ -205,28 +242,38 @@ def ingest_upsert(jid: str, fields: dict[str, Any]) -> dict[str, Any]:
     existing = ingest_get(jid)
     merged = {"name": "", "kind": "api", "target": "", "mode": "append",
               "config": {}, "columns": [], "freq": "수동 실행", "retry": 1,
-              "trigger_type": "manual"}
+              "trigger_type": "manual", "scope": {}}
     if existing:
         merged.update({k: existing[k] for k in merged})
     merged.update({k: v for k, v in fields.items() if k in merged and v is not None})
 
+    # 워터마크는 실행이 남기는 값이라 저장에서 건드리지 않는다. 설정을 고쳤다고
+    # 어디까지 가져왔는지가 초기화되면 같은 구간을 다시 긁는다.
     with db() as conn:
         conn.execute(
             """INSERT INTO ingest_job
                  (id, name, kind, target, mode, config, columns, freq, retry,
-                  trigger_type, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  trigger_type, scope, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(id) DO UPDATE SET
                  name=excluded.name, kind=excluded.kind, target=excluded.target,
                  mode=excluded.mode, config=excluded.config, columns=excluded.columns,
                  freq=excluded.freq, retry=excluded.retry,
-                 trigger_type=excluded.trigger_type, updated_at=excluded.updated_at""",
+                 trigger_type=excluded.trigger_type, scope=excluded.scope,
+                 updated_at=excluded.updated_at""",
             (jid, merged["name"], merged["kind"], merged["target"], merged["mode"],
              json.dumps(merged["config"], ensure_ascii=False),
              json.dumps(merged["columns"], ensure_ascii=False),
              merged["freq"], int(merged["retry"]), merged["trigger_type"],
+             json.dumps(merged["scope"], ensure_ascii=False),
              existing["created_at"] if existing else now, now))
     return ingest_get(jid)  # type: ignore[return-value]
+
+
+def ingest_mark(jid: str, watermark: str) -> None:
+    """증분 수집이 어디까지 덮었는지 기록한다. 적재가 성공했을 때만 부른다."""
+    with db() as conn:
+        conn.execute("UPDATE ingest_job SET watermark = ? WHERE id = ?", (watermark, jid))
 
 
 def ingest_delete(jid: str) -> None:
@@ -296,6 +343,35 @@ def model_folder_set(model_id: str, folder_id: str | None) -> None:
             "INSERT INTO model_folder (model_id, folder_id) VALUES (?, ?) "
             "ON CONFLICT(model_id) DO UPDATE SET folder_id = excluded.folder_id",
             (model_id, folder_id))
+
+
+# ---------------------------------------------------------------- DATA MART
+
+def marts() -> set[str]:
+    """DATA MART 로 지정된 모델 id 집합.
+
+    manifest 와 조인하지 않는다 — 지워진 모델의 행이 남을 수 있지만, 조회하는
+    쪽이 항상 카탈로그와 교차해서 쓰므로 고아 행은 화면에 나오지 않는다.
+    """
+    with db() as conn:
+        return {r["model_id"] for r in conn.execute("SELECT model_id FROM model_mart")}
+
+
+def mart_set(model_id: str, on: bool) -> None:
+    with db() as conn:
+        if on:
+            conn.execute(
+                "INSERT INTO model_mart (model_id, marked_at) VALUES (?, ?) "
+                "ON CONFLICT(model_id) DO NOTHING", (model_id, time.time()))
+        else:
+            conn.execute("DELETE FROM model_mart WHERE model_id = ?", (model_id,))
+
+
+def mart_marked_at(model_id: str) -> float | None:
+    with db() as conn:
+        r = conn.execute("SELECT marked_at FROM model_mart WHERE model_id = ?",
+                         (model_id,)).fetchone()
+        return r["marked_at"] if r else None
 
 
 # ---------------------------------------------------------------- 파이프라인
@@ -422,6 +498,39 @@ def transform_set(model_id: str, cfg: dict[str, Any]) -> None:
             "INSERT INTO model_transform (model_id, cfg) VALUES (?, ?) "
             "ON CONFLICT(model_id) DO UPDATE SET cfg = excluded.cfg",
             (model_id, json.dumps(cfg, ensure_ascii=False)))
+
+
+# ---------------------------------------------------------------- 분석 데이터셋
+
+def ds_all() -> dict[str, dict[str, Any]]:
+    """모델id → {datasetId, phys, syncedAt, state}."""
+    with db() as conn:
+        return {r["model_id"]: {"datasetId": r["dataset_id"], "phys": r["phys"],
+                                "syncedAt": r["synced_at"], "state": r["state"]}
+                for r in conn.execute("SELECT * FROM superset_dataset")}
+
+
+def ds_by_dataset() -> dict[int, str]:
+    """데이터셋id → 모델id. 차트·대시보드에서 모델로 거슬러 올라갈 때 쓴다."""
+    with db() as conn:
+        return {r["dataset_id"]: r["model_id"]
+                for r in conn.execute(
+                    "SELECT model_id, dataset_id FROM superset_dataset")}
+
+
+def ds_set(model_id: str, dataset_id: int, phys: str, state: str = "ok") -> None:
+    with db() as conn:
+        conn.execute(
+            "INSERT INTO superset_dataset (model_id, dataset_id, phys, synced_at, state) "
+            "VALUES (?, ?, ?, ?, ?) ON CONFLICT(model_id) DO UPDATE SET "
+            "dataset_id = excluded.dataset_id, phys = excluded.phys, "
+            "synced_at = excluded.synced_at, state = excluded.state",
+            (model_id, int(dataset_id), phys, time.time(), state))
+
+
+def ds_delete(model_id: str) -> None:
+    with db() as conn:
+        conn.execute("DELETE FROM superset_dataset WHERE model_id = ?", (model_id,))
 
 
 # ---------------------------------------------------------------- 설정

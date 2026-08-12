@@ -16,7 +16,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from .. import airflow_client as af
-from .. import daggen, dbtproj, graph, manifest, state, store
+from .. import daggen, dbtproj, graph, ingest, ingestdag, manifest, state, store
 from ..errors import ApiError, not_found
 
 router = APIRouter(tags=["pipelines"])
@@ -256,6 +256,32 @@ def put_config(pid: str, body: ConfigIn) -> dict[str, Any]:
     return get_config(pid)
 
 
+def _ingest_run_state(job: dict[str, Any]) -> dict[str, Any]:
+    """수집 작업의 예약·최근 실행 상태.
+
+    걸린 시간 계산은 수집 라우터의 것을 그대로 쓴다. 같은 실행이 목록과
+    그래프에서 다르게 보이지 않으려면 재는 자리가 하나여야 한다.
+    """
+    from .ingest import _run_view
+
+    dag_id = ingestdag.dag_id_of(job["id"])
+    paused = None
+    next_run = None
+    try:
+        dag = af.dag_get(dag_id)
+        paused, next_run = bool(dag.get("is_paused")), dag.get("next_dagrun_run_after")
+    except af.AirflowError:
+        pass
+    try:
+        runs = af.dag_runs(dag_id, limit=1)
+    except af.AirflowError:
+        runs = []
+    last = _run_view(runs[0]) if runs else None
+    state_of = {"success": "ok", "failed": "err", "running": "run"}
+    return {"paused": paused, "nextRun": next_run, "latestRun": last,
+            "status": state_of.get((last or {}).get("state"), "wait")}
+
+
 @router.get("/pipelines/flow")
 def pipelines_flow() -> dict[str, Any]:
     """파이프라인 단위 DAG — 전체 흐름 화면이 그린다.
@@ -269,7 +295,8 @@ def pipelines_flow() -> dict[str, Any]:
     for p in store.pipelines():
         x = by_id.get(p["id"], {})
         nodes.append({
-            "id": p["id"], "name": p["name"], "freq": p["freq"],
+            "id": p["id"], "name": p["name"], "kind": "pipeline",
+            "freq": p["freq"],
             "triggerType": p.get("trigger_type") or "schedule",
             "upstreamPipelineId": p.get("upstream_pipeline_id"),
             "status": x.get("status", "wait"), "paused": x.get("paused"),
@@ -280,6 +307,26 @@ def pipelines_flow() -> dict[str, Any]:
         if p.get("trigger_type") == "upstream" and p.get("upstream_pipeline_id"):
             edges.append({"from": p["upstream_pipeline_id"], "to": p["id"],
                           "cond": "success"})
+
+    # 수집 → 가공. 파이프라인이 읽는 원천과, 그 원천에 적재하는 수집 작업을 잇는다.
+    # 실제로 둘을 잇는 것은 Asset 이지만(수집 DAG 의 outlets = 파이프라인 DAG 의
+    # schedule), 화면에 그리기에는 «누가 이 테이블을 채우는가» 로 보는 편이 곧다.
+    for j in store.ingest_jobs():
+        nodes.append({
+            "id": j["id"], "name": j["name"], "kind": "ingest",
+            "freq": j.get("freq") or "수동 실행",
+            "triggerType": j.get("trigger_type") or "schedule",
+            "target": j["target"], "phys": f"{ingest.RAW_SCHEMA}.{j['target']}",
+            **_ingest_run_state(j),
+        })
+
+    fills = {j["target"]: j["id"] for j in store.ingest_jobs()}
+    for p in store.pipelines():
+        flow = (by_id.get(p["id"], {}).get("flow") or {})
+        for n in flow.get("nodes") or []:
+            src = fills.get(n["id"]) if n.get("dbt_type") == "source" else None
+            if src:
+                edges.append({"from": src, "to": p["id"], "cond": "asset"})
     return {"nodes": nodes, "edges": edges}
 
 

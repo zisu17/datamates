@@ -232,7 +232,7 @@ function ruleModal(ruleId, modelId) {
       <button class="iconbtn sp" data-close>${ic('x')}</button></div>
     <div class="modal-b"><div class="frm">
       <div class="fr"><span class="fr-l">규칙 이름</span>
-        <input class="inp" id="rNm" value="${esc(cur.name)}" placeholder="예) 환자번호 필수값"></div>
+        <input class="inp" id="rNm" value="${esc(cur.name)}" placeholder="예) 주문번호 필수값"></div>
       <div class="fr"><span class="fr-l">검사 유형</span>
         <select class="inp" id="rTp">${Object.entries(QTYPES).map(([k, v]) =>
           `<option value="${k}" ${cur.type === k ? 'selected' : ''}>${v.label}</option>`).join('')}</select>

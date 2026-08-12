@@ -18,8 +18,10 @@ from fastapi.staticfiles import StaticFiles
 
 from . import dbtproj, errors, manifest, state, store
 from .config import AIRFLOW_BASE_URL, DBT_DIR, PROJECT_DIR
-from .routers import (bootstrap, catalog, history, ingest, lineage, models,
-                      models_extra, pipelines, pipelines_extra, quality)
+from .analytics import proxy as superset_proxy
+from .routers import (analytics, bootstrap, catalog, history, ingest, lineage,
+                      mart, models, models_extra, pipelines, pipelines_extra,
+                      quality)
 
 API_PREFIX = "/api/v1"
 
@@ -61,8 +63,61 @@ async def context_headers(request: Request, call_next):
 @app.on_event("startup")
 def _startup() -> None:
     store.init()
+    _seed_marts()
     _ensure_iceberg_pool()
     _regenerate_dags()
+    _sync_analytics_datasets()
+
+
+def _seed_marts() -> None:
+    """DATA MART 개념을 들이기 전에 만들어진 설치를 한 번 맞춰 준다.
+
+    그전에는 카탈로그의 모든 모델이 분석에서 보였다. 규칙만 바꾸고 끝내면
+    이미 만든 대시보드의 근거 데이터가 하루아침에 「분석에서 못 쓰는 모델」이
+    되어 버린다. 그래서 최초 1회, **이미 최종 모델인 것**(하류 모델이 없고
+    데이터셋이 만들어져 있던 것)을 마트로 올려 둔다.
+
+    이후로는 자동으로 지정하지 않는다 — 무엇을 분석에 내보낼지는 사람이 정한다.
+    """
+    if store.pref_get("martSeeded") == "1":
+        return
+    try:
+        entries = manifest.all_entries()
+        mapped = set(store.ds_all())
+        seeded = []
+        for mid, e in entries.items():
+            if e["kind"] != "model" or e["downstream"] or mid not in mapped:
+                continue
+            store.mart_set(mid, True)
+            seeded.append(mid)
+        store.pref_set("martSeeded", "1")
+        if seeded:
+            print(f"[datamates] DATA MART 초기 지정 {len(seeded)}건: {', '.join(seeded)}")
+    except Exception as e:                       # noqa: BLE001
+        print(f"[datamates] DATA MART 초기 지정 실패 (기동은 계속): {e}")
+
+
+def _sync_analytics_datasets() -> None:
+    """카탈로그를 Superset 데이터셋에 반영한다.
+
+    데이터셋을 만드는 경로는 이것뿐이다 — 프록시가 데이터셋 쓰기를 막고 있어서
+    사람이 Superset 화면에서 만들 수 없다(설계서 리스크 6). 그래서 기동 때
+    한 번 맞춰 두지 않으면 모델을 추가해도 분석 화면에서 쓸 수 없다.
+
+    분석 엔진이 안 떠 있을 수 있으므로 실패해도 서버 기동은 막지 않는다 —
+    화면의 「동기화」 버튼(/analytics/datasets:sync)이 같은 일을 한다.
+    """
+    from .analytics import sync as ds_sync
+    try:
+        out = ds_sync.sync_all()
+        msg = f"[datamates] 분석 데이터셋 동기화: {out['byAction']}"
+        if out["errors"]:
+            msg += f" · 실패 {len(out['errors'])}건"
+        if out["orphans"]:
+            msg += f" · 고아 {len(out['orphans'])}건"
+        print(msg)
+    except Exception as e:                       # noqa: BLE001
+        print(f"[datamates] 분석 데이터셋 동기화 실패 (기동은 계속): {e}")
 
 
 def _regenerate_dags() -> None:
@@ -139,10 +194,22 @@ def reparse() -> dict[str, Any]:
 # 먼저 등록돼야 "graph" 가 model_id 로 잡히지 않는다.
 # 마찬가지로 pipelines_extra 의 고정 경로(/pipelines/{id}/config 등)를 먼저 둔다.
 for r in (bootstrap.router,
-          models_extra.router, models.router,
+          mart.router, models_extra.router, models.router,
           pipelines_extra.router, pipelines.router,
-          ingest.router, catalog.router, quality.router, history.router, lineage.router):
+          ingest.router, catalog.router, quality.router, history.router,
+          lineage.router, analytics.router):
     app.include_router(r, prefix=API_PREFIX)
+
+
+# 분석 화면의 iframe 이 부르는 리버스 프록시.
+#
+# 등록 순서가 이 두 줄의 전부다.
+#   · api_fallback 은 **플랫폼 라우터 뒤** — /api/v1 이 겹치므로 플랫폼이 먼저 잡는다.
+#   · router 는 **UI 마운트 앞** — /static/... 이 정적 파일 핸들러에 먹히면 안 된다.
+# 접두사를 붙이지 않는다. Superset 이 만드는 절대 경로를 같은 이름으로 내보내야
+# 하기 때문이다 — 이유는 analytics/proxy.py 의 모듈 주석.
+app.include_router(superset_proxy.api_fallback)
+app.include_router(superset_proxy.router)
 
 
 # 화면을 같은 서버에서 내보낸다 — 설치형이라 진입점이 하나여야 한다.

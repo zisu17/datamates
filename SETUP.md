@@ -17,15 +17,27 @@
 .iceberg-rest/    카탈로그 sqlite
 .spark-warehouse/ 구 로컬 웨어하우스 (지금은 MinIO 를 쓴다)
 .spark-events/    Spark 이벤트 로그
-dbt/dbt_packages/ dbt deps 로 재생성
-dbt/target/ logs/ 빌드 산출물
+dbt_packages/     dbt deps 로 재생성 (dbt 프로젝트 안)
+target/ logs/     빌드 산출물 (dbt 프로젝트 안)
 edr_target/       Elementary 리포트
 .datamates/runs/  dbt 실행 산출물. 수백 MB 인데 다시 실행하면 쌓인다
 ```
 
-옮겨야 하는 것은 dbt 프로젝트 전체인 `dbt/`(그 안의 `models/ seeds/ tests/ macros/
-profiles/ dbt_project.yml packages.yml package-lock.yml`), 화면·API 인 `datamates/ ui/`,
-그리고 `dags/ scripts/ docker/ requirements.txt env.sh docker-compose.yml`.
+옮겨야 하는 것은 화면·API 인 `datamates/ ui/` 와
+`dags/ scripts/ docker/ requirements.txt env.sh docker-compose.yml` 이다.
+
+**dbt 프로젝트는 이 저장소에 없다.** 콘솔이 제품이고 dbt 프로젝트는 그 제품이 다루는
+데이터라 저장소를 갈랐다. 새 맥에서는 dbt 프로젝트를 따로 받아 두고 `DBT_PROJECT_DIR`
+로 가리킨다 — 그 한 줄이 제품과 데이터의 경계다.
+
+```bash
+git clone git@github.com:zisu17/dbt-projects.git ~/PycharmProjects/dbt-projects
+export DBT_PROJECT_DIR=~/PycharmProjects/dbt-projects/realestate-gap
+```
+
+`~/.zshrc` 에 넣어 두면 매번 치지 않아도 된다. 지정하지 않으면 관례상 저장소 안의
+`dbt/` 를 보므로, 거기에 두거나 심볼릭 링크를 걸어도 된다. 경로에 `dbt_project.yml`
+이 없으면 `env.sh` 가 경고한다.
 
 `.datamates/datamates.db` 는 **선택**이다. 파이프라인 정의·수집 작업·폴더 배치·변경 이력이
 들어 있는 메타스토어라, 가져가면 그 화면들이 그대로 이어지고 안 가져가면 빈 화면에서
@@ -232,12 +244,6 @@ open http://localhost:8080
 docker exec airflow cat /opt/airflow/simple_auth_manager_passwords.json.generated
 ```
 
-배관 확인용 DAG `dbt_smoke` 를 UI 에서 돌려보거나:
-
-```bash
-docker exec airflow airflow dags test dbt_smoke
-```
-
 **컨테이너와 호스트가 같은 웨어하우스를 보는지** — 가장 중요한 검증이다.
 
 ```bash
@@ -256,7 +262,7 @@ docker exec -w /opt/project/dbt airflow /opt/dbt-venv/bin/dbt build
 그다음 호스트에서 같은 결과가 나오면 성공이다.
 
 ```bash
-dbt show --inline "select count(*) as rows from {{ ref('fct_events') }}"
+dbt show --inline "select count(*) as rows from {{ ref('stg_apt_trade') }}"
 ```
 
 **MinIO 콘솔** — http://localhost:9001 (minioadmin / minioadmin)

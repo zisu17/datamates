@@ -1,0 +1,12 @@
+# Superset 이미지에 추가로 넣는 것 — 질의 경로에 필요한 두 개뿐이다.
+#
+# duckdb 버전은 datamates/requirements.txt 와 **같은 핀**이어야 한다.
+# 플랫폼(미리보기·통계)과 Superset(차트)이 서로 다른 DuckDB 로 같은 테이블을 읽으면
+# 타임존·소수 정밀도·NULL 정렬에서 값이 어긋날 수 있다 (설계서 리스크 2).
+# 한쪽을 올릴 때 반드시 양쪽을 같이 올린다.
+duckdb==1.5.5
+duckdb-engine==0.17.0
+
+# 메타DB(Postgres) 드라이버. apache/superset:5.0.0 이미지에는 들어 있지 않다
+# (기대와 다른 부분이다 — 없으면 `superset db upgrade` 가 ModuleNotFoundError 로 죽는다).
+psycopg2-binary==2.9.12

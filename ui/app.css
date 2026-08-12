@@ -18,14 +18,50 @@
   --shadow-1:0 2px 4px rgba(0,0,0,.10);
   --shadow-2:0 4px 12px rgba(0,0,0,.10);
   --shadow-3:4px 8px 20px rgba(0,0,0,.10);
-  --r-s:6px; --r-m:8px; --r-l:12px;
+  /* ── 타이포그래피 스케일 ──────────────────────────────────────────
+     화면마다 임의 크기를 쓰던 것을 여덟 단으로 모았다. 원래 8.5 ~ 26px 사이에
+     0.5px 간격으로 20종이 흩어져 있었는데, 같은 역할인데 화면마다 12 / 12.5 로
+     갈리는 식이라 눈에 보이는 차이 없이 규칙만 잃고 있었다.
+
+     역할 → 단
+       페이지 제목            --fs-page      18   ← 전역 헤더 브랜드와 같은 급
+       섹션 · 모달 제목        --fs-title     16
+       카드 · 패널 제목        --fs-strong    14
+       본문 · 버튼 · 입력 · 탭  --fs-body      13   ← 기준
+       보조 본문 · 폼 라벨      --fs-sm        12
+       캡션 · 메타 · 표머리 · 배지 --fs-cap    11
+       캔버스 노드 내부         --fs-micro     10   (좁은 상자 전용 예외)
+       KPI 수치               --fs-display   26
+
+     새 크기를 쓰고 싶으면 여기에 단을 더한다 — 규칙 바깥의 px 을 쓰지 않는다. */
+  /* 전역 헤더 — 화면 폭과 무관하게 **고정**이다.
+     폭에 따라 글자·컨트롤을 키우면 같은 헤더가 모니터마다 다른 제품처럼 보이고,
+     본문 글자와의 크기 관계도 화면마다 달라진다. 반응형은 padding·gap·요소 배치와
+     보조 정보 숨김·버튼 축약으로만 대응한다(아래 #app.nar / .xnar).
+     값을 여기 모아 두는 이유는, 페이지마다 헤더를 다시 정의하지 못하게 하려는 것이다. */
+  --hd-h:60px;        /* 헤더 높이 */
+  --hd-brand:18px;    /* 브랜드 */
+  --hd-nav:14px;      /* 메뉴 */
+  --hd-logo:32px;     /* 브랜드 배지 */
+  --hd-ctl:34px;      /* 아이콘 버튼 */
+  --hd-ic:18px;       /* 아이콘 버튼 안 아이콘 */
+  --fs-micro:10px; --fs-cap:11px; --fs-sm:12px; --fs-body:13px;
+  --fs-strong:14px; --fs-title:16px; --fs-page:18px; --fs-display:26px;
+  /* 행간 — 제목은 좁게, 본문은 넉넉히, 컨트롤·캡션은 그 사이 */
+  --lh-tight:1.3; --lh-snug:1.4; --lh-base:1.5;
+  /* 굵기 — 본문 400 · 라벨 500 · 제목 700.
+     원래 500·600·620·650·700·750·800 일곱 가지를 썼는데, 불러오는 Noto Sans KR 은
+     400·500·700 세 가지뿐이라 600 이상은 전부 700 으로 그려지고 있었다.
+     보이는 것과 적힌 것을 맞춘다. */
+  --fw-reg:400; --fw-med:500; --fw-bold:700;
+  --tab-w:176px;--r-s:6px; --r-m:8px; --r-l:12px;
   --sans:'Noto Sans KR','Noto Sans CJK KR','Apple SD Gothic Neo',system-ui,-apple-system,sans-serif;
   --mono:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace;
 }
 *{box-sizing:border-box}
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);
-  font-size:14px;line-height:1.5;letter-spacing:-0.5px;-webkit-font-smoothing:antialiased}
+  font-size:var(--fs-body);line-height:1.5;letter-spacing:-0.5px;-webkit-font-smoothing:antialiased}
 input,select,textarea{font:inherit;color:inherit}
 /* 브라우저 기본 버튼 스타일 초기화 — 테두리·배경이 남지 않게 한다 */
 button{border:0;background:transparent;appearance:none;-webkit-appearance:none;
@@ -34,6 +70,34 @@ button::-moz-focus-inner{border:0;padding:0}
 .mono{font-family:var(--mono);letter-spacing:0}
 .num{font-variant-numeric:tabular-nums}
 /* 포커스 링 — 전 컴포넌트 공통 */
+/* 모션 감축 — OS 에서 «동작 줄이기» 를 켠 사용자를 위해 전환·애니메이션을 끈다.
+   끄지 않고 두면 전정 장애·멀미가 있는 사용자에게 사이드바 슬라이드와 스켈레톤
+   파동이 그대로 돈다. 완전히 0 이 아니라 0.01ms 인 이유는, 길이를 0 으로 두면
+   transitionend 를 기다리는 코드가 영원히 멈추기 때문이다. */
+/* ── 지원 폭 ──────────────────────────────────────────────────
+   **이 도구는 데스크톱·태블릿 가로(1024px 이상)를 지원한다.** 휴대폰 세로는
+   지원하지 않는다 — 계보 캔버스·파이프라인 흐름도·다중 패널이 화면의 본체인데
+   그것들을 세로 화면에 접어 넣으면 «작게 보이는 같은 화면» 이 아니라 다른 제품이
+   된다. 그 결정을 여기 적어 두는 이유는, 적어 두지 않으면 다음 사람이 «반응형을
+   빠뜨렸다» 고 읽고 없는 요구를 만들어 내기 때문이다.
+
+   1024px 위로는 JS 폭 단계(widthTier — nar 1180 · xnar 1040)가 여백과 노출을
+   조절한다. 아래 규칙은 그보다 좁아졌을 때의 **최소 안전장치**다: 레이아웃을
+   새로 짜지 않고, 가로로 훑어볼 수 있게만 열어 둔다. */
+@media (max-width: 1023px){
+  .shell{overflow-x:auto}
+  .main{min-width:1024px}          /* 접지 않는다 — 가로로 훑는다 */
+}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{
+    animation-duration:.01ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:.01ms !important;
+    scroll-behavior:auto !important;
+  }
+}
+
 :focus{outline:none}
 :focus-visible{outline:2px solid var(--line-focus);outline-offset:1px;border-radius:6px}
 
@@ -46,24 +110,33 @@ button::-moz-focus-inner{border:0;padding:0}
 /* ───────── 앱 셸 ───────── */
 /* 높이를 뷰포트에 고정해야 캔버스가 스스로 스크롤하고 하단 도크가 화면 안에 남는다 */
 #app{height:100vh;overflow:hidden;display:flex;flex-direction:column}
-.top{height:54px;flex:none;background:var(--surface);border-bottom:1px solid var(--line);
-  display:flex;align-items:center;gap:12px;padding:0 14px;position:sticky;top:0;z-index:60}
-.brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;color:var(--ink);letter-spacing:-0.4px}
-.brand-m svg{width:16px;height:16px;display:block}
-.brand-m{width:24px;height:24px;border-radius:7px;background:linear-gradient(135deg,var(--pri),#447CFC);
-  color:#fff;display:grid;place-items:center;font-size:13px;font-weight:800}
+/* 헤더 크기는 화면 폭을 따라간다.
+   54px 고정은 1440 이상에서 화면 높이의 6% 도 안 돼, 넓은 모니터일수록 얇게
+   눌린 띠처럼 보였다. clamp 의 최솟값은 지금까지의 크기이므로 좁은 화면은
+   그대로이고, 넓어질수록 헤더·브랜드·메뉴·아이콘이 같은 비율로 함께 커진다.
+   1180 이하는 아래 #app.nar / .xnar 규칙이 따로 줄인다. */
+.top{height:var(--hd-h);flex:none;background:var(--surface);
+  border-bottom:1px solid var(--line);display:flex;align-items:center;
+  gap:14px;padding:0 16px;position:sticky;top:0;z-index:60}
+.top .iconbtn{width:var(--hd-ctl);height:var(--hd-ctl)}
+.top .iconbtn .ic{width:var(--hd-ic);height:var(--hd-ic)}
+/* .brand · .brand-m 의 실제 정의는 «전역 네비게이션» 절에 있다(button.brand).
+   여기에 두면 특정도가 낮아 통째로 무효가 되고, 크기를 고칠 때 이쪽만 고쳐
+   화면이 바뀌지 않는 일이 생긴다. */
+.brand-m{background:linear-gradient(135deg,var(--pri),#447CFC);
+  color:#fff;display:grid;place-items:center;font-weight:var(--fw-bold)}
 .ctx{display:flex;align-items:center;gap:6px;margin-left:6px}
-.ctx-sep{color:var(--faint);font-size:12px}
+.ctx-sep{color:var(--faint);font-size:var(--fs-sm)}
 select.sel{height:32px;border:1px solid var(--line-str);border-radius:var(--r-s);background:var(--surface);
-  padding:0 26px 0 9px;font-size:12.5px;color:var(--text);cursor:pointer;
+  padding:0 26px 0 9px;font-size:var(--fs-body);color:var(--text);cursor:pointer;
   appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23777777' stroke-width='2.2' stroke-linecap='round'><path d='m6 9 6 6 6-6'/></svg>");
   background-repeat:no-repeat;background-position:right 8px center}
 select.sel:hover{border-color:var(--line-focus)}
-select.sel.env{font-weight:600}
+select.sel.env{font-weight:var(--fw-bold)}
 .env-dot{width:7px;height:7px;border-radius:50%;display:inline-block}
 .topsearch{margin-left:auto;position:relative;width:min(420px,32vw)}
 .topsearch input{width:100%;height:32px;border:1px solid var(--line-str);border-radius:var(--r-s);
-  background:var(--surface-2);padding:0 10px 0 32px;font-size:13px}
+  background:var(--surface-2);padding:0 10px 0 32px;font-size:var(--fs-body)}
 .topsearch input::placeholder{color:var(--faint)}
 .topsearch input:focus{background:var(--surface);border-color:var(--line-focus);outline:none}
 .topsearch .ic{position:absolute;left:9px;top:7px;color:var(--muted)}
@@ -75,51 +148,51 @@ select.sel.env{font-weight:600}
   border-radius:999px;background:var(--surface);cursor:pointer}
 .me:hover{border-color:var(--line-focus)}
 .av{width:24px;height:24px;border-radius:6px;background:var(--pri-soft);color:var(--pri-ink);
-  display:grid;place-items:center;font-size:11px;font-weight:700;flex:none}
-.me-role{font-size:11.5px;color:var(--muted)}
+  display:grid;place-items:center;font-size:var(--fs-cap);font-weight:var(--fw-bold);flex:none}
+.me-role{font-size:var(--fs-cap);color:var(--muted)}
 
 .shell{flex:1;min-height:0;display:flex}
 .side{width:220px;flex:none;background:var(--bg);border-right:1px solid var(--line);
   padding:10px 10px 12px;display:flex;flex-direction:column;gap:2px}
-.side-l{font-size:11px;font-weight:700;letter-spacing:-0.3px;color:var(--faint);
+.side-l{font-size:var(--fs-cap);font-weight:var(--fw-bold);letter-spacing:-0.3px;color:var(--faint);
   text-transform:none;padding:12px 8px 6px}
 .nav-i{display:flex;align-items:center;gap:9px;height:36px;padding:0 9px;border-radius:var(--r-s);
-  color:var(--text);cursor:pointer;font-size:13.5px;border:0;background:none;width:100%;text-align:left}
+  color:var(--text);cursor:pointer;font-size:var(--fs-body);border:0;background:none;width:100%;text-align:left}
 .nav-i .ic{color:var(--muted);flex:none}
 .nav-i:hover{background:var(--hover-o)}
-.nav-i.on{background:var(--sel-o);color:var(--pri);font-weight:700}
+.nav-i.on{background:var(--sel-o);color:var(--pri);font-weight:var(--fw-bold)}
 .nav-i.on .ic{color:var(--pri)}
-.nav-c{margin-left:auto;font-size:11px;color:var(--faint)}
+.nav-c{margin-left:auto;font-size:var(--fs-cap);color:var(--faint)}
 .nav-i.on .nav-c{color:var(--pri)}
 .nav-b{margin-left:auto;min-width:17px;height:17px;padding:0 5px;border-radius:9px;background:var(--err);
-  color:#fff;font-size:10.5px;font-weight:700;display:grid;place-items:center}
+  color:#fff;font-size:var(--fs-cap);font-weight:var(--fw-bold);display:grid;place-items:center}
 .side-f{margin-top:auto;border-top:1px solid var(--line-2);padding-top:8px}
-.side-note{font-size:11px;color:var(--faint);padding:6px 9px;line-height:1.45}
+.side-note{font-size:var(--fs-cap);color:var(--faint);padding:6px 9px;line-height:1.45}
 
 .main{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
 .page{flex:1;min-height:0;overflow:auto;padding:20px 24px 32px}
 .page.flush{padding:0;overflow:hidden;display:flex;flex-direction:column}
 .page-h{display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;flex-wrap:wrap}
-.page-t{font-size:20px;font-weight:700;color:var(--ink);letter-spacing:-0.5px;margin:0}
-.page-d{font-size:12.5px;color:var(--muted);margin:3px 0 0}
+.page-t{font-size:var(--fs-page);font-weight:var(--fw-bold);color:var(--ink);letter-spacing:-0.5px;margin:0}
+.page-d{font-size:var(--fs-sm);color:var(--muted);margin:3px 0 0}
 .page-a{margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 
 /* ───────── 기본 컴포넌트 ───────── */
 .btn{height:32px;padding:0 12px;border-radius:var(--r-s);border:1px solid #B4B4B4;background:var(--surface);
-  color:var(--text);font-size:14px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap}
+  color:var(--text);font-size:var(--fs-body);display:inline-flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap}
 .btn:hover{border-color:var(--line-focus);background:var(--surface)}
-.btn.pri{background:var(--pri);border-color:var(--pri);color:#fff;font-weight:600}
+.btn.pri{background:var(--pri);border-color:var(--pri);color:#fff;font-weight:var(--fw-bold)}
 .btn.pri:hover{background:var(--pri-hover);border-color:var(--pri-hover)}
 .btn.gho{border-color:transparent;background:none;color:var(--muted)}
 .btn.gho:hover{background:var(--hover-o);color:var(--text)}
-.btn.sm{height:28px;padding:0 10px;font-size:13px;gap:4px}
+.btn.sm{height:28px;padding:0 10px;font-size:var(--fs-sm);gap:4px}
 .btn.dngr{color:var(--err);border-color:var(--err-line)}
 .btn:disabled{background:#F4F4F4;border-color:#D3D3D3;color:#B4B4B4;cursor:not-allowed}
 .btn.pri:disabled{background:#D3D3D3;border-color:#D3D3D3;color:#fff}
 .btn:disabled:hover{background:#F4F4F4;border-color:#D3D3D3}
 
 .inp{height:32px;border:1px solid var(--line-str);border-radius:var(--r-s);background:var(--surface);
-  padding:0 10px;font-size:14px;width:100%}
+  padding:0 10px;font-size:var(--fs-body);width:100%}
 .inp::placeholder{color:#B4B4B4}
 .inp:disabled{background:#FAFAFA;color:#B4B4B4}
 .inp::placeholder{color:var(--faint)}
@@ -135,13 +208,13 @@ select.inp:hover{border-color:var(--line-focus)}
 .srch .ic{position:absolute;left:9px;top:7px;color:var(--muted);pointer-events:none}
 
 .chip{height:28px;padding:0 11px;border-radius:1000px;border:1px solid var(--line-str);background:var(--surface);
-  font-size:12.5px;color:var(--text);display:inline-flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap}
+  font-size:var(--fs-sm);color:var(--text);display:inline-flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap}
 .chip:hover{border-color:var(--line-focus)}
 .chip.on{background:#333333;border-color:#333333;color:#fff}
-.chip-c{font-weight:700;color:var(--pri);font-variant-numeric:tabular-nums}
+.chip-c{font-weight:var(--fw-bold);color:var(--pri);font-variant-numeric:tabular-nums}
 .chip.on .chip-c{color:#fff;opacity:.85}
 
-.bdg{height:20px;padding:0 7px;border-radius:4px;font-size:12px;font-weight:600;letter-spacing:-0.1px;
+.bdg{height:20px;padding:0 7px;border-radius:4px;font-size:var(--fs-cap);font-weight:var(--fw-bold);letter-spacing:-0.1px;
   display:inline-flex;align-items:center;gap:4px;white-space:nowrap;border:1px solid transparent}
 .bdg.ok{background:var(--ok-soft);color:var(--ok);border-color:var(--ok-line)}
 .bdg.warn{background:var(--warn-soft);color:var(--warn);border-color:var(--warn-line)}
@@ -152,17 +225,17 @@ select.inp:hover{border-color:var(--line-focus)}
 .bdg.wait{background:var(--surface-3);color:var(--faint);border-color:var(--line);border-style:dashed}
 .bdg .dt{width:6px;height:6px;border-radius:50%;background:currentColor}
 .tag{height:19px;padding:0 6px;border-radius:4px;background:var(--surface-3);color:var(--muted);
-  font-size:11px;display:inline-flex;align-items:center;white-space:nowrap}
-.tag.cert{background:var(--pri-soft);color:var(--pri-ink);font-weight:600}
+  font-size:var(--fs-cap);display:inline-flex;align-items:center;white-space:nowrap}
+.tag.cert{background:var(--pri-soft);color:var(--pri-ink);font-weight:var(--fw-bold)}
 
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-m);
   box-shadow:var(--shadow-1);display:flex;flex-direction:column;min-width:0}
 .card-h{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line-2)}
-.card-t{font-size:13.5px;font-weight:650;color:var(--ink)}
+.card-t{font-size:var(--fs-strong);font-weight:var(--fw-bold);color:var(--ink)}
 .card-b{padding:14px}
 .card-b.tight{padding:0}
 .card-f{padding:9px 14px;border-top:1px solid var(--line-2);display:flex;align-items:center;gap:8px}
-.lnk{color:var(--pri);font-size:12.5px;cursor:pointer;text-decoration:none;background:none;border:0;padding:0}
+.lnk{color:var(--pri);font-size:var(--fs-sm);cursor:pointer;text-decoration:none;background:none;border:0;padding:0}
 .lnk:hover{text-decoration:underline}
 
 .grid{display:grid;gap:14px}
@@ -173,17 +246,17 @@ select.inp:hover{border-color:var(--line-focus)}
 .f1{flex:1;min-width:0}
 .g4{gap:4px}.g6{gap:6px}.g10{gap:10px}.g12{gap:12px}.g14{gap:14px}
 .mut{color:var(--muted)}.fnt{color:var(--faint)}
-.t11{font-size:11px}.t12{font-size:12px}.t13{font-size:13px}.t15{font-size:15px}.t17{font-size:17px}
-.b6{font-weight:600}.b7{font-weight:700}
+.t11{font-size:var(--fs-cap)}.t12{font-size:var(--fs-sm)}.t13{font-size:var(--fs-body)}.t15{font-size:var(--fs-title)}.t17{font-size:var(--fs-title)}
+.b6{font-weight:var(--fw-bold)}.b7{font-weight:var(--fw-bold)}
 .trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* KPI */
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:12px}
 .kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-m);padding:13px 15px;
   display:flex;flex-direction:column;gap:3px;box-shadow:var(--shadow-1);min-width:0}
-.kpi-l{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px}
-.kpi-v{font-size:26px;font-weight:700;letter-spacing:-1px;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.15}
-.kpi-s{font-size:11.5px;color:var(--faint)}
+.kpi-l{font-size:var(--fs-sm);color:var(--muted);display:flex;align-items:center;gap:5px}
+.kpi-v{font-size:var(--fs-display);font-weight:var(--fw-bold);letter-spacing:-1px;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.15}
+.kpi-s{font-size:var(--fs-cap);color:var(--faint)}
 .kpi.act{cursor:pointer}
 .kpi.act:hover{border-color:var(--pri-line);box-shadow:var(--shadow-2)}
 
@@ -191,7 +264,7 @@ select.inp:hover{border-color:var(--line-focus)}
 .tbl{display:flex;flex-direction:column;min-width:0}
 .th,.tr{display:grid;grid-template-columns:var(--cols);align-items:center;gap:0}
 .th{height:40px;background:var(--bg);border-bottom:1px solid var(--line);
-  font-size:11.5px;font-weight:600;color:var(--muted);position:sticky;top:0;z-index:2}
+  font-size:var(--fs-cap);font-weight:var(--fw-bold);color:var(--muted);position:sticky;top:0;z-index:2}
 .th>*,.tr>*{padding:0 12px;min-width:0;overflow:hidden}
 .tr{min-height:48px;border-bottom:1px solid var(--line-2);cursor:pointer}
 .tr:hover{background:var(--hover-o)}
@@ -201,23 +274,33 @@ select.inp:hover{border-color:var(--line-focus)}
 .c2{display:flex;flex-direction:column;justify-content:center;gap:1px;line-height:1.35;min-width:0}
 .c2>*{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rt{text-align:right}
-.sub{font-size:11px;color:var(--faint);font-family:var(--mono);letter-spacing:0}
+.sub{font-size:var(--fs-cap);color:var(--faint);font-family:var(--mono);letter-spacing:0}
 
-/* 탭 */
+/* 탭 ──────────────────────────────────────────────────────────
+   여기는 모든 탭이 공유하는 모양만 정한다(높이·색·밑줄).
+
+   **폭 고정과 말줄임은 문서 탭(.ptabs)에만 적용한다.** 아래 .ptabs 규칙을
+   보라. 섹션 전환 탭(홈·품질·모델 만들기 등)과 하단 독 탭(모델 상세·
+   파이프라인 실행 상세)은 화면마다 사정이 달라 따로 관리한다 — 제목 길이에
+   맞춰 폭이 잡히던 기존 방식 그대로다. */
 .tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);flex:none;overflow-x:auto}
-.tab{height:36px;padding:0 13px;border:0;background:none;color:var(--muted);font-size:13px;cursor:pointer;
+.tab{height:36px;padding:0 13px;border:0;background:none;color:var(--muted);font-size:var(--fs-body);cursor:pointer;
   border-bottom:2px solid transparent;white-space:nowrap;display:flex;align-items:center;gap:6px}
+/* 제목. 이것만 줄어들고 말줄임표가 붙는다. */
+.tab-l{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+/* 제목 외 요소는 압축 대상이 아니다. */
+.tab > .ic,.tab > .tab-c,.tab > .ptab-x,.tab > .t11{flex:none}
 .tab:hover{color:var(--text)}
-.tab.on{color:var(--pri);font-weight:700;border-bottom-color:var(--pri)}
-.tab-c{font-size:11px;color:var(--faint)}
+.tab.on{color:var(--pri);font-weight:var(--fw-bold);border-bottom-color:var(--pri)}
+.tab-c{font-size:var(--fs-cap);color:var(--faint)}
 .tab.on .tab-c{color:var(--pri)}
 .seg{display:inline-flex;background:var(--surface-3);border-radius:var(--r-s);padding:2px;gap:2px}
-.seg button{height:26px;padding:0 11px;border:0;background:none;border-radius:5px;font-size:12.5px;
+.seg button{height:28px;padding:0 11px;border:0;background:none;border-radius:5px;font-size:var(--fs-sm);
   color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:5px}
-.seg button.on{background:var(--surface);color:var(--ink);font-weight:600;box-shadow:var(--shadow-1)}
+.seg button.on{background:var(--surface);color:var(--ink);font-weight:var(--fw-bold);box-shadow:var(--shadow-1)}
 
 /* 안내 박스 */
-.note{border-radius:var(--r-m);padding:11px 13px;display:flex;gap:9px;font-size:12.5px;line-height:1.55;border:1px solid}
+.note{border-radius:var(--r-m);padding:11px 13px;display:flex;gap:9px;font-size:var(--fs-sm);line-height:1.55;border:1px solid}
 .note .ic{flex:none;margin-top:1px}
 .note.info{background:var(--info-soft);border-color:#C3D7FF;color:#002D93}
 .note.info .ic{color:var(--info)}
@@ -228,22 +311,28 @@ select.inp:hover{border-color:var(--line-focus)}
 .note.ok{background:var(--ok-soft);border-color:var(--ok-line);color:#007E47}
 .note.ok .ic{color:var(--ok)}
 .note.mute{background:var(--surface-2);border-color:var(--line);color:var(--muted)}
-.note b{font-weight:650}
+.note b{font-weight:var(--fw-bold)}
+
+/* 스켈레톤 — 불러오는 동안 자리를 지킨다. 빈 화면을 보여주고 나중에 표가 나타나면
+   그 사이 레이아웃이 튀어 무엇을 기다리는지 알기 어렵다. */
+.skel{background:linear-gradient(90deg,var(--surface-2) 25%,var(--line-2) 38%,var(--surface-2) 62%);
+  background-size:400% 100%;animation:skl 1.4s ease-in-out infinite;border-radius:4px;height:10px;flex:none}
+@keyframes skl{0%{background-position:100% 50%}100%{background-position:0 50%}}
 
 .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
-  padding:36px 20px;color:var(--faint);text-align:center;font-size:12.5px}
+  padding:36px 20px;color:var(--faint);text-align:center;font-size:var(--fs-sm)}
 .empty .ic{width:26px;height:26px;color:#B4B4B4}
-.empty-t{font-size:13.5px;color:var(--muted);font-weight:600}
+.empty-t{font-size:var(--fs-body);color:var(--muted);font-weight:var(--fw-bold)}
 
 .code{background:#222222;color:#E1E1E1;border-radius:var(--r-m);padding:12px 14px;font-family:var(--mono);
-  font-size:12px;line-height:1.7;overflow:auto;white-space:pre;letter-spacing:0}
+  font-size:var(--fs-sm);line-height:1.7;overflow:auto;white-space:pre;letter-spacing:0}
 .code.light{background:var(--surface-2);color:var(--text);border:1px solid var(--line)}
 .k{color:#97BAFF}.s{color:#68DB8B}.c{color:#65707E}.f{color:#97BAFF}.r{color:#FFB764}
 
 /* 진행 단계 */
 .steps{display:flex;align-items:center;gap:0;flex-wrap:wrap}
 .step{display:flex;align-items:center;gap:7px;padding:7px 11px;border:1px solid var(--line);
-  border-radius:999px;background:var(--surface);font-size:12.5px;white-space:nowrap}
+  border-radius:999px;background:var(--surface);font-size:var(--fs-sm);white-space:nowrap}
 .step .ic{width:14px;height:14px}
 .step.ok{border-color:var(--ok-line);background:var(--ok-soft);color:#007E47}
 .step.run{border-color:var(--pri-line);background:var(--pri-soft);color:var(--pri-ink)}
@@ -268,10 +357,10 @@ select.inp:hover{border-color:var(--line-focus)}
 .panel-b{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:14px}
 .panel-f{padding:10px 14px;border-top:1px solid var(--line-2);display:flex;gap:6px}
 .kv{display:flex;flex-direction:column;gap:7px}
-.kv-r{display:flex;align-items:baseline;gap:10px;font-size:12.5px}
-.kv-k{width:88px;flex:none;color:var(--faint);font-size:12px}
+.kv-r{display:flex;align-items:baseline;gap:10px;font-size:var(--fs-sm)}
+.kv-k{width:88px;flex:none;color:var(--faint);font-size:var(--fs-sm)}
 .kv-v{flex:1;min-width:0;color:var(--text)}
-.sect-t{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)}
+.sect-t{font-size:var(--fs-cap);font-weight:var(--fw-bold);letter-spacing:.05em;text-transform:uppercase;color:var(--faint)}
 
 /* 모달 */
 .scrim{position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:100;display:grid;place-items:center;padding:24px}
@@ -279,22 +368,22 @@ select.inp:hover{border-color:var(--line-focus)}
   max-height:88vh;display:flex;flex-direction:column;overflow:hidden}
 .modal.sm{width:min(460px,100%)}
 .modal-h{padding:15px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
-.modal-t{font-size:15.5px;font-weight:700;color:var(--ink);letter-spacing:-0.3px}
+.modal-t{font-size:var(--fs-title);font-weight:var(--fw-bold);color:var(--ink);letter-spacing:-0.3px}
 .modal-b{flex:1;overflow:auto;padding:18px}
 .modal-f{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center;background:var(--surface-2)}
 .frm{display:flex;flex-direction:column;gap:13px}
 .fr{display:flex;flex-direction:column;gap:5px}
-.fr-l{font-size:12px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:6px}
-.fr-h{font-size:11.5px;color:var(--faint);line-height:1.45}
+.fr-l{font-size:var(--fs-sm);font-weight:var(--fw-bold);color:var(--text);display:flex;align-items:center;gap:6px}
+.fr-h{font-size:var(--fs-cap);color:var(--faint);line-height:1.45}
 .pick{display:flex;flex-wrap:wrap;gap:6px;padding:8px;border:1px solid var(--line);border-radius:var(--r-s);
   background:var(--surface-2);max-height:120px;overflow:auto}
 .pk{height:26px;padding:0 9px;border-radius:999px;border:1px solid var(--line);background:var(--surface);
-  font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);letter-spacing:0}
-.pk.on{background:var(--pri-soft);border-color:var(--pri-line);color:var(--pri-ink);font-weight:600}
+  font-size:var(--fs-sm);cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);letter-spacing:0}
+.pk.on{background:var(--pri-soft);border-color:var(--pri-line);color:var(--pri-ink);font-weight:var(--fw-bold)}
 
 /* 토스트 */
 .toasts{position:fixed;right:18px;bottom:18px;z-index:200;display:flex;flex-direction:column;gap:8px}
-.toast{background:var(--ink);color:#fff;border-radius:var(--r-m);padding:11px 14px;font-size:12.5px;
+.toast{background:var(--ink);color:#fff;border-radius:var(--r-m);padding:11px 14px;font-size:var(--fs-sm);
   box-shadow:var(--shadow-3);display:flex;align-items:center;gap:9px;max-width:380px;animation:tin .18s ease}
 .toast .ic{flex:none}
 .toast.ok .ic{color:#68DB8B}.toast.err .ic{color:#FFBABA}.toast.warn .ic{color:#FFB764}
@@ -310,6 +399,20 @@ select.inp:hover{border-color:var(--line-focus)}
 .mod-bar>*{flex:none}
 .canvas-wrap::-webkit-scrollbar{width:0;height:0;display:none}
 .mod-bar .btn,.mod-bar .seg button{white-space:nowrap}
+/* 페이지 헤더 바 — 역할마다 크기를 **하나로** 고정한다.
+   같은 .mod-bar 인데 화면마다 제목이 13px / 15px, 메타가 11px / 12px / 13px 로
+   갈려 있었다. 페이지를 옮길 때마다 같은 자리의 글자가 커졌다 작아졌다 하면
+   헤더가 화면마다 다른 부품처럼 읽힌다.
+   여기서 강제하므로 화면 쪽 마크업이 t13·t15 중 무엇을 쓰든 결과는 같다. */
+.mod-bar .b6{font-size:var(--fs-title)}                 /* 페이지명 */
+/* 제목은 «b6 t13» 처럼 크기 클래스를 함께 달고 있어, :not(.b6) 로 빼 두지 않으면
+   뒤에 오는 이 규칙이 제목까지 메타 크기로 끌어내린다. */
+.mod-bar .t11:not(.b6),.mod-bar .t12:not(.b6),
+.mod-bar .t13:not(.b6){font-size:var(--fs-sm)}          /* 메타정보 */
+.mod-bar .bdg{font-size:var(--fs-cap)}                  /* 상태 */
+/* 데이터 분석 상세도 같은 역할의 바다 — 같은 토큰을 쓴다. */
+.ana-top.bar .b6,.ana-top.bar .tt{font-size:var(--fs-title)}
+.ana-top.bar .t12,.ana-top.bar .t13{font-size:var(--fs-sm)}
 .canvas-wrap{flex:1;min-height:0;position:relative;overflow:auto;scrollbar-width:none;-ms-overflow-style:none;
   background-color:#F7F8FA;
   background-image:radial-gradient(circle,#E1E1E1 1px,transparent 1px);
@@ -323,8 +426,8 @@ select.inp:hover{border-color:var(--line-focus)}
 .node.drag{cursor:grabbing;box-shadow:var(--shadow-3);z-index:30}
 .node-top{height:4px}
 .node-b{padding:9px 10px;display:flex;flex-direction:column;gap:4px}
-.node-n{font-size:12.5px;font-weight:650;color:var(--ink);line-height:1.3}
-.node-p{font-size:10.5px;color:var(--faint);font-family:var(--mono);letter-spacing:0;
+.node-n{font-size:var(--fs-sm);font-weight:var(--fw-bold);color:var(--ink);line-height:1.3}
+.node-p{font-size:var(--fs-cap);color:var(--faint);font-family:var(--mono);letter-spacing:0;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .node-m{display:flex;align-items:center;gap:5px;margin-top:2px}
 .port{position:absolute;width:11px;height:11px;border-radius:50%;background:var(--surface);
@@ -334,7 +437,7 @@ select.inp:hover{border-color:var(--line-focus)}
 .port.i{left:-6px}
 .node.linking .port.i{background:var(--pri);border-color:var(--pri)}
 .canvas-hint{position:absolute;left:16px;top:12px;background:var(--surface);
-  border:1px solid var(--line);border-radius:999px;padding:6px 13px;font-size:12px;color:var(--muted);
+  border:1px solid var(--line);border-radius:999px;padding:6px 13px;font-size:var(--fs-sm);color:var(--muted);
   box-shadow:var(--shadow-1);z-index:20}
 
 .dock{flex:none;background:var(--surface);border-top:1px solid var(--line);display:flex;flex-direction:column;height:224px}
@@ -372,8 +475,8 @@ select.inp:hover{border-color:var(--line-focus)}
 select.sel{max-width:150px;text-overflow:ellipsis}
 .topsearch{margin-left:auto;flex:1 1 220px;min-width:180px;max-width:420px}
 .me{flex:none;white-space:nowrap}
-.me-name{font-size:12.5px;font-weight:600;line-height:1.15;white-space:nowrap}
-.me-role{font-size:11px;color:var(--muted);line-height:1.15;white-space:nowrap}
+.me-name{font-size:var(--fs-sm);font-weight:var(--fw-bold);line-height:1.15;white-space:nowrap}
+.me-role{font-size:var(--fs-cap);color:var(--muted);line-height:1.15;white-space:nowrap}
 #app.nar select.sel{max-width:112px}
 #app.nar .me-role{display:none}
 #app.xnar .topsearch{flex:1 1 160px;min-width:150px}
@@ -386,7 +489,7 @@ select.sel{max-width:150px;text-overflow:ellipsis}
 .side.mini .nav-i .nav-b{position:absolute;top:3px;right:3px;margin:0}
 .side.mini .side-f{border-top:0}
 .side-tgl{display:flex;align-items:center;gap:9px;height:32px;padding:0 9px;border-radius:var(--r-s);
-  color:var(--muted);font-size:12.5px;width:100%}
+  color:var(--muted);font-size:var(--fs-sm);width:100%}
 .side-tgl:hover{background:var(--surface-3);color:var(--text)}
 .side.mini .side-tgl{justify-content:center;padding:0}
 .side.mini .side-tgl span{display:none}
@@ -398,7 +501,7 @@ select.sel{max-width:150px;text-overflow:ellipsis}
 .nav-i .ic{color:#989898}
 .nav-i:hover{background:rgba(255,255,255,.06);color:#FFFFFF}
 .nav-i:hover .ic{color:#D3D3D3}
-.nav-i.on{background:rgba(113,155,252,.22);color:#FFFFFF;font-weight:700}
+.nav-i.on{background:rgba(113,155,252,.22);color:#FFFFFF;font-weight:var(--fw-bold)}
 .nav-i.on .ic{color:#719BFC}
 .nav-c{color:#777777}
 .nav-i.on .nav-c{color:#719BFC}
@@ -437,22 +540,10 @@ html,body{overflow:hidden}
 #app:has(.side.mini) .top{margin-left:0}
 #app:has(.side.mini) .shell{padding-left:0}
 
-/* 현재 메뉴 이름 + 펼침 화살표 — 브랜드 오른쪽 */
-.gnb{display:flex;align-items:center;gap:7px;height:32px;padding:0 8px;margin-left:12px;
-  border-radius:var(--r-s);font-size:14px;font-weight:700;color:var(--ink);letter-spacing:-0.3px}
-.gnb::before{display:none}
-.gnb:hover{background:rgba(0,0,0,.03)}
-.gnb .ic{color:var(--pri);flex:none}
-.gnb-c{transition:transform .12s ease;color:var(--muted);flex:none}
-.gnb.on .gnb-c{transform:rotate(180deg)}
-#app.xnar .gnb span.gnb-t{display:none}
-
-/* 드롭다운 항목 — 아이콘 · 이름 · (현재 표시) · 배지 */
-.menu button .gnb-k{margin-left:auto;display:flex;align-items:center;gap:6px;flex:none}
-.menu button .gnb-k .nav-b{background:var(--err);color:#fff;border-radius:999px;
-  min-width:16px;height:16px;padding:0 5px;font-size:10.5px;font-weight:700;
-  display:flex;align-items:center;justify-content:center}
-.menu button.on{color:var(--pri);font-weight:700}
+/* 페이지 전환 드롭다운(.gnb / .gnb-t / .gnb-k)은 전역 네비게이션으로 대체돼
+   규칙까지 걷어냈다 — 맨 아래 «전역 네비게이션» 블록이 그 자리를 대신한다.
+   아래 .menu 규칙은 남은 다른 드롭다운(분석 카드 메뉴 등)이 계속 쓴다. */
+.menu button.on{color:var(--pri);font-weight:var(--fw-bold)}
 .menu button.on .ic{color:var(--pri)}
 
 /* ───── v4.7 — 본문 제목 줄 제거 ─────
@@ -463,29 +554,24 @@ html,body{overflow:hidden}
 .tabs-a{margin-left:auto;display:flex;align-items:center;gap:6px;flex:none;padding:0 2px 0 12px}
 .tabs-a .page-d{margin:0}
 
-/* ───── v4.8 — 좌측 패널 폭 통일 + 서비스명을 그 폭에 맞춤 ─────
-   카탈로그 228px · 파이프라인 목록 262px 로 달랐다. S.leftW 하나로 모으고
-   헤더의 서비스명 영역을 같은 폭으로 잡아 목록 왼쪽 경계와 줄을 맞춘다.
-   --lw 는 부팅 때 S.leftW 로 한 번만 정한다 — 드래그로 사이드바를 넓혀도 헤더는 그대로다. */
-/* 헤더 좌측 패딩(14px)만큼 빼야 브랜드 오른쪽 끝이 사이드바 경계(= --lw)와 맞는다.
-   구분선은 .gnb 안쪽(::before)이 아니라 여기 테두리로 둔다 — .gnb 는 좌측 패딩이
-   있어 선이 사이드바 경계보다 밀렸다. 이제 아래 사이드바 테두리와 한 줄로 이어진다. */
-.brand{width:calc(var(--lw,228px) - 14px);flex:none;box-sizing:border-box;padding-right:12px;
-  height:100%;border-right:1px solid var(--line);
-  font-size:17px;gap:9px;letter-spacing:-0.5px}
-.brand-m{width:28px;height:28px;border-radius:8px}
-.brand-m svg{width:18px;height:18px}
-.gnb{margin-left:0}
+/* ───── v4.8 — 좌측 패널 폭 통일 ─────
+   카탈로그 228px · 파이프라인 목록 262px 로 달랐다. S.leftW 하나로 모은다.
+
+   딸려 있던 «서비스명을 그 폭(--lw)에 맞춘다» 는 걷어냈다 — 로고와 페이지 메뉴가
+   한 묶음으로 읽혀야 하는데, 로고 상자가 좌측 패널 경계까지 늘어나면 둘 사이에
+   150px 짜리 빈 칸이 생겨 서로 다른 영역처럼 갈라져 보였다. 브랜드 생김새는
+   맨 아래 «전역 네비게이션» 블록이 한 곳에서 정하고, --lw 는 읽는 곳이 없어져
+   api.js 의 설정까지 함께 걷어냈다. */
 
 /* ───── v4.9 — 좌측 패널 확대 ─────
    폭 228 → 264, 글자도 한 단씩 올린다. 카탈로그 트리와 파이프라인 목록이
    같은 .mod-l 을 쓰므로 여기 한 곳만 손대면 두 화면이 함께 커진다. */
-.mod-l-head .b6{font-size:14px}
-.mod-l .tg-r{height:26px;font-size:13px;gap:5px}
+.mod-l-head .b6{font-size:var(--fs-strong)}
+.mod-l .tg-r{height:26px;font-size:var(--fs-body);gap:5px}
 .mod-l .tg-r.g{height:28px}
-.mod-l .fdr{font-size:13px;padding:7px 8px}
-.mod-l .t12{font-size:13px}
-.mod-l .t11{font-size:12px}
+.mod-l .fdr{font-size:var(--fs-body);padding:7px 8px}
+.mod-l .t12{font-size:var(--fs-body)}
+.mod-l .t11{font-size:var(--fs-sm)}
 
 /* ───── v5.0 — 데이터 계보 캔버스 (관계 화면) ─────
    ERD(FK 추론)가 아니라 실제 SQL 데이터 흐름을 그린다.
@@ -501,13 +587,13 @@ html,body{overflow:hidden}
 .lin-h{height:44px;padding:6px 11px 0;background:var(--surface-2);border-bottom:1px solid var(--line);
   cursor:pointer;border-radius:0}
 .lin-h:hover{background:var(--surface-3)}
-.lin-n{font-size:12.5px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:6px;
+.lin-n{font-size:var(--fs-sm);font-weight:var(--fw-bold);color:var(--ink);display:flex;align-items:center;gap:6px;
   white-space:nowrap;overflow:hidden}
 .lin-n > span:first-child{overflow:hidden;text-overflow:ellipsis}
-.lin-p{font-size:10.5px;color:var(--faint);font-family:var(--mono);display:block;
+.lin-p{font-size:var(--fs-cap);color:var(--faint);font-family:var(--mono);display:block;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lin-badge{flex:none;height:15px;line-height:15px;padding:0 5px;border-radius:4px;
-  background:var(--warn-soft);color:var(--warn);font-size:9.5px;font-weight:700}
+  background:var(--warn-soft);color:var(--warn);font-size:var(--fs-micro);font-weight:var(--fw-bold)}
 .lin-r{display:flex;align-items:center;gap:6px;height:24px;padding:0 10px;
   border-bottom:1px solid var(--line-2);position:relative;cursor:pointer}
 .lin-r:last-child{border-bottom:0;border-radius:0 0 8px 8px}
@@ -516,15 +602,15 @@ html,body{overflow:hidden}
 .lin-r.up{background:var(--ok-soft)}
 .lin-r.down{background:var(--warn-soft)}
 .lin-r.dim{opacity:.3}
-.lin-c{flex:1;min-width:0;font-size:11.5px;color:var(--text);
+.lin-c{flex:1;min-width:0;font-size:var(--fs-cap);color:var(--text);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.lin-y{font-size:10px;color:var(--faint);font-family:var(--mono);flex:none;max-width:88px;
+.lin-y{font-size:var(--fs-micro);color:var(--faint);font-family:var(--mono);flex:none;max-width:88px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lin-fx{flex:none;height:15px;line-height:15px;padding:0 5px;border-radius:4px;
-  background:var(--pri-soft);color:var(--pri-ink);font-size:9.5px;font-weight:800;
+  background:var(--pri-soft);color:var(--pri-ink);font-size:var(--fs-micro);font-weight:var(--fw-bold);
   font-family:var(--mono);cursor:pointer}
 .lin-fx:hover{background:var(--pri);color:#fff}
-.lin-q{flex:none;width:13px;text-align:center;color:var(--warn);font-weight:800;font-size:11px}
+.lin-q{flex:none;width:13px;text-align:center;color:var(--warn);font-weight:var(--fw-bold);font-size:var(--fs-cap)}
 .lin-port{position:absolute;top:50%;width:8px;height:8px;border-radius:50%;
   background:#C9D2E4;border:2px solid var(--surface);transform:translateY(-50%);pointer-events:none}
 .lin-port.l{left:-4.5px}
@@ -546,16 +632,24 @@ html,body{overflow:hidden}
 /* 그룹 태그(SOURCE/DATA MODEL)는 색 띠가 대신한다 — 이름이 밀려 잘리는 게 더 손해 */
 .lin-node.compact .lin-n .tag{display:none}
 /* 조회 전용 카드 — 다른 파이프라인이 적재하는 모델. 여기서는 읽기만 한다 */
-.pn.ro{border-style:dashed}
-.pn.ro .pn-seq{background:var(--warn-soft);color:var(--warn);font-size:8.5px;font-weight:800}
+.pn.pn-ro{border-style:dashed}
+.pn.pn-ro .pn-seq{background:var(--warn-soft);color:var(--warn);font-size:var(--fs-micro);font-weight:var(--fw-bold)}
+
+/* 완료 표식 Task — 실제 Airflow 태스크이므로 그리되, 일을 하지 않는다는 것이
+   보여야 한다. 실행 순번 대신 체크만 달고 테두리를 점선으로 둔다. */
+.pn.done{border-style:dashed;background:var(--bg)}
+.pn.done .pn-seq{background:var(--ok-soft,#E6F6EF);color:var(--ok);font-weight:var(--fw-bold)}
 /* 전체 흐름의 파이프라인 상자는 배지가 들어가 머리가 살짝 높다 */
 .pf-n .lin-h{height:52px}
 .pf-n .lin-n{margin-top:2px}
 /* v5.3 — 파이프라인 탭 스트립 (IDE 식) */
 .ptabs{display:flex;align-items:center;gap:2px;border-bottom:1px solid var(--line);
-  background:var(--surface);padding:0 8px;flex:none;overflow-x:auto;scrollbar-width:none}
+  background:var(--bg);height:46px;padding:0 8px;flex:none;overflow-x:auto;scrollbar-width:none}
 .ptabs::-webkit-scrollbar{display:none}
-.ptabs .tab{flex:none}
+/* 문서 탭 — 열고 닫는 탭이다. 제목이 사용자 데이터(파이프라인·대시보드 이름)라
+   길이를 예측할 수 없으므로 폭을 고정하고 넘치는 제목은 말줄임표로 끊는다.
+   폭은 --tab-w 하나로 정한다. 파이프라인·적재·데이터 분석이 이를 공유한다. */
+.ptabs .tab{height:44px;width:var(--tab-w);flex:none;justify-content:flex-start;overflow:hidden}
 .ptab-x{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;
   border-radius:4px;margin-left:2px;color:var(--faint)}
 .ptab-x:hover{background:var(--err-soft);color:var(--err)}
@@ -577,9 +671,12 @@ html,body{overflow:hidden}
 .lin-node.psel{border-color:var(--pri);box-shadow:0 0 0 2px var(--pri-soft),var(--shadow-2)}
 .psel-chk{flex:none;width:16px;height:16px;border-radius:50%;background:var(--pri);color:#fff;
   display:inline-flex;align-items:center;justify-content:center}
-/* 남이 적재하는 모델을 함께 고른 경우 — 적재가 아니라 조회 전용 입력 */
-.psel-chk.ro{background:var(--warn)}
-.lin-node.psel:has(.psel-chk.ro){border-color:var(--warn-line);box-shadow:0 0 0 2px var(--warn-soft),var(--shadow-2)}
+/* 남이 적재하는 모델을 함께 고른 경우 — 적재가 아니라 조회 전용 입력.
+   수식어를 psel-ro 로 길게 두는 이유: 두 글자짜리 .ro 는 예전 규칙 안내 줄의
+   클래스와 같아서, 그 규칙의 padding 이 16px 원을 안쪽부터 밀어 아이콘 폭을
+   0 으로 만들었다(주황 점만 보이던 원인). 짧은 유틸 이름은 이렇게 부딪힌다. */
+.psel-chk.psel-ro{background:var(--warn)}
+.lin-node.psel:has(.psel-chk.psel-ro){border-color:var(--warn-line);box-shadow:0 0 0 2px var(--warn-soft),var(--shadow-2)}
 .psel-chk .ic{width:11px;height:11px}
 /* 저장 안 된 변경 표시 — 탭·모델명에 주황 점 */
 .tab.dirty::after,.lin-n.dirty::after{content:'';width:6px;height:6px;border-radius:50%;
@@ -592,13 +689,10 @@ html,body{overflow:hidden}
 #app.lin-view .mod-bar,#app.pipe-view .mod-bar{background:#F6F7F9}
 #app.lin-view .erd-wrap,#app.pipe-view .erd-wrap{background-color:#FAFBFC}
 #app.pipe-view .canvas-wrap{background-color:#FAFBFC !important}
-/* 탭 스트립도 같은 층으로 — 헤더 묶음이 하나로 읽힌다 */
-#app.pipe-view .ptabs{background:#F6F7F9}
 /* ───── 사이드바 공통 규격 — 데이터 모델(카탈로그)·데이터 파이프라인(목록) ─────
    두 화면의 사이드바가 머리 높이(47 vs 38)와 본문 패딩(0 vs 8)이 달라 첫 줄이
    어긋나 보였다. 오른쪽 첫 줄(.mod-bar 46px / .ptabs)과도 같은 높이로 맞춘다. */
 .mod-l:not(.closed) .mod-l-head{height:46px;padding:0 12px;align-items:center}
-#app.pipe-view .ptabs{height:46px}
 /* 사이드바 본문 — 좌우 여백을 같은 값으로 */
 #plList{padding:0 8px 8px}
 #mList{padding:2px 8px 12px}
@@ -613,19 +707,19 @@ html,body{overflow:hidden}
 .kpi-l{min-height:18px}
 .kpi-v{margin:1px 0}
 .kpi-s{min-height:16px}
-.side-note{color:var(--muted);font-size:11.5px;line-height:1.5;word-break:keep-all}
+.side-note{color:var(--muted);font-size:var(--fs-cap);line-height:1.5;word-break:keep-all}
 .taskline{display:flex;align-items:flex-start;gap:9px;padding:8px 9px;width:100%}
 .taskline .ic-lead{margin-top:2px;flex:none}
 .taskline .tl-b{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
-.taskline .tl-t{font-size:13px;font-weight:600;line-height:1.4}
-.taskline .tl-d{font-size:11.5px;color:var(--muted)}
+.taskline .tl-t{font-size:var(--fs-body);font-weight:var(--fw-bold);line-height:1.4}
+.taskline .tl-d{font-size:var(--fs-cap);color:var(--muted)}
 .card.eqh{min-height:186px}
 
 /* 카탈로그 */
 .tr.pick{background:var(--pri-soft);box-shadow:inset 3px 0 0 var(--pri)}
-.cat-name{font-size:13.5px;font-weight:650;color:var(--ink)}
-.cat-phys{font-size:11px;color:var(--faint);font-family:var(--mono);letter-spacing:0}
-.cat-desc{font-size:12px;color:var(--muted);line-height:1.45}
+.cat-name{font-size:var(--fs-body);font-weight:var(--fw-bold);color:var(--ink)}
+.cat-phys{font-size:var(--fs-cap);color:var(--faint);font-family:var(--mono);letter-spacing:0}
+.cat-desc{font-size:var(--fs-sm);color:var(--muted);line-height:1.45}
 .rowgo{width:26px;height:26px;border-radius:5px;display:grid;place-items:center;color:var(--faint)}
 .tr:hover .rowgo{color:var(--pri);background:var(--surface-3)}
 
@@ -651,21 +745,21 @@ html,body{overflow:hidden}
 .canvas{transform-origin:0 0}
 .node-n,.node-p{cursor:inherit}
 .zoomlbl{position:absolute;right:12px;bottom:12px;background:var(--surface);border:1px solid var(--line);
-  border-radius:999px;padding:4px 10px;font-size:11.5px;color:var(--muted);box-shadow:var(--shadow-1);z-index:20}
+  border-radius:999px;padding:4px 10px;font-size:var(--fs-cap);color:var(--muted);box-shadow:var(--shadow-1);z-index:20}
 
 /* 툴바 — 스크롤 숨김 대신 더보기 메뉴 사용 */
 .mod-bar{overflow:visible}
 .menu{position:absolute;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-m);
   box-shadow:var(--shadow-3);padding:5px;z-index:80;min-width:184px;display:flex;flex-direction:column;gap:1px}
 .menu button{display:flex;align-items:center;gap:8px;height:32px;padding:0 9px;border-radius:5px;
-  font-size:13px;color:var(--text);width:100%;text-align:left}
+  font-size:var(--fs-body);color:var(--text);width:100%;text-align:left}
 .menu button:hover{background:var(--surface-3)}
 .menu button:disabled{color:var(--faint);cursor:not-allowed}
 .menu button:disabled:hover{background:transparent}
 .menu-sep{height:1px;background:var(--line-2);margin:4px 2px}
 
 /* 품질 — 접기 */
-.acc-t{display:flex;align-items:center;gap:7px;padding:7px 0;font-size:12.5px;color:var(--muted);width:100%}
+.acc-t{display:flex;align-items:center;gap:7px;padding:7px 0;font-size:var(--fs-sm);color:var(--muted);width:100%}
 .acc-t:hover{color:var(--text)}
 .acc-t .ic{transition:transform .12s}
 .acc-t.open .ic{transform:rotate(90deg)}
@@ -674,7 +768,7 @@ html,body{overflow:hidden}
 /* 설정 */
 .narrowpage{max-width:760px}
 .chk{width:16px;height:16px;accent-color:var(--sel);flex:none;margin:0}
-.chkrow{display:flex;align-items:center;gap:9px;font-size:13px;padding:5px 0;cursor:pointer}
+.chkrow{display:flex;align-items:center;gap:9px;font-size:var(--fs-body);padding:5px 0;cursor:pointer}
 .chkrow:hover{color:var(--ink)}
 
 /* 표 · 배지 · 버튼 규격 통일 */
@@ -689,41 +783,38 @@ html,body{overflow:hidden}
 /* ════════ style block 02 (index.html 에서 추출) ════════ */
 /* ══════════════ v1.2 ══════════════ */
 .elabel{position:absolute;transform:translate(-50%,-50%);background:var(--surface);border:1px solid var(--line);
-  border-radius:999px;padding:2px 9px;font-size:11px;color:var(--muted);white-space:nowrap;z-index:6;
+  border-radius:999px;padding:2px 9px;font-size:var(--fs-cap);color:var(--muted);white-space:nowrap;z-index:6;
   box-shadow:var(--shadow-1);max-width:170px;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
 .elabel:hover{border-color:var(--pri-line);color:var(--pri-ink);background:var(--pri-soft)}
-.elabel.on{border-color:var(--pri);color:var(--pri-ink);background:var(--pri-soft);font-weight:600}
-.elabel .op{color:var(--pri);font-weight:600}
+.elabel.on{border-color:var(--pri);color:var(--pri-ink);background:var(--pri-soft);font-weight:var(--fw-bold)}
+.elabel .op{color:var(--pri);font-weight:var(--fw-bold)}
 .node-x{position:absolute;top:6px;right:6px;width:20px;height:20px;border-radius:5px;display:none;
   align-items:center;justify-content:center;color:var(--faint);background:var(--surface)}
 .node:hover .node-x{display:flex}
 .node-x:hover{background:var(--surface-3);color:var(--err)}
-.node-st{display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:1px 6px;border-radius:4px;border:1px solid}
-.node.ro{cursor:pointer}
-.node.ro:hover{box-shadow:var(--shadow-2)}
+.node-st{display:flex;align-items:center;gap:4px;font-size:var(--fs-cap);font-weight:var(--fw-bold);padding:1px 6px;border-radius:4px;border:1px solid}
+/* (.node.ro — 옛 캔버스의 조회 전용 카드. 'ro' 를 붙이던 코드가 없어 도달하지 않는다.) */
 
-.wscard{display:flex;flex-direction:column;gap:8px;padding:15px 16px;background:var(--surface);
-  border:1px solid var(--line);border-radius:var(--r-m);box-shadow:var(--shadow-1);text-align:left;width:100%;min-width:0}
-.wscard:hover{border-color:var(--pri-line);box-shadow:var(--shadow-2)}
-.wscard-t{font-size:14.5px;font-weight:650;color:var(--ink);display:flex;align-items:center;gap:7px}
-.wscard-d{font-size:12px;color:var(--muted);line-height:1.5;min-height:36px}
-.wscard-m{display:flex;align-items:center;gap:10px;font-size:11.5px;color:var(--faint);
-  border-top:1px solid var(--line-2);padding-top:8px}
-.wsgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(248px,1fr));gap:12px}
-.crumbs{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);margin-bottom:8px}
-.crumbs button{color:var(--pri)}
-.crumbs button:hover{text-decoration:underline}
+/* (.wscard · .wsgrid · .crumbs — 홈의 워크 스페이스 탭에서만 쓰던 규칙이라
+   탭과 함께 제거. 빵부스러기(.crumbs)도 그 상세 화면에만 있었다) */
+
+/* 홈 기준 시각 — 탭 줄 오른쪽에 얹혀 있던 값이 탭을 없애며 갈 곳을 잃었다.
+   숫자가 언제 것인지 말하는 줄이라 오른쪽에 조용히 남긴다. */
+/* 홈 제목줄 — 화면 이름과 «언제 기준인가» 가 한 줄로 읽힌다 */
+.home-h{display:flex;align-items:baseline;gap:10px;margin:-2px 0 12px}
+.home-h .page-t{margin:0}
+.home-when{margin-left:auto;font-size:var(--fs-sm);color:var(--faint);white-space:nowrap}
 
 .mp{width:360px;flex:none;background:var(--surface);border-left:1px solid var(--line);
   display:flex;flex-direction:column;overflow:hidden;min-height:0}
 .split{display:flex;flex:1;min-height:0;gap:0}
 .logbox{background:#222222;color:#E1E1E1;border-radius:var(--r-s);padding:10px 12px;font-family:var(--mono);
-  font-size:11.5px;line-height:1.75;white-space:pre-wrap;overflow:auto;max-height:230px;letter-spacing:0}
+  font-size:var(--fs-cap);line-height:1.75;white-space:pre-wrap;overflow:auto;max-height:230px;letter-spacing:0}
 .statrow{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r-s)}
 
 /* ════════ style block 03 (index.html 에서 추출) ════════ */
 /* ══════════════ v1.3 ══════════════ */
-.elabel{max-width:130px;font-size:10.5px;padding:1px 8px}
+.elabel{max-width:130px;font-size:var(--fs-cap);padding:1px 8px}
 .node.flow{width:230px}
 .canvas-top{height:36px;flex:none;display:flex;align-items:center;gap:6px;padding:0 12px;
   background:var(--surface);border-bottom:1px solid var(--line-2)}
@@ -753,7 +844,7 @@ html,body{overflow:hidden}
   box-shadow:var(--shadow-3);padding:12px 14px;min-width:240px;display:flex;flex-direction:column;gap:7px}
 .logline.hl{background:rgba(250,69,83,.18);display:block;border-radius:3px;padding:0 4px;margin:0 -4px}
 .tfsec{border:1px solid var(--line);border-radius:var(--r-m);padding:11px 12px;display:flex;flex-direction:column;gap:9px}
-.tfsec-t{font-size:12px;font-weight:650;color:var(--ink);display:flex;align-items:center;gap:6px}
+.tfsec-t{font-size:var(--fs-sm);font-weight:var(--fw-bold);color:var(--ink);display:flex;align-items:center;gap:6px}
 
 /* ════════ style block 04 (index.html 에서 추출) ════════ */
 /* ══════════════ v2.1 ══════════════ */
@@ -765,7 +856,7 @@ html,body{overflow:hidden}
 .mp-h{padding:11px 13px;border-bottom:1px solid var(--line-2);display:flex;align-items:flex-start;gap:8px}
 .mp-tabs{display:flex;border-bottom:1px solid var(--line);overflow-x:auto;flex:none;scrollbar-width:none}
 .mp-tabs::-webkit-scrollbar{display:none}
-.mp-tabs .tab{height:34px;padding:0 9px;font-size:12px;white-space:nowrap}
+.mp-tabs .tab{height:36px;padding:0 9px;font-size:var(--fs-sm);white-space:nowrap}
 .mp-b{flex:1;min-height:0;overflow:auto;padding:13px;display:flex;flex-direction:column;gap:12px}
 .mp-f{padding:10px 13px;border-top:1px solid var(--line-2);display:flex;gap:6px;flex-wrap:wrap}
 #app.nar .mp{width:308px}
@@ -774,12 +865,12 @@ html,body{overflow:hidden}
 .info2{display:grid;grid-template-columns:minmax(0,1fr);border:1px solid var(--line);border-radius:var(--r-m);overflow:hidden}
 .info2 > div{display:flex;gap:10px;padding:8px 13px;border-bottom:1px solid var(--line-2);min-width:0}
 .info2 > div:last-child{border-bottom:0}
-.info2 > div > span:first-child{width:92px;flex:none;color:var(--muted);font-size:12px}
-.info2 > div > span:last-child{flex:1;min-width:0;font-size:12.5px;overflow-wrap:anywhere}
+.info2 > div > span:first-child{width:92px;flex:none;color:var(--muted);font-size:var(--fs-sm)}
+.info2 > div > span:last-child{flex:1;min-width:0;font-size:var(--fs-sm);overflow-wrap:anywhere}
 .sec{border:1px solid var(--line);border-radius:var(--r-m);padding:12px 13px;display:flex;flex-direction:column;gap:10px}
-.sec-t{font-size:12px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:6px}
+.sec-t{font-size:var(--fs-sm);font-weight:var(--fw-bold);color:var(--ink);display:flex;align-items:center;gap:6px}
 .qtabs{display:flex;border-bottom:1px solid var(--line);margin-bottom:14px}
-.sevb{height:20px;padding:0 7px;border-radius:5px;font-size:11.5px;font-weight:600;border:1px solid;display:inline-flex;align-items:center}
+.sevb{height:20px;padding:0 7px;border-radius:5px;font-size:var(--fs-cap);font-weight:var(--fw-bold);border:1px solid;display:inline-flex;align-items:center}
 .sev-error{background:var(--err-soft);color:var(--err);border-color:var(--err-line)}
 .sev-warn{background:var(--warn-soft);color:var(--warn);border-color:var(--warn-line)}
 .tgl{width:34px;height:19px;border-radius:10px;background:var(--line);position:relative;flex:none;transition:background .12s}
@@ -797,7 +888,7 @@ html,body{overflow:hidden}
 /* ════════ style block 05 (index.html 에서 추출) ════════ */
 /* ══════════════ v2.2 ══════════════ */
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden;background:var(--surface);flex:none}
-.seg button{height:28px;padding:0 11px;font-size:12px;font-weight:600;color:var(--muted);
+.seg button{height:28px;padding:0 11px;font-size:var(--fs-sm);font-weight:var(--fw-bold);color:var(--muted);
   background:transparent;border:0;border-right:1px solid var(--line);display:inline-flex;align-items:center;gap:5px;cursor:pointer}
 .seg button:last-child{border-right:0}
 .seg button.on{background:var(--pri-soft);color:var(--pri)}
@@ -809,19 +900,20 @@ html,body{overflow:hidden}
 .def-tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);background:var(--surface);
   padding:0 20px;overflow-x:auto;flex:none;scrollbar-width:none}
 .def-tabs::-webkit-scrollbar{display:none}
-.def-tabs .tab{height:38px;padding:0 13px;font-size:13px;white-space:nowrap}
+.def-tabs .tab{height:36px;padding:0 13px;font-size:var(--fs-body);white-space:nowrap}
 .def-b{display:flex;flex-direction:column;gap:13px}
 .def-b .sec,.def-b .info2{background:var(--surface)}
 .g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:13px;align-items:start}
-.ro{display:flex;align-items:center;gap:7px;padding:7px 12px;border-radius:var(--r-m);
-  background:var(--surface-3);color:var(--muted);font-size:11.5px}
+/* (.ro — 파이프라인 흐름 위에 있던 «규칙 안내 줄». 그 요소는 v5.4 에서 사라졌는데
+   규칙만 남아, 두 글자 이름을 쓰던 다른 요소(.pn.ro · .psel-chk.ro)에 padding 과
+   회색 배경을 몰래 입히고 있었다. 쓰는 곳이 없으므로 지운다.) */
 .pick{display:flex;align-items:center;gap:9px;padding:9px 12px;border:1px solid var(--line);
   border-radius:var(--r-m);background:var(--surface);cursor:pointer}
 .pick:hover{border-color:var(--pri-line)}
 .pick.on{border-color:var(--pri);background:var(--pri-soft)}
 .ordn{display:flex;align-items:center;gap:9px;padding:8px 11px;border:1px solid var(--line);border-radius:var(--r-m);background:var(--surface)}
 .ordn b{width:20px;height:20px;border-radius:50%;background:var(--pri-soft);color:var(--pri);
-  font-size:11px;display:grid;place-items:center;flex:none}
+  font-size:var(--fs-cap);display:grid;place-items:center;flex:none}
 
 /* ════════ style block 06 (index.html 에서 추출) ════════ */
 /* ══════════════ v2.3 — ERD ══════════════ */
@@ -835,29 +927,29 @@ html,body{overflow:hidden}
 .ent.drag{cursor:grabbing;box-shadow:var(--shadow-3);z-index:5}
 .ent-t{height:5px}
 .ent-h{padding:8px 11px 8px;background:var(--surface-2);border-bottom:1px solid var(--line)}
-.ent-n{font-size:12.5px;font-weight:700;color:var(--ink);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ent-p{font-size:10.5px;color:var(--faint);font-family:var(--mono);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ent-n{font-size:var(--fs-sm);font-weight:var(--fw-bold);color:var(--ink);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ent-p{font-size:var(--fs-cap);color:var(--faint);font-family:var(--mono);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ent-r{display:flex;align-items:center;gap:7px;height:24px;padding:0 11px;border-bottom:1px solid var(--line-2)}
 .ent-r:last-child{border-bottom:0}
 .ent-r.pk{background:rgba(99,102,241,.05)}
-.ent-k{width:22px;flex:none;font-size:9px;font-weight:800;letter-spacing:.2px;text-align:center;
+.ent-k{width:22px;flex:none;font-size:var(--fs-micro);font-weight:var(--fw-bold);letter-spacing:.2px;text-align:center;
   border-radius:3px;line-height:13px;height:13px}
 .ent-k.p{background:var(--pri-soft);color:var(--pri)}
 .ent-k.f{background:var(--warn-soft);color:var(--warn)}
 .ent-k.n{background:transparent;color:transparent}
-.ent-c{flex:1;min-width:0;font-size:11.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ent-y{font-size:10px;color:var(--faint);font-family:var(--mono);flex:none;max-width:96px;
+.ent-c{flex:1;min-width:0;font-size:var(--fs-cap);color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ent-y{font-size:var(--fs-micro);color:var(--faint);font-family:var(--mono);flex:none;max-width:96px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ent-m{padding:5px 11px;font-size:10.5px;color:var(--faint);background:var(--surface-2)}
+.ent-m{padding:5px 11px;font-size:var(--fs-cap);color:var(--faint);background:var(--surface-2)}
 .rel-l{position:absolute;transform:translate(-50%,-50%);background:var(--surface);border:1px solid var(--line);
-  border-radius:5px;padding:1px 6px;font-size:10.5px;color:var(--muted);font-family:var(--mono);
+  border-radius:5px;padding:1px 6px;font-size:var(--fs-cap);color:var(--muted);font-family:var(--mono);
   white-space:nowrap;pointer-events:auto;cursor:pointer}
 .rel-l:hover{border-color:var(--pri);color:var(--pri)}
-.card-n{position:absolute;transform:translate(-50%,-50%);font-size:10.5px;font-weight:700;color:var(--muted);
+.card-n{position:absolute;transform:translate(-50%,-50%);font-size:var(--fs-cap);font-weight:var(--fw-bold);color:var(--muted);
   background:var(--surface);border-radius:4px;padding:0 3px;pointer-events:none}
 .erd-lg{position:absolute;left:14px;bottom:12px;display:flex;gap:9px;align-items:center;
   background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:6px 10px;
-  box-shadow:var(--shadow-1);font-size:11px;color:var(--muted)}
+  box-shadow:var(--shadow-1);font-size:var(--fs-cap);color:var(--muted)}
 
 /* ════════ style block 07 (index.html 에서 추출) ════════ */
 /* ══════════════ v2.4 — 컬럼이 많은 테이블 ══════════════ */
@@ -867,24 +959,24 @@ html,body{overflow:hidden}
 .ent-cols::-webkit-scrollbar-track{background:transparent}
 .ent-f{display:flex;align-items:center;gap:6px;padding:5px 9px;border-bottom:1px solid var(--line-2);background:var(--surface-2)}
 .ent-f input{flex:1;min-width:0;height:22px;border:1px solid var(--line);border-radius:5px;
-  padding:0 7px;font-size:11px;background:var(--surface);color:var(--ink);outline:none}
+  padding:0 7px;font-size:var(--fs-cap);background:var(--surface);color:var(--ink);outline:none}
 .ent-f input:focus{border-color:var(--pri)}
 .ent-m{display:flex;align-items:center;gap:6px}
-.ent-m .lnk{font-size:10.5px}
-.ent-g{padding:3px 11px;font-size:9.5px;font-weight:700;letter-spacing:.3px;color:var(--faint);
+.ent-m .lnk{font-size:var(--fs-cap)}
+.ent-g{padding:3px 11px;font-size:var(--fs-micro);font-weight:var(--fw-bold);letter-spacing:.3px;color:var(--faint);
   background:var(--surface-2);border-bottom:1px solid var(--line-2)}
 .relk{display:inline-flex;align-items:center;gap:4px}
-.relk b{font-weight:700;color:var(--pri)}
+.relk b{font-weight:var(--fw-bold);color:var(--pri)}
 
 /* ════════ style block 08 (index.html 에서 추출) ════════ */
 /* ══════════════ v2.5 ══════════════ */
 .kindt{display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:4px;
-  font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.4px;flex:none}
+  font-family:var(--mono);font-size:var(--fs-micro);font-weight:var(--fw-bold);letter-spacing:.4px;flex:none}
 .grp-h{display:flex;align-items:center;gap:6px;padding:9px 9px 5px;font-family:var(--mono);
-  font-size:10px;font-weight:700;letter-spacing:.6px;color:var(--faint)}
+  font-size:var(--fs-micro);font-weight:var(--fw-bold);letter-spacing:.6px;color:var(--faint)}
 .grp-h i{width:8px;height:8px;border-radius:2px;display:block;flex:none}
 .rule{display:flex;align-items:flex-start;gap:7px;padding:8px 11px;border-radius:var(--r-m);
-  background:var(--pri-soft);color:var(--pri);font-size:11.5px;line-height:1.5}
+  background:var(--pri-soft);color:var(--pri);font-size:var(--fs-cap);line-height:1.5}
 .rule.q{background:var(--surface-3);color:var(--muted)}
 .ent.dimx{opacity:.32}
 .ent.up{box-shadow:0 0 0 2px rgba(14,159,110,.35),var(--shadow-1)}
@@ -897,8 +989,8 @@ html,body{overflow:hidden}
 .pn.linking{border-color:var(--ok);box-shadow:0 0 0 2px rgba(14,159,110,.25)}
 .pn-t{height:5px;border-radius:8px 8px 0 0}
 .pn-b{padding:8px 11px 9px;display:flex;flex-direction:column;gap:3px;min-width:0}
-.pn-n{font-size:12.5px;font-weight:700;color:var(--ink)}
-.pn-p{font-size:10.5px;font-family:var(--mono);color:var(--faint)}
+.pn-n{font-size:var(--fs-sm);font-weight:var(--fw-bold);color:var(--ink)}
+.pn-p{font-size:var(--fs-cap);font-family:var(--mono);color:var(--faint)}
 .pn-m{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:2px}
 .pn-x{position:absolute;top:-8px;right:-8px;width:20px;height:20px;border-radius:50%;
   background:var(--surface);border:1px solid var(--line);color:var(--muted);display:none;
@@ -914,9 +1006,9 @@ html,body{overflow:hidden}
   background:var(--surface);overflow-x:auto;flex:none;scrollbar-width:none}
 .ordbar::-webkit-scrollbar{display:none}
 .ordc{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border:1px solid var(--line);
-  border-radius:20px;font-size:11.5px;white-space:nowrap;flex:none;background:var(--surface)}
+  border-radius:20px;font-size:var(--fs-cap);white-space:nowrap;flex:none;background:var(--surface)}
 .ordc b{width:16px;height:16px;border-radius:50%;background:var(--pri-soft);color:var(--pri);
-  font-size:10px;display:grid;place-items:center}
+  font-size:var(--fs-micro);display:grid;place-items:center}
 
 /* ════════ style block 09 (index.html 에서 추출) ════════ */
 /* ══════════════ v2.6 — UI 다듬기 ══════════════ */
@@ -931,10 +1023,10 @@ html,body{overflow:hidden}
 .pn-x{width:22px;height:22px;top:-9px;right:-9px}
 .zoomlbl{padding:4px 8px}
 .zoomlbl .lnk{padding:4px 4px;display:inline-block}
-.kindt{font-size:10px;height:17px}
-.grp-h{font-size:10.5px}
+.kindt{font-size:var(--fs-micro);height:17px}
+.grp-h{font-size:var(--fs-cap)}
 /* 안내 배너는 한 줄로 슬림하게 */
-.rule{padding:8px 12px;font-size:11.5px;gap:8px;align-items:center}
+.rule{padding:8px 12px;font-size:var(--fs-cap);gap:8px;align-items:center}
 .rule .ic{flex:none}
 /* 실행 설정 저장 줄은 스크롤해도 보이게 */
 .def-act{position:sticky;bottom:0;margin:0 -20px -24px;padding:12px 20px 14px;
@@ -949,8 +1041,8 @@ html,body{overflow:hidden}
 /* ══════════════ v2.8 — DAG task 캔버스 ══════════════ */
 .pn-hd{display:flex;align-items:center;gap:6px;min-width:0}
 .pn-seq{width:19px;height:19px;border-radius:50%;background:var(--pri);color:#fff;
-  font-size:10.5px;font-weight:700;display:grid;place-items:center;flex:none;font-family:var(--mono)}
-.pn.src .pn-seq{background:var(--surface-3);color:var(--faint);font-size:9px}
+  font-size:var(--fs-cap);font-weight:var(--fw-bold);display:grid;place-items:center;flex:none;font-family:var(--mono)}
+.pn.src .pn-seq{background:var(--surface-3);color:var(--faint);font-size:var(--fs-micro)}
 .pn.src{border-style:dashed}
 
 /* ════════ style block 11 (index.html 에서 추출) ════════ */
@@ -962,20 +1054,20 @@ html,body{overflow:hidden}
 .fdr-c{width:16px;height:16px;display:grid;place-items:center;flex:none;color:var(--faint);
   transition:transform .12s}
 .fdr.open .fdr-c{transform:rotate(90deg)}
-.fdr-n{font-size:12px;font-weight:600;color:var(--text);flex:1;min-width:0;
+.fdr-n{font-size:var(--fs-sm);font-weight:var(--fw-bold);color:var(--text);flex:1;min-width:0;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.fdr-k{font-size:11px;color:var(--faint);flex:none}
+.fdr-k{font-size:var(--fs-cap);color:var(--faint);flex:none}
 .fdr-m{width:20px;height:20px;border-radius:4px;display:none;place-items:center;color:var(--muted);flex:none}
 .fdr:hover .fdr-m{display:grid}
 .fdr-m:hover{background:var(--line);color:var(--ink)}
 .fdr-i{color:var(--faint);flex:none;display:flex}
 .fdr.on .fdr-n{color:var(--pri)}
 .lp.in-f{padding-left:26px}
-.lp .lp-n{font-size:12.5px;color:var(--text);flex:1;min-width:0;
+.lp .lp-n{font-size:var(--fs-sm);color:var(--text);flex:1;min-width:0;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.lp.on .lp-n{color:var(--pri);font-weight:600}
+.lp.on .lp-n{color:var(--pri);font-weight:var(--fw-bold)}
 .fdr-add{display:flex;align-items:center;gap:5px;padding:6px 8px;border-radius:var(--r-s);
-  font-size:11.5px;color:var(--muted);cursor:pointer;width:100%;background:none;border:0}
+  font-size:var(--fs-cap);color:var(--muted);cursor:pointer;width:100%;background:none;border:0}
 .fdr-add:hover{background:var(--surface-3);color:var(--pri)}
 
 /* ════════ style block 12 (index.html 에서 추출) ════════ */
@@ -990,8 +1082,8 @@ html,body{overflow:hidden}
 .ct-grp{position:sticky;top:0;z-index:3;background:var(--surface);
   display:flex;align-items:center;gap:7px;padding:9px 6px 6px;margin-top:2px}
 .ct-grp i{width:7px;height:7px;border-radius:2px;flex:none}
-.ct-grp-n{font-size:10.5px;font-weight:750;letter-spacing:.07em;color:var(--muted)}
-.ct-grp-k{font-size:11px;color:var(--faint);margin-left:auto;flex:none}
+.ct-grp-n{font-size:var(--fs-cap);font-weight:var(--fw-bold);letter-spacing:.07em;color:var(--muted)}
+.ct-grp-k{font-size:var(--fs-cap);color:var(--faint);margin-left:auto;flex:none}
 .ct-grp.over{background:var(--pri-soft);border-radius:var(--r-s);box-shadow:inset 0 0 0 1px var(--pri-line)}
 .ct-kids{margin-left:14px;padding-left:9px;border-left:1px solid var(--line-2)}
 .ct-kids.over{border-left-color:var(--pri);background:var(--pri-soft);border-radius:0 var(--r-s) var(--r-s) 0}
@@ -1004,43 +1096,43 @@ html,body{overflow:hidden}
 .ct-f.open .ct-f-c{transform:rotate(90deg)}
 .ct-f-i{color:var(--faint);flex:none;display:flex}
 .ct-f.open .ct-f-i{color:var(--muted)}
-.ct-f-n{font-size:12.5px;font-weight:620;color:var(--text);flex:1;min-width:0;
+.ct-f-n{font-size:var(--fs-sm);font-weight:var(--fw-bold);color:var(--text);flex:1;min-width:0;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ct-f-k{font-size:11px;color:var(--faint);flex:none;font-variant-numeric:tabular-nums}
+.ct-f-k{font-size:var(--fs-cap);color:var(--faint);flex:none;font-variant-numeric:tabular-nums}
 .ct-f:hover .ct-f-k,.ct-f:focus-within .ct-f-k{display:none}
 .ct-f-m{width:22px;height:22px;border-radius:5px;display:none;place-items:center;
   color:var(--muted);flex:none;border:0;background:none;cursor:pointer;padding:0}
 .ct-f:hover .ct-f-m,.ct-f:focus-within .ct-f-m{display:grid}
 .ct-f-m:hover{background:var(--line);color:var(--ink)}
-.ct-ren{height:24px;font-size:12.5px;padding:0 6px;border:1px solid var(--pri);border-radius:5px;
+.ct-ren{height:24px;font-size:var(--fs-sm);padding:0 6px;border:1px solid var(--pri);border-radius:5px;
   background:var(--surface);color:var(--ink);width:100%;min-width:0;outline:none}
 .ct-i{padding-left:7px !important;padding-right:5px !important}
-.ct-i .lp-n{font-size:12.5px}
+.ct-i .lp-n{font-size:var(--fs-sm)}
 .ct-i.dragging{opacity:.45}
-.ct-path{font-size:10.5px;color:var(--faint);margin-left:auto;flex:none;
+.ct-path{font-size:var(--fs-cap);color:var(--faint);margin-left:auto;flex:none;
   max-width:44%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ct-empty{font-size:11px;color:var(--faint);padding:5px 8px;margin:1px 0 3px;
+.ct-empty{font-size:var(--fs-cap);color:var(--faint);padding:5px 8px;margin:1px 0 3px;
   border:1px dashed var(--line);border-radius:var(--r-s)}
 .ct-empty.over{border-color:var(--pri);color:var(--pri);background:var(--pri-soft)}
 .ct-new{display:flex;align-items:center;gap:5px;padding:5px 6px;margin:1px 0 2px;border-radius:var(--r-s);
-  font-size:11.5px;color:var(--faint);cursor:pointer;width:100%;background:none;border:0;text-align:left}
+  font-size:var(--fs-cap);color:var(--faint);cursor:pointer;width:100%;background:none;border:0;text-align:left}
 .ct-new:hover{background:var(--surface-3);color:var(--pri)}
-.ct-none{font-size:11.5px;color:var(--faint);padding:14px 8px;text-align:center}
-.ct-res{font-size:11px;color:var(--faint);padding:8px 7px 4px}
+.ct-none{font-size:var(--fs-cap);color:var(--faint);padding:14px 8px;text-align:center}
+.ct-res{font-size:var(--fs-cap);color:var(--faint);padding:8px 7px 4px}
 .ct-hit{background:oklch(.92 .12 95);border-radius:2px;padding:0 1px}
 
 /* ════════ style block 14 (index.html 에서 추출) ════════ */
 /* ══════════════ v3.2 — 논리 폴더 탐색기 (밀도 높은 트리) ══════════════ */
-.tg{padding:2px 0 12px;font-size:12px;user-select:none}
+.tg{padding:2px 0 12px;font-size:var(--fs-sm);user-select:none}
 .tg-bar{display:flex;align-items:center;gap:2px;padding:4px 6px;border-bottom:1px solid var(--line-2)}
 .tg-bar .iconbtn{width:24px;height:24px;border-radius:5px}
 .tg-bar .iconbtn.on{background:var(--pri-soft);color:var(--pri)}
 .tg-srch{padding:6px 8px}
-.tg-srch .inp{height:26px;font-size:12px;padding-left:26px}
+.tg-srch .inp{height:28px;font-size:var(--fs-sm);padding-left:26px}
 .tg-sel{display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--pri-soft);
-  border-bottom:1px solid var(--pri-line);font-size:11.5px;color:var(--pri)}
-.tg-sel button{border:0;background:none;cursor:pointer;font-size:11.5px;color:var(--pri);
-  font-weight:650;padding:2px 4px;border-radius:4px}
+  border-bottom:1px solid var(--pri-line);font-size:var(--fs-cap);color:var(--pri)}
+.tg-sel button{border:0;background:none;cursor:pointer;font-size:var(--fs-cap);color:var(--pri);
+  font-weight:var(--fw-bold);padding:2px 4px;border-radius:4px}
 .tg-sel button:hover{background:var(--surface)}
 .tg-r{display:flex;align-items:center;gap:4px;height:22px;padding-right:4px;cursor:default;
   min-width:0;position:relative;white-space:nowrap;outline:none}
@@ -1059,14 +1151,14 @@ html,body{overflow:hidden}
 .tg-i svg{width:14px;height:14px}
 .tg-r.g .tg-i{display:none}
 .tg-n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
-.tg-r.f .tg-n{font-weight:600}
+.tg-r.f .tg-n{font-weight:var(--fw-bold)}
 .tg-r.g{height:24px;margin-top:3px}
-.tg-r.g .tg-n{font-size:10.5px;font-weight:750;letter-spacing:.06em;color:var(--muted)}
+.tg-r.g .tg-n{font-size:var(--fs-cap);font-weight:var(--fw-bold);letter-spacing:.06em;color:var(--muted)}
 .tg-r.g:hover{background:var(--surface-3)}
 .tg-r.i .tg-n{color:var(--text)}
-.tg-r.i.on .tg-n,.tg-r.f.on .tg-n{color:var(--pri);font-weight:650}
+.tg-r.i.on .tg-n,.tg-r.f.on .tg-n{color:var(--pri);font-weight:var(--fw-bold)}
 .tg-sw{width:6px;height:6px;border-radius:2px;flex:none;margin-right:1px}
-.tg-k{font-size:10.5px;color:var(--faint);flex:none;font-variant-numeric:tabular-nums;padding-left:2px}
+.tg-k{font-size:var(--fs-cap);color:var(--faint);flex:none;font-variant-numeric:tabular-nums;padding-left:2px}
 .tg-r:hover .tg-k{display:none}
 .tg-fav{color:oklch(.72 .15 78);flex:none;display:flex}
 .tg-fav svg{width:12px;height:12px;fill:currentColor}
@@ -1075,18 +1167,18 @@ html,body{overflow:hidden}
 .tg-b svg{width:14px;height:14px}
 .tg-r:hover .tg-b,.tg-r.dim .tg-b.eye{display:grid}
 .tg-b:hover{background:var(--line);color:var(--ink)}
-.tg-e{height:20px;display:flex;align-items:center;font-size:11px;color:var(--faint);font-style:normal}
+.tg-e{height:20px;display:flex;align-items:center;font-size:var(--fs-cap);color:var(--faint);font-style:normal}
 .tg-e.over{color:var(--pri);background:var(--pri-soft)}
-.tg-ren{height:19px;font-size:12px;padding:0 4px;border:1px solid var(--pri);border-radius:4px;
+.tg-ren{height:19px;font-size:var(--fs-sm);padding:0 4px;border:1px solid var(--pri);border-radius:4px;
   background:var(--surface);color:var(--ink);flex:1;min-width:0;outline:none}
-.tg-path{font-size:10.5px;color:var(--faint);flex:none;max-width:46%;overflow:hidden;text-overflow:ellipsis}
-.tg-res{font-size:10.5px;color:var(--faint);padding:7px 8px 3px}
+.tg-path{font-size:var(--fs-cap);color:var(--faint);flex:none;max-width:46%;overflow:hidden;text-overflow:ellipsis}
+.tg-res{font-size:var(--fs-cap);color:var(--faint);padding:7px 8px 3px}
 .tg-hit{background:oklch(.92 .12 95);border-radius:2px}
-.tg-note{font-size:10.5px;color:var(--faint);padding:8px 10px;line-height:1.45}
+.tg-note{font-size:var(--fs-cap);color:var(--faint);padding:8px 10px;line-height:1.45}
 .tg-pop{position:fixed;z-index:120;min-width:176px;background:var(--surface);
   border:1px solid var(--line);border-radius:8px;box-shadow:0 12px 30px rgba(16,24,40,.18);padding:4px}
 .tg-pop button{display:flex;align-items:center;gap:8px;width:100%;padding:6px 9px;border:0;background:none;
-  cursor:pointer;border-radius:5px;font-size:12.5px;color:var(--text);text-align:left}
+  cursor:pointer;border-radius:5px;font-size:var(--fs-sm);color:var(--text);text-align:left}
 .tg-pop button:hover{background:var(--surface-3)}
 .tg-pop button.dngr{color:var(--err)}
 .tg-pop button svg{width:14px;height:14px;flex:none;color:var(--faint)}
@@ -1097,3 +1189,289 @@ html,body{overflow:hidden}
    라벨 자체가 연결 키 라는 뜻이라 아이콘이 정보를 더하지 않고,
    선이 촘촘한 구간에서 글자보다 아이콘이 먼저 눈에 들어와 방해가 된다. */
 .relk svg { display: none; }
+
+/* ── 데이터 분석 ────────────────────────────────────────────────
+   골격은 데이터 파이프라인 화면과 같다 — .page.flush > .mod > (.mod-l | .mod-c)
+   그리고 .mod-c 안에 .ptabs 스트립. 새 골격을 만들지 않는다.
+
+   **스크롤은 한 겹이다.** .page.flush 가 overflow:hidden 이고, 실제로 스크롤하는
+   것은 (1) 사이드바 목록 (2) 상세 콘텐츠 (3) 탭 스트립의 가로 뿐이다.
+   차트를 플랫폼이 직접 그리므로 iframe 이 없다 — 이중 스크롤이 생길 자리가 없다. */
+
+/* 페이지 헤더 — 목록·상세 공통 */
+.ana-top{flex:none;background:var(--surface);border-bottom:1px solid var(--line);
+  padding:16px 24px}
+.ana-top .tt{font-size:var(--fs-page);font-weight:var(--fw-bold);color:var(--ink);letter-spacing:-0.5px;margin:0}
+.ana-top .td{font-size:var(--fs-sm);color:var(--muted);margin:4px 0 0}
+
+/* 스크롤 담당자 — 여기 하나만 세로로 움직인다 */
+.ana-scroll{flex:1;min-height:0;overflow:auto}
+.ana-inner{max-width:1440px;margin:0 auto;padding:24px}
+
+.ana-sec+.ana-sec{margin-top:24px}
+.ana-sec-h{display:flex;align-items:center;gap:8px;margin:0 0 12px}
+.ana-sec-h .t{font-size:var(--fs-strong);font-weight:var(--fw-bold);color:var(--text)}
+.ana-sec-h .n{font-size:var(--fs-strong);font-weight:var(--fw-bold);color:var(--pri)}
+
+/* 카드 그리드 */
+.ana-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.ana-c{position:relative;height:132px;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--r-m);padding:16px;cursor:pointer;
+  display:flex;flex-direction:column}
+.ana-c:hover{border-color:#4A4A4A}
+.ana-c .ct{font-size:var(--fs-strong);font-weight:var(--fw-bold);color:var(--ink);letter-spacing:-0.5px;
+  padding-right:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ana-c .cd{display:flex;gap:4px;margin-top:8px;overflow:hidden}
+.ana-c .cacts{position:absolute;top:10px;right:10px;display:flex;gap:2px}
+.ana-c .cfoot{margin-top:auto;padding-top:10px;border-top:1px solid #F0F0F0;
+  font-size:var(--fs-sm);color:var(--muted)}
+.ana-tag{height:20px;display:inline-flex;align-items:center;background:var(--surface-3);
+  border-radius:4px;padding:0 6px;font-family:var(--mono);font-size:var(--fs-sm);color:var(--muted);
+  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ana-fav{color:var(--faint)}
+.ana-fav.on{color:var(--warn)}
+.ana-empty{text-align:center;padding:48px 20px;font-size:var(--fs-body);color:var(--muted)}
+
+/* 상세 — 분석 엔진 화면을 그대로 띄우는 프레임.
+   스크롤은 프레임 안에서만 일어난다. 바깥에 스크롤을 두면 두 겹이 된다. */
+/* 임베드 프레임 — 화면 트리 밖의 고정 층에 산다(b53.js anaSyncFrames 참고).
+   render() 가 #app 을 비워도 이 층은 건드려지지 않아 대시보드가 다시 로드되지 않는다.
+   z-index 50 — 헤더(60) 아래, 모달 스크림(100) 아래. */
+#anaFrames{position:fixed;inset:0;pointer-events:none;z-index:50}
+#anaFrames .ana-frame{position:absolute;pointer-events:auto;border:0;display:none;
+  background:var(--surface)}
+/* 자리표시자 — 프레임이 놓일 자리를 잡아 준다. 자신은 그리지 않는다. */
+.ana-frame-slot{flex:1;min-height:0;width:100%;background:var(--surface)}
+
+/* 「마트 데이터 갱신 필요」 — 원천이 마트보다 새것일 때만 나온다.
+   경고색을 쓰되 배지 하나로 끝낸다. 화면을 막지 않는 이유는 값이 틀린 것이 아니라
+   오래된 것이기 때문이다 — 보고 판단할 사람에게 사실만 알린다. */
+.ana-stale{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;
+  background:var(--warn-soft);border:1px solid var(--warn-line);border-radius:999px;
+  font-size:var(--fs-sm);font-weight:var(--fw-bold);color:#EB6400;cursor:default}
+
+/* 차트 카드 */
+.ana-ch{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-m);
+  padding:20px}
+.ana-ch+.ana-ch{margin-top:16px}
+.ana-ch-h{display:flex;align-items:center;gap:8px;margin:0 0 12px}
+.ana-ch-h .t{font-size:var(--fs-strong);font-weight:var(--fw-bold);color:var(--ink);letter-spacing:-0.5px}
+.ana-txt{border:0;background:none;padding:0;font-size:var(--fs-sm);color:var(--muted);cursor:pointer}
+.ana-txt:hover{color:var(--text);text-decoration:underline}
+.ana-txt.off{color:var(--faint)}
+
+/* 범례 — 차트 하단 중앙 */
+.ana-leg{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 16px;margin-top:12px}
+.ana-leg .li{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-sm);color:var(--muted);
+  cursor:pointer;background:none;border:0;padding:0}
+.ana-leg .li.off{opacity:.4}
+.ana-sw{width:10px;height:10px;border-radius:2px;flex:none}
+
+/* 도넛 + 범례 리스트 */
+.ana-donut-row{display:flex;align-items:center;gap:24px;flex-wrap:wrap}
+.ana-donut{width:220px;height:220px;border-radius:50%;flex:none;position:relative}
+.ana-donut .hole{position:absolute;inset:44px;background:var(--surface);border-radius:50%;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.ana-donut .hole .k{font-size:var(--fs-sm);color:var(--muted)}
+.ana-donut .hole .v{font-size:var(--fs-page);font-weight:var(--fw-bold);color:var(--ink);letter-spacing:-0.5px}
+.ana-dlist{flex:1;min-width:220px;display:flex;flex-direction:column}
+.ana-dl{display:grid;grid-template-columns:10px 1fr auto auto;align-items:center;
+  gap:10px;height:36px;padding:0 8px;border-radius:var(--r-s)}
+.ana-dl:hover{background:var(--hover-o)}
+.ana-dl .lb{font-size:var(--fs-body);color:var(--text);overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.ana-dl .cnt{font-size:var(--fs-body);color:var(--muted)}
+.ana-dl .pct{font-size:var(--fs-body);font-weight:var(--fw-med);color:var(--text);min-width:48px;text-align:right}
+
+/* 데이터 선택 · 분석 만들기 (마법사) */
+.ana-opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:8px}
+.ana-opt{display:flex;flex-direction:column;gap:2px;text-align:left;padding:12px;
+  border:1px solid var(--line-str);border-radius:var(--r-s);background:var(--surface);cursor:pointer}
+.ana-opt:hover{background:var(--hover-o)}
+.ana-opt.on{border-color:var(--pri);background:var(--sel-o)}
+.ana-opt .on1{font-size:var(--fs-body);font-weight:var(--fw-bold);color:var(--text)}
+.ana-opt .on2{font-size:var(--fs-sm);color:var(--muted);overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.ana-name{font-size:var(--fs-page);font-weight:var(--fw-bold);color:var(--ink);letter-spacing:-0.5px;
+  border:0;background:none;padding:0;min-width:200px;outline:none}
+.ana-name::placeholder{color:var(--faint);font-weight:var(--fw-bold)}
+
+.inp.sm{height:28px;font-size:var(--fs-sm);padding:0 8px}
+.menu button.dngr{color:var(--err)}
+.menu button.dngr .ic{color:var(--err)}
+
+/* ════════ 파이프라인 실행 상세(하단 독) ════════
+   .pdock 으로만 건다 — .dock-h/.dock-b 는 데이터 모델 화면의 독과 공용이다.
+
+   좌우 여백은 헤더와 본문을 14px 한 값으로 맞추고, 첫 탭의 안쪽 여백을 지워
+   «실행 정보» 글자와 아래 «모델» 글자가 같은 세로선에서 시작하게 한다. */
+.pdock .dock-h{padding:0 14px;gap:0}
+.pdock .dock-b{padding:14px}
+.pdock .dock-tabs{display:flex;align-items:center;gap:2px;min-width:0;flex:0 1 auto;
+  overflow-x:auto;scrollbar-width:none}
+.pdock .dock-tabs::-webkit-scrollbar{display:none}
+.pdock .dock-tabs .tab{flex:none;height:36px}
+.pdock .dock-tabs .tab:first-child{padding-left:0}
+
+/* 오른쪽 동작 묶음 — 탭보다 한 단 작게. 폭이 줄어도 여기는 줄이지 않고(flex:none)
+   탭 줄이 대신 스크롤된다. 버튼 글자가 눌려 두 줄이 되는 쪽이 더 나쁘다. */
+.pdock .dock-act{margin-left:auto;display:flex;align-items:center;gap:6px;flex:none;
+  padding-left:12px;padding-right:0}
+.pdock .dock-act .btn{height:26px;padding:0 9px;font-size:var(--fs-sm);gap:4px}
+.pdock .dock-act .btn:not(.pri){border-color:var(--line-str);color:var(--text)}
+.pdock .dock-act .pd-who{min-width:0;max-width:200px;padding-right:2px}
+/* 좁아지면 이름표를 접고 아이콘만 남긴다. 버튼을 그대로 두면 탭 줄이 밀려
+   «실행 SQL·품질 결과» 가 버튼 뒤로 잘려 들어간다 — 탭은 넷 다 보여야 한다.
+   접힌 뒤에도 title 이 남아 hover 로 이름을 확인할 수 있다. */
+#app.xnar .pdock .dock-act .btn-l{display:none}
+#app.xnar .pdock .dock-act .btn{padding:0 7px;gap:0}
+#app.xnar .pdock .dock-act .pd-who{display:none}
+
+/* 값 칸 — 긴 경로·모델명은 한 줄로 줄이고 «…» 로 자른다. 전체 값은 title(hover)로 본다.
+   .kv-v 는 min-width:0 이라, 안쪽만 block/flex 로 만들어 주면 칸을 넘지 않는다. */
+.pd-kv .kv-v > .trunc{display:block}
+.pd-kv .kv-v > .row{min-width:0}
+/* 이름은 자기 글자만큼만 차지한다 — 늘려 두면 종류 태그가 칸 끝까지 밀려나
+   «dim_region ······················ DATA MODEL» 처럼 둘이 남남으로 보인다.
+   대신 min-width:0 이라 이름이 길면 그 자리에서 «…» 로 잘린다. */
+.pd-kv .kv-v > .row > .trunc{min-width:0}
+.pd-kv .kv-v .kindt{flex:none}
+.pd-side .statrow{min-width:0}
+.pd-side .statrow .kindt{flex:none}
+.pd-side .swatch{flex:none}
+
+/* ════════ 전역 네비게이션 — 브랜드(홈)와 페이지 이동이 한 줄 ════════
+   Data Mates 는 메뉴의 첫 칸(홈)이다. 생김새만 로고이고 역할은 홈 버튼이라,
+   활성 표시는 나머지 메뉴와 똑같은 밑줄로 준다 — 한 줄이 하나의 네비게이션으로
+   읽히려면 «지금 여기» 를 말하는 방법이 하나여야 한다.
+   로고 글자색은 페이지마다 바꾸지 않는다(로고는 상수, 밑줄만 움직인다).
+   브랜드 폭은 글자에 맞춘다. 구분선도 두지 않는다 — 로고와 메뉴는 같은
+   «지금 어디인가» 를 말하는 묶음이라, 사이를 벌리거나 선을 그으면 갈라져 읽힌다. */
+/* 이 줄은 페이지 안의 기능 탭(.tabs/.qtabs)과 같은 «파란 밑줄» 을 쓴다. 층이 다르다는
+   것은 위치가 아니라 높이로 말한다 — 흰 띠를 옅게 띄워 두면 회색 본문 위에 얹힌
+   전역 층으로 읽히고, 본문 탭은 그 아래 페이지 안의 것으로 남는다. */
+.top{box-shadow:0 1px 2px rgba(0,0,0,.05)}
+/* display:flex 를 여기서 빼면 배지와 글자가 두 줄로 쌓인다 — 버튼의 기본 display 는
+   inline-block 이라 gap 도 듣지 않는다. 중복 정의를 정리할 때 «크기만 겹친다» 고
+   보고 앞쪽 .brand 규칙을 지웠는데, 거기에 이 레이아웃이 함께 들어 있었다. */
+button.brand{display:flex;align-items:center;flex:none;height:100%;position:relative;
+  border:0;background:none;cursor:pointer;padding:0 4px;font:inherit;color:var(--ink);
+  font-size:var(--hd-brand);font-weight:var(--fw-bold);gap:10px;letter-spacing:-0.5px}
+.brand-m{width:var(--hd-logo);height:var(--hd-logo);border-radius:9px;flex:none}
+.brand-m svg{width:20px;height:20px}
+.brand:hover .brand-m{filter:brightness(1.08)}
+.brand:hover,.gnav-i:hover{color:var(--ink)}
+
+.gnav{display:flex;align-items:center;gap:2px;margin-left:8px;min-width:0;overflow-x:auto;
+  scrollbar-width:none;align-self:stretch}
+.gnav::-webkit-scrollbar{display:none}
+.gnav-i{position:relative;border:0;background:none;height:100%;
+  padding:0 14px;font-size:var(--hd-nav);font-weight:var(--fw-med);
+  color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;flex:none}
+.gnav-i.on{color:var(--pri);font-weight:var(--fw-bold)}
+/* 활성 밑줄 — 메뉴에만 붙는다.
+   브랜드(Data Mates)는 제품 이름이지 메뉴 항목이 아니다. 홈에서 밑줄이 그어지면
+   메뉴 하나가 더 있는 것처럼 읽힌다. 홈으로 가는 버튼 역할은 그대로 둔다. */
+.gnav-i.on::after{content:'';position:absolute;bottom:0;height:2px;
+  left:10px;right:10px;border-radius:2px 2px 0 0;background:var(--pri)}
+.gnav-i .nav-b{margin-left:0}
+/* 좁은 화면 — **글자 크기는 건드리지 않는다.** 여백과 배치로만 줄인다.
+   폭마다 글자를 줄이면 같은 헤더가 화면마다 다른 크기로 보이고, 본문 글자와의
+   관계도 달라진다. 여백을 다 줄이고도 넘치면 이 줄이 가로로 스크롤된다 —
+   전역 이동을 드롭다운이나 사이드바로 되접지 않는다. */
+#app.nar .top{gap:10px;padding:0 12px}
+#app.nar .gnav{margin-left:4px}
+#app.nar .gnav-i{padding:0 10px}
+#app.xnar .top{gap:8px;padding:0 10px}
+#app.xnar button.brand{padding:0 2px}
+#app.xnar .gnav{margin-left:2px}
+#app.xnar .gnav-i{padding:0 8px}
+/* 가장 좁을 때 — 브랜드 글자는 감추고 배지만 남긴다. 글자를 줄이는 대신
+   보조 정보를 빼는 쪽이다. 홈으로 가는 버튼 역할은 배지로 그대로 남는다. */
+#app.xnar .brand-l{display:none}
+#app.xnar button.brand{gap:0}
+
+/* ════════ 파이프라인 실행 설정 (v6.1 재구성) ════════
+   설정 페이지다. 카드를 겹치지 않는다 — 섹션 제목 + 구분선 + 설정 행이 전부이고,
+   경계는 여백과 선으로만 만든다. 실행 대상은 «구성이 정해 준 결과» 라 참고 정보로
+   낮추고, 실제로 바꾸는 값(방식·예약·환경·실패·알림)이 화면의 주인이 된다. */
+.pcfg .def-in{max-width:1080px;padding:14px 24px 32px;gap:0}
+
+/* 머리 — 한 줄 안내(왼쪽) + 페이지 동작(오른쪽) */
+.pcfg-top{display:flex;align-items:center;gap:16px;padding-bottom:14px}
+.pcfg-hint{display:flex;align-items:flex-start;gap:6px;min-width:0;
+  font-size:var(--fs-cap);color:var(--muted);line-height:var(--lh-snug)}
+.pcfg-hint .ic{flex:none;margin-top:1px}
+.pcfg-act{margin-left:auto;flex:none}
+/* 삭제는 뒤 층이 저장 다음에 끼워 넣는다. 보이는 차례는 여기서 정한다 */
+.pcfg-act #pcGo{order:1}
+.pcfg-act #pcDel{order:2}
+.pcfg-act #pcOk{order:3}
+.pcfg-act .btn{height:30px;padding:0 11px}
+.pcfg-act #pcDel{border-color:transparent;background:none;color:var(--err)}
+.pcfg-act #pcDel:hover{background:var(--err-soft);border-color:var(--err-line)}
+
+/* 섹션 — 제목 + 구분선. 테두리도 배경도 두지 않는다 */
+.pcfg-s{display:flex;flex-direction:column;padding:14px 0 4px;border-top:1px solid var(--line-2)}
+.pcfg-s:first-of-type{border-top:0;padding-top:0}
+.pcfg-sh{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}
+.pcfg-st{font-size:var(--fs-strong);font-weight:var(--fw-bold);color:var(--ink)}
+.pcfg-sn{font-size:var(--fs-sm);color:var(--muted);font-weight:var(--fw-med)}
+.pcfg-sd{font-size:var(--fs-cap);color:var(--faint);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pcfg-sh .lnk{margin-left:auto;flex:none}
+.pcfg-b{display:flex;flex-direction:column}
+
+/* 설정 행 — [이름 고정폭][컨트롤 고정폭][보조 설명].
+   이름·컨트롤 폭을 고정해야 설명 길이와 무관하게 select 시작선이 한 줄로 맞는다. */
+.pcfg-f{display:grid;grid-template-columns:132px 232px minmax(0,1fr);gap:12px;
+  align-items:center;padding:5px 0;margin:0}
+.pcfg-fl{font-size:var(--fs-sm);color:var(--text);font-weight:var(--fw-med)}
+.pcfg-fv{font-size:var(--fs-sm);color:var(--text)}
+.pcfg-fh{font-size:var(--fs-cap);color:var(--faint);line-height:var(--lh-snug)}
+.pcfg-f .inp{width:100%}
+.pcfg-chk{cursor:pointer}
+.pcfg-chk .row{min-width:0}
+.pcfg-note{margin:6px 0 0;font-size:var(--fs-cap);color:var(--faint);line-height:var(--lh-base)}
+.pcfg-empty{margin:2px 0 0;font-size:var(--fs-sm);color:var(--faint)}
+
+/* 실행 대상 — 항목마다 카드를 두지 않는다. 행 구분선만 있는 촘촘한 목록 */
+.pcfg-tl{display:flex;flex-direction:column;border-top:1px solid var(--line-2)}
+.pcfg-tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);gap:12px;
+  align-items:center;min-height:30px;padding:4px 0;border-bottom:1px solid var(--line-2);
+  font-size:var(--fs-sm)}
+.pcfg-tr-h{min-height:26px;font-size:var(--fs-cap);color:var(--faint);font-weight:var(--fw-med)}
+.pcfg-tr b{font-weight:var(--fw-med);color:var(--text)}
+.pcfg-in{color:var(--muted)}
+.pcfg-hid{display:none}
+.pcfg-more{align-self:flex-start;margin-top:8px}
+/* 조회 전용 — 실행 대상이 아니라 읽기만 하는 입력이다 */
+.pcfg-ro b::after{content:'조회 전용';margin-left:6px;padding:0 5px;border-radius:4px;
+  background:var(--warn-soft);color:var(--warn);font-size:var(--fs-micro);font-weight:var(--fw-bold)}
+.pcfg-ro b{color:var(--muted)}
+
+/* 좁은 화면 — 설명이 들어갈 셋째 칸부터 포기한다. 이름·컨트롤 두 칸은 끝까지
+   유지해서 컨트롤 시작선이 흐트러지지 않게 하고, 설명만 컨트롤 아래로 내린다.
+   (한 칸으로 전부 쌓으면 설정 열 개가 세로로 늘어져 훑어보기가 더 나빠진다) */
+#app.nar .pcfg-f{grid-template-columns:120px 200px minmax(0,1fr);gap:10px}
+#app.xnar .pcfg .def-in{padding:12px 14px 24px}
+#app.xnar .pcfg-f{grid-template-columns:112px minmax(0,1fr);gap:3px 10px;padding:7px 0}
+#app.xnar .pcfg-fh{grid-column:2;margin-bottom:2px}
+#app.xnar .pcfg-f .inp{max-width:260px}
+#app.xnar .pcfg-tr{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr)}
+
+/* 실행 설정 모달 — pcfg 규칙을 그릇만 바꿔 다시 쓴다
+   (하단 «실행 정보» 탭에도 같이 걸던 규칙이 있었는데, 그 탭이 사라져 모달 쪽만 남긴다) */
+.modal-b .pcfg{overflow:visible;background:none;flex:none}
+.modal-b .pcfg .def-in{max-width:none;margin:0;padding:0}
+.modal-b .pcfg .pcfg-top{display:none}          /* 모달은 제목줄과 푸터가 대신한다 */
+.modal-f #pcmOk .btn{margin:0}
+/* 이력 탭 — 원래 한 화면을 차지하던 뷰라 그릇을 독 안으로 눕힌다 */
+.pdock .dock-b > .def{overflow:visible;background:none;flex:none}
+.pdock .dock-b > .def > .def-in{max-width:none;margin:0;padding:0}
+
+/* 빌드 정보의 실행 SQL — 오른쪽 칸이 옆 칸들과 같은 높이로 늘어나고,
+   그 안에서 코드 상자가 남은 높이를 채워 스스로 스크롤한다.
+   고정 높이를 주면 독 바깥으로 넘쳐 독 스크롤과 상자 스크롤이 겹쳤다. */
+.pd-sql{min-height:0}
+.pd-sqlbox{flex:1;min-height:110px;margin:0}
+#app.xnar .pd-sqlbox{flex:none;max-height:180px}

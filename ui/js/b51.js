@@ -36,7 +36,7 @@
   D.forEach(d => d.folder = SEED_A[d.id] || null);
 
   let HID = new Set(), FAV = new Set();
-  S.fdrOpen = {}; S.grpOpen = { SOURCE: true, 'DATA MODEL': true };
+  S.fdrOpen = {}; S.grpOpen = { SOURCE: true, 'DATA MODEL': true, 'DATA MART': true };
   S.showHidden = false; S.tgSel = [];
 
   /* ── 개인 설정 저장 ── */
@@ -68,7 +68,18 @@
     .sort((a, b) => (FAV.has(b.id) - FAV.has(a.id)) || a.name.localeCompare(b.name, 'ko'));
   function subtree(fid) { const out = [fid]; for (let i = 0; i < out.length; i++)
     FOLDERS.forEach(f => { if ((f.parent || null) === out[i]) out.push(f.id); }); return out; }
-  const rollup = (fid) => { const s = new Set(subtree(fid)); return D.filter(d => s.has(d.folder)).length; };
+  /* 항목이 실제로 놓이는 폴더.
+     구분(SOURCE·DATA MODEL·DATA MART)은 상태에 따라 바뀐다 — 모델을 DATA MART 로
+     지정하면 그 순간 영역이 옮겨진다. 그런데 폴더는 예전 영역(DATA MODEL)의
+     것이라 그대로 두면 새 영역의 어느 폴더에도 속하지 않아 트리에서 사라진다.
+     맞지 않는 폴더는 «미분류» 로 본다 — 배치는 지우지 않으므로 마트 지정을
+     해제하면 원래 폴더로 돌아온다. */
+  const folderOf = (d) => {
+    if (!d.folder) return null;
+    const f = F(d.folder);
+    return f && f.grp === grpOf(d) ? d.folder : null;
+  };
+  const rollup = (fid) => { const s = new Set(subtree(fid)); return D.filter(d => s.has(folderOf(d))).length; };
   const pathOf = (fid) => { const n = []; let f = F(fid); while (f) { n.unshift(f.name); f = f.parent ? F(f.parent) : null; } return n; };
   const openF = (id) => S.fdrOpen[id] !== false;
   const isHidden = (fid) => { let f = F(fid); while (f) { if (HID.has(f.id)) return true; f = f.parent ? F(f.parent) : null; } return false; };
@@ -119,7 +130,7 @@
     inp.onkeydown = (e) => { if (e.key === 'Enter') ok(); };
   }
   function whereOpts(grp, sel, skip) {
-    return ['SOURCE', 'DATA MODEL'].map(g => {
+    return GRPS.map(g => {
       let s = '<option value="' + g + '" ' + (g === grp && !sel ? 'selected' : '') + '>' + g + ' (최상위)</option>';
       FOLDERS.filter(f => f.grp === g && (!skip || !subtree(skip).includes(f.id))).forEach(f => {
         const p = pathOf(f.id);
@@ -163,7 +174,7 @@
   function moveItem(d) {
     const grp = grpOf(d);
     const opts = FOLDERS.filter(f => f.grp === grp).map(f => { const p = pathOf(f.id);
-      return '<option value="' + f.id + '" ' + (d.folder === f.id ? 'selected' : '') + '>'
+      return '<option value="' + f.id + '" ' + (folderOf(d) === f.id ? 'selected' : '') + '>'
         + '　'.repeat(p.length - 1) + esc2(p[p.length - 1]) + '</option>'; }).join('');
     const h = '<div class="modal-h"><span class="modal-t">폴더 이동</span>'
       + '<button class="iconbtn sp" data-close>' + ic('x') + '</button></div>'
@@ -193,16 +204,16 @@
     const rows = [];
     if (q) {
       const res = D.filter(d => (d.name + ' ' + d.phys + ' ' + (d.desc || '')).toLowerCase().includes(q))
-        .filter(d => S.showHidden || !d.folder || !isHidden(d.folder));
-      ['SOURCE', 'DATA MODEL'].forEach(g => {
+        .filter(d => S.showHidden || !folderOf(d) || !isHidden(folderOf(d)));
+      GRPS.forEach(g => {
         const list = res.filter(d => grpOf(d) === g);
         if (!list.length) return;
         rows.push({ k: 'g', id: g, depth: 0, count: list.length, flat: true });
-        list.forEach(d => rows.push({ k: 'i', id: d.id, d: d, depth: 1, path: d.folder ? pathOf(d.folder).join(' / ') : '미분류' }));
+        list.forEach(d => rows.push({ k: 'i', id: d.id, d: d, depth: 1, path: folderOf(d) ? pathOf(folderOf(d)).join(' / ') : '미분류' }));
       });
       return rows;
     }
-    ['SOURCE', 'DATA MODEL'].forEach(g => {
+    GRPS.forEach(g => {
       const all = D.filter(d => grpOf(d) === g);
       const gopen = S.grpOpen[g] !== false;
       rows.push({ k: 'g', id: g, depth: 0, count: all.length, open: gopen });
@@ -215,14 +226,14 @@
           rows.push({ k: 'f', id: f.id, f: f, depth: depth, count: rollup(f.id), open: open, hidden: hid, own: own });
           if (!open) return;
           walk(f.id, depth + 1, hid);
-          all.filter(d => d.folder === f.id).forEach(d => rows.push({ k: 'i', id: d.id, d: d, depth: depth + 1, dim: hid }));
-          if (!kidsOf(g, f.id).length && !all.some(d => d.folder === f.id))
+          all.filter(d => folderOf(d) === f.id).forEach(d => rows.push({ k: 'i', id: d.id, d: d, depth: depth + 1, dim: hid }));
+          if (!kidsOf(g, f.id).length && !all.some(d => folderOf(d) === f.id))
             rows.push({ k: 'e', id: 'e:' + f.id, f: f, depth: depth + 1, dim: hid });
         });
       })(null, 1, false);
       // 미분류를 가짜 폴더로 두지 않는다. 폴더에 담기지 않은 항목은 그룹(=루트) 바로 아래다.
       // 그룹 머리말이 이미 드롭 대상이라(dropInto(node, null, grp)) 끌어다 놓으면 루트로 빠진다.
-      all.filter(d => !d.folder).forEach(d => rows.push({ k: 'i', id: d.id, d: d, depth: 1 }));
+      all.filter(d => !folderOf(d)).forEach(d => rows.push({ k: 'i', id: d.id, d: d, depth: 1 }));
     });
     return rows;
   }
@@ -257,7 +268,7 @@
   function paintTree(host, q, opts) {
     host.innerHTML = ''; host.classList.add('tg');
     const rows = buildRows(q);
-    if (!rows.length) { host.appendChild(el('<div class="tg-note">일치하는 항목이 없습니다.</div>')); return; }
+    if (!rows.length) { host.appendChild(el('<div class="tg-note">일치하는 항목이 없습니다. 검색어를 줄여 보세요.</div>')); return; }
     if (q) host.appendChild(el('<div class="tg-res">검색 결과 ' + rows.filter(r => r.k === 'i').length + '건 · 폴더 경로를 함께 표시합니다</div>'));
 
     const nodes = [];
@@ -418,7 +429,7 @@
 
     function paint() {
       pop.innerHTML = '';
-      ['SOURCE', 'DATA MODEL'].forEach((g, gi) => {
+      GRPS.forEach((g, gi) => {
         if (gi) pop.appendChild(el('<div style="height:1px;background:var(--line-2);margin:4px 0"></div>'));
         const all = FOLDERS.filter(f => f.grp === g).map(f => f.id);
         const onN = all.filter(id => !HID.has(id)).length;
@@ -448,7 +459,7 @@
             walk(f.id, depth + 1);
           });
         })(null, 0);
-        if (!all.length) pop.appendChild(el('<div class="t11 fnt" style="padding:5px 14px">폴더가 없습니다.</div>'));
+        if (!all.length) pop.appendChild(el('<div class="t11 fnt" style="padding:5px 14px">폴더가 없습니다. 아래에서 만들 수 있습니다.</div>'));
       });
     }
     paint();
@@ -532,7 +543,15 @@
     return left;
   };
 
-  HELP.modeling.items[1] = '왼쪽 카탈로그 는 SOURCE · DATA MODEL 아래 폴더로 정리합니다.';
-  HELP.modeling.items[2] = '폴더 위에서 마우스 오른쪽 버튼 — 하위 폴더·이름 변경·이동·숨기기·즐겨찾기·삭제. 끌어다 놓아 옮길 수도 있습니다.';
-  HELP.modeling.items[3] = '상단 N of M 을 눌러 카탈로그에 표시할 폴더를 고릅니다.';
+  /* 앞선 층들이 items[1] 만 갈아끼워 와서 목록이 뒤섞여 있었다.
+     여기가 마지막 층이므로 전체를 한 번에 확정한다. */
+  HELP.modeling.items = [
+    '하나의 SQL로 하나의 데이터 모델을 정의합니다. 출력 테이블도 하나입니다.',
+    '입력은 데이터 수집이 만든 SOURCE 또는 앞서 만든 DATA MODEL 입니다.',
+    '왼쪽 카탈로그 는 데이터가 흐르는 순서 그대로 SOURCE · DATA MODEL · DATA MART 로 나뉩니다.',
+    '모델 사이의 실행 순서는 SQL 의 ref() 가 정합니다 — 따로 잇지 않습니다.',
+    '여러 모델을 거친 최종 모델만 DATA MART 로 지정합니다. 중간 모델은 내부 가공용입니다.',
+    'DATA MART 로 지정하면 데이터 분석에서 고를 수 있고, 다른 모델의 입력으로는 쓸 수 없습니다.',
+    '폴더 위에서 마우스 오른쪽 버튼 — 하위 폴더·이름 변경·이동·숨기기·즐겨찾기·삭제.',
+    '실행은 하지 않습니다. 언제 돌릴지는 데이터 파이프라인에서 정합니다.'];
 })();

@@ -14,6 +14,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from . import graph
 from .config import (CONTAINER_DBT_BIN, CONTAINER_DBT_DIR, DAGS_DIR,
                      DAG_PREFIX)
 
@@ -75,9 +76,6 @@ def _bash(select: str, env_target: str) -> str:
 
     `dbt build` 는 run 과 test 를 DAG 순서로 함께 돌리고, 테스트가 실패하면
     하류를 SKIP 한다 — 오염된 데이터가 번지지 않게 하는 기본기다.
-    간접 선택은 buildable 이어야 한다. 기본 eager 를 쓰면 상류 모델 하나만
-    실행해도 아직 만들어지지 않은 하류 모델을 함께 참조하는 singular test 가
-    선택되어, 빈 웨어하우스의 첫 스테이지 실행이 하류 테이블 부재로 실패한다.
     --target-path 를 실행마다 갈라 두어야 run_results.json 이 서로 덮어쓰지 않는다.
     """
     out_dir = f"{CONTAINER_RUNS_DIR}/{{{{ run_id {_SANITIZE} }}}}/{select.replace('+', '')}"
@@ -86,7 +84,7 @@ def _bash(select: str, env_target: str) -> str:
         f"mkdir -p '{out_dir}' && "
         f"cd {CONTAINER_DBT_DIR} && "
         f"DBT_TARGET={env_target} "
-        f"{CONTAINER_DBT_BIN} build --indirect-selection buildable --select {select} "
+        f"{CONTAINER_DBT_BIN} build --select {select} "
         f"--target-path '{out_dir}'"
     )
 
@@ -120,6 +118,11 @@ with DAG(
     catchup=False,
     max_active_runs=1,
     max_active_tasks={max_active_tasks},
+    # 실패 처리 «중단» — 한 Task 가 실패하면 실행 중인 나머지도 즉시 세운다.
+    # «계속» 이면 여기가 False 이고, 실패한 Task 의 후행만 막히고 옆가지는 간다.
+    # 어느 쪽이든 «실패한 Task 에 의존하는 후행은 돌지 않는다» 는 지켜진다 —
+    # 그건 각 Task 의 trigger_rule=all_success 가 보장한다.
+    fail_fast={fail_fast},
     default_args=DEFAULT_ARGS,
     tags=["datamates", {pipeline_id!r}],
 ) as dag:
@@ -195,10 +198,7 @@ def data_event_watch(flow: dict[str, Any]) -> list[str]:
     watch = list(flow.get("inputs") or [])
     for nd in flow.get("nodes") or []:
         rtype = nd.get("dbt_type")
-        # 이 파이프라인이 직접 적재하는 seed 를 구독하면, 태스크의 outlet 이벤트가
-        # 같은 DAG 을 다시 깨우는 자기 재실행 고리가 생긴다. 읽기 전용 입력만
-        # 감시하고 실행 노드는 제외한다.
-        if nd["id"] in watch or nd.get("executable"):
+        if nd["id"] in watch:
             continue
         if rtype in _EVENT_KINDS or (rtype == "source" and nd["id"] in ingested):
             watch.append(nd["id"])
@@ -209,45 +209,50 @@ def render(pipeline: dict[str, Any], flow: dict[str, Any]) -> str:
     pid = pipeline["id"]
     order: list[str] = flow["order"]
     env_target = pipeline.get("env") or "local"
-    # 검증이 실패해도 계속 가야 하면 상류 실패를 무시하고 시작한다.
-    trigger_rule = "all_done" if pipeline.get("on_fail") == "go" else "all_success"
+
+    # **Task 그래프를 그대로 옮긴다.** 예전에는 여기서 모델 간선을 다시 걸러
+    # 태스크 의존을 만들었는데, 화면은 화면대로 같은 일을 따로 해서 둘이 어긋날
+    # 자리가 있었다(특히 task_mode=single 은 화면에 열두 칸, DAG 에 태스크 하나).
+    # graph.tasks_of 하나가 정본이고 화면과 DAG 이 그것을 함께 읽는다.
+    tasks_spec: list[dict[str, Any]] = flow.get("tasks") or []
+    task_edges: list[dict[str, str]] = flow.get("task_edges") or []
 
     lines: list[str] = []
     deps: list[str] = []
 
-    if pipeline.get("task_mode") == "single" or not order:
-        select = " ".join(order) if order else "state:new"
-        all_outlets = ", ".join(f"Asset({model_asset_uri(m)!r})" for m in order)
+    for t in tasks_spec:
+        if t["kind"] != "build":
+            continue                      # 완료 표식은 템플릿이 이미 만든다
+        models = t["models"]
+        outlets = ", ".join(f"Asset({model_asset_uri(m)!r})" for m in models)
+        lines.append(
+            f'    tasks[{t["key"]!r}] = BashOperator(\n'
+            f'        task_id={("build__all" if t["key"] == "all" else task_id_of(t["key"]))!r},\n'
+            # **선행이 실패하면 후행은 돌지 않는다.** 예외를 두지 않는다 —
+            # 상류가 실패한 채로 하류를 돌리면 옛 데이터 위에 새 결과가 얹혀
+            # 「성공한 파이프라인」이 틀린 값을 남긴다. 옆가지는 그대로 진행되므로
+            # (Airflow 의 기본 동작) 실패가 무관한 Task 까지 막지는 않는다.
+            f'        trigger_rule="all_success",\n'
+            f'        bash_command={_bash(" ".join(models), env_target)!r},\n'
+            f'        pool={POOL!r},\n'
+            f'        outlets=[{outlets}],\n'
+            f'    )'
+        )
+
+    for e in task_edges:
+        a = '"_done"' if e["to"] == graph.DONE_TASK else repr(e["to"])
+        deps.append(f'    tasks[{e["from"]!r}] >> tasks[{a}]')
+
+    if not tasks_spec:                    # 실행할 모델이 없는 파이프라인
         lines.append(
             f'    tasks["all"] = BashOperator(\n'
             f'        task_id="build__all",\n'
-            f'        bash_command={_bash(select, env_target)!r},\n'
+            f'        trigger_rule="all_success",\n'
+            f'        bash_command={_bash("state:new", env_target)!r},\n'
             f'        pool={POOL!r},\n'
-            f'        outlets=[{all_outlets}],\n'
             f'    )'
         )
         deps.append('    tasks["all"] >> tasks["_done"]')
-    else:
-        for mid in order:
-            lines.append(
-                f'    tasks[{mid!r}] = BashOperator(\n'
-                f'        task_id={task_id_of(mid)!r},\n'
-                f'        trigger_rule={trigger_rule!r},\n'
-                f'        bash_command={_bash(mid, env_target)!r},\n'
-                f'        pool={POOL!r},\n'
-                f'        outlets=[Asset({model_asset_uri(mid)!r})],\n'
-                f'    )'
-            )
-        # 모델 사이 의존만 태스크 의존으로 옮긴다. SOURCE·조회 전용은 태스크가 아니다.
-        executable = set(order)
-        has_down: set[str] = set()
-        for e in flow["edges"]:
-            if e["from"] in executable and e["to"] in executable:
-                deps.append(f'    tasks[{e["from"]!r}] >> tasks[{e["to"]!r}]')
-                has_down.add(e["from"])
-        for mid in order:                        # 끝 모델들 → 완료 표식
-            if mid not in has_down:
-                deps.append(f'    tasks[{mid!r}] >> tasks["_done"]')
 
     return TEMPLATE.format(
         name=pipeline.get("name") or pid,
@@ -258,6 +263,7 @@ def render(pipeline: dict[str, Any], flow: dict[str, Any]) -> str:
         schedule_expr=_schedule_expr(pipeline, flow),
         asset_uri=asset_uri_of(pid),
         max_active_tasks=MAX_ACTIVE_TASKS,
+        fail_fast=(pipeline.get("on_fail") != "go"),
         retry=int(pipeline.get("retry") or 0),
         pipeline_id=pid,
         task_lines="\n\n".join(lines),

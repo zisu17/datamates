@@ -25,11 +25,22 @@ ENVS = [
 
 router = APIRouter(tags=["bootstrap"])
 
+# 카탈로그 정렬 = 데이터가 흐르는 순서다. 수집이 만든 SOURCE 가 먼저 오고,
+# 그것으로 만든 DATA MODEL, 그중 분석에 내보내는 DATA MART 가 마지막이다.
+GROUP_ORDER = {"SOURCE": 0, "DATA MODEL": 1, "DATA MART": 2}
 
-def _layer(entry: dict[str, Any]) -> str:
-    """dbt 디렉터리 → 화면의 가공 단계. 표시용 분류라 서버 로직에는 쓰지 않는다."""
+
+def _layer(entry: dict[str, Any], is_mart: bool) -> str:
+    """가공 단계 — 화면의 색과 구분 라벨이 쓴다.
+
+    원천 · 정제 · 분석용까지는 dbt 디렉터리에서 나오는 표시용 분류다.
+    마트만 다르다 — 사용자가 명시적으로 지정한 상태이고, «분석에서 쓸 수 있는
+    데이터» 라는 뜻이 붙는다.
+    """
     if entry["kind"] == "source":
         return "원천"
+    if is_mart:
+        return "마트"
     return "정제" if "/staging/" in (entry.get("path") or "") else "분석용"
 
 
@@ -37,16 +48,22 @@ def _layer(entry: dict[str, Any]) -> str:
 def bootstrap() -> dict[str, Any]:
     entries = manifest.all_entries()
     placed = store.model_folders()
+    marts = store.marts()
     snap = state.snapshot()
     rs = state.rules()
 
     items = []
     for e in entries.values():
         run = snap["nodeRuns"].get(e["id"])
+        is_mart = e["id"] in marts
         items.append({
             "id": e["id"], "name": e["name"], "phys": e["phys"],
-            "group": e["group"], "kind": e["kind"], "dbtType": e["dbt_type"],
-            "layer": _layer(e), "desc": e["desc"], "mat": e["mat"],
+            # group 은 화면의 카탈로그 구분이다. 마트는 별도 객체가 아니지만
+            # 카탈로그에서는 DATA MART 영역에 놓인다 — 상태가 곧 위치다.
+            "group": "DATA MART" if is_mart else e["group"],
+            "baseGroup": e["group"], "isMart": is_mart,
+            "kind": e["kind"], "dbtType": e["dbt_type"],
+            "layer": _layer(e, is_mart), "desc": e["desc"], "mat": e["mat"],
             "tags": e["tags"], "path": e["path"], "folderId": placed.get(e["id"]),
             "cols": e["cols"], "colDesc": e["col_desc"],
             "upstream": e["upstream"], "downstream": e["downstream"],
@@ -54,7 +71,7 @@ def bootstrap() -> dict[str, Any]:
             "sql": dbtproj.read_sql(e["id"]) if e["kind"] == "model" else None,
             "run": run,
         })
-    items.sort(key=lambda x: (x["group"] != "SOURCE", x["name"]))
+    items.sort(key=lambda x: (GROUP_ORDER.get(x["group"], 9), x["name"]))
 
     pipes = [{
         "id": p["id"], "name": p["name"], "description": p["description"],

@@ -59,6 +59,25 @@ def connect() -> Any:
         env = dbt_env()
         host, ssl = _endpoint(env.get("MINIO_ENDPOINT", "http://localhost:9000"))
         con = duckdb.connect()
+
+        # 시간대를 명시로 고정한다. 없으면 DuckDB 가 «호스트의 로컬 시간대» 를 쓰는데,
+        # 그러면 같은 테이블의 timestamptz 컬럼이 개발자 맥(Asia/Seoul)과
+        # 컨테이너(UTC)에서 다른 시각으로 보인다. 값은 같고 표기만 갈리므로
+        # 테스트로는 잡히지 않고 화면에서만 드러난다.
+        #
+        # 분석 화면(Superset)도 같은 값으로 고정한다 —
+        # docker/superset/superset_config.py 의 DUCKDB_TIMEZONE. 한쪽만 바꾸면 어긋난다.
+        #
+        # **GLOBAL 이 아니면 효과가 없다.** 이 모듈의 모든 조회는 cursor() 를 거치는데,
+        # cursor() 는 별도 커넥션이라 세션 SET 이 전파되지 않는다(실측):
+        #
+        #   SET TimeZone='UTC'         → 루트 UTC / cursor 는 그대로 Asia/Seoul
+        #   SET GLOBAL TimeZone='UTC'  → 루트·cursor 모두 UTC (기존 cursor 까지)
+        #
+        # 그래서 평범한 SET 을 넣으면 조용히 아무 일도 일어나지 않는다.
+        con.execute(
+            f"SET GLOBAL TimeZone = '{env.get('DATAMATES_DUCKDB_TIMEZONE', 'Asia/Seoul')}';")
+
         con.execute("INSTALL iceberg; LOAD iceberg;")
         con.execute(
             "CREATE SECRET (TYPE s3, KEY_ID ?, SECRET ?, ENDPOINT ?, "

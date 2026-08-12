@@ -14,7 +14,9 @@
 
 from __future__ import annotations
 
+import threading
 import time
+from datetime import datetime
 from typing import Any, Literal
 
 from fastapi import APIRouter, Body, UploadFile
@@ -45,6 +47,9 @@ class PreviewIn(BaseModel):
     kind: Literal["api", "file"] = "api"
     config: dict[str, Any] = Field(default_factory=dict)
     text: str | None = None
+    # 수정 화면의 미리보기. 비밀 값은 마스킹되어 내려갔으므로 화면이 되돌려주는
+    # 설정만으로는 원천에 못 붙는다. 저장된 값을 채워 넣을 작업을 가리킨다.
+    job_id: str | None = None
 
 
 class JobIn(BaseModel):
@@ -57,6 +62,8 @@ class JobIn(BaseModel):
     freq: str | None = None
     retry: int | None = None
     trigger_type: Literal["schedule", "manual"] | None = None
+    # 수집 범위. 워터마크는 여기 없다 — 실행이 남기는 값이라 화면이 보내지 않는다.
+    scope: dict[str, Any] | None = None
 
 
 def _target_conflict(target: str, job_id: str | None) -> None:
@@ -93,13 +100,92 @@ def _users_block(target: str, verb: str) -> None:
                        f"쓰고 있어 {verb} 수 없습니다. 모델에서 먼저 참조를 끊어 주세요.")
 
 
+def _secret_names(cfg: dict[str, Any]) -> set[str]:
+    return {str(x) for x in (cfg.get("secret_params") or [])}
+
+
+def _mask(job: dict[str, Any]) -> dict[str, Any]:
+    """비밀로 표시한 값을 응답에서 지운다.
+
+    저장은 그대로 두고 내보낼 때만 비운다. 인증키를 주소에 박으면 목록 응답과
+    상세 화면에 그대로 실려 나가는데, 그것을 막으려고 파라미터로 옮긴 것이므로
+    여기서 새면 옮긴 의미가 없다. 수정 화면은 빈 값을 «저장됨» 으로 보여 주고,
+    비운 채로 저장하면 _keep_secrets 가 기존 값을 되살린다.
+    """
+    cfg = job.get("config") or {}
+    names = _secret_names(cfg)
+    auth = cfg.get("auth") or {}
+    if not names and not auth:
+        return job
+    c = dict(cfg)
+    if names and c.get("params"):
+        c["params"] = {k: ("" if k in names else v) for k, v in c["params"].items()}
+    if auth:
+        a = dict(auth)
+        for f in ("token", "value"):
+            if a.get(f):
+                a[f] = ""
+        c["auth"] = a
+    return {**job, "config": c}
+
+
+def _keep_secrets(new: dict[str, Any] | None,
+                  old: dict[str, Any] | None) -> dict[str, Any] | None:
+    """비어 온 비밀 값을 기존 값으로 되돌린다.
+
+    화면은 마스킹된(빈) 값을 그대로 돌려보낸다. 이것이 없으면 이름 한 글자만
+    고쳐 저장해도 인증키가 지워진다.
+    """
+    if not new or not old:
+        return new
+    c = dict(new)
+    names = _secret_names(c) | _secret_names(old)
+    op = old.get("params") or {}
+    if names and c.get("params"):
+        c["params"] = {k: (op.get(k, "") if (k in names and not v) else v)
+                       for k, v in c["params"].items()}
+    oa = old.get("auth") or {}
+    if c.get("auth") and oa:
+        a = dict(c["auth"])
+        for f in ("token", "value"):
+            if not a.get(f) and oa.get(f):
+                a[f] = oa[f]
+        c["auth"] = a
+    return c
+
+
+def _elapsed(start: str | None, end: str | None) -> float | None:
+    """실행에 걸린 초. 아직 끝나지 않았으면 None 이다."""
+    if not start or not end:
+        return None
+    try:
+        a = datetime.fromisoformat(start.replace("Z", "+00:00"))
+        b = datetime.fromisoformat(end.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return round((b - a).total_seconds(), 1)
+
+
+def _run_view(r: dict[str, Any]) -> dict[str, Any]:
+    """실행 한 건을 화면 모양으로.
+
+    걸린 시간을 여기서 계산해 내려보낸다 — 화면마다 따로 재면 같은 실행이
+    목록과 상세에서 다르게 보인다.
+    """
+    start, end = r.get("start_date"), r.get("end_date")
+    return {"runId": r.get("dag_run_id"), "state": r.get("state"),
+            "start": start, "end": end, "type": r.get("run_type"),
+            "seconds": _elapsed(start, end)}
+
+
 def _view(job: dict[str, Any]) -> dict[str, Any]:
-    """화면이 쓰는 모양. 예약 상태와 다음 실행 시각은 Airflow 가 원천이다."""
-    out = dict(job)
+    """화면이 쓰는 모양. 예약 상태·다음 실행·최근 실행은 Airflow 가 원천이다."""
+    out = dict(_mask(job))
     out["phys"] = f"{ingest.RAW_SCHEMA}.{job['target']}"
     out["dagId"] = ingestdag.dag_id_of(job["id"])
     out["paused"] = None
     out["nextRun"] = None
+    out["lastRun"] = None
     if job["kind"] == "api":
         try:
             dag = af.dag_get(out["dagId"])
@@ -108,6 +194,14 @@ def _view(job: dict[str, Any]) -> dict[str, Any]:
         if dag:
             out["paused"] = bool(dag.get("is_paused"))
             out["nextRun"] = dag.get("next_dagrun_run_after")
+        # 목록에서 바로 성공·실패를 보려면 최근 실행 한 건이 필요하다. 화면이
+        # 작업마다 따로 물으면 목록을 그릴 때 왕복이 개수만큼 늘어난다.
+        try:
+            runs = af.dag_runs(out["dagId"], limit=1)
+        except af.AirflowError:
+            runs = []
+        if runs:
+            out["lastRun"] = _run_view(runs[0])
     return out
 
 
@@ -120,7 +214,12 @@ def preview(body: PreviewIn) -> dict[str, Any]:
     컬럼 타입은 전부 문자열이다. 수집은 원본을 그대로 넣는 일이고, 타입을
     정하는 것은 dbt 모델의 판단이다.
     """
-    rows = ingest.sample(body.kind, body.config, body.text)
+    cfg = body.config
+    if body.job_id:
+        saved = store.ingest_get(body.job_id)
+        if saved:
+            cfg = _keep_secrets(cfg, saved.get("config")) or cfg
+    rows = ingest.sample(body.kind, cfg, body.text)
     return {"columns": ingest.infer_columns(rows), "rows": rows[:20],
             "sampled": len(rows)}
 
@@ -175,6 +274,8 @@ def update_job(job_id: str, body: JobIn) -> dict[str, Any]:
         raise not_found("수집 작업")
 
     fields = body.model_dump(exclude_none=True)
+    if "config" in fields:
+        fields["config"] = _keep_secrets(fields["config"], job.get("config"))
     target = fields.get("target") or job["target"]
     if target != job["target"]:
         _target_conflict(target, job_id)
@@ -227,10 +328,47 @@ def _save(job: dict[str, Any], others: list[dict[str, Any]]) -> dict[str, Any]:
     saved = store.ingest_upsert(job["id"], job)
     if saved["kind"] == "api":
         ingestdag.write(saved)
+        _autostart(saved)
     else:
         ingestdag.remove(saved["id"])
     state.invalidate()
     return saved
+
+
+def _autostart(job: dict[str, Any]) -> None:
+    """예약 수집은 저장하자마자 깨운다.
+
+    Airflow 는 새 DAG 을 정지 상태로 만든다(dags_are_paused_at_creation=True).
+    그대로 두면 「매시 정각」으로 저장해도 정각이 와서 아무 일이 없다 — 화면은
+    예약이라고 적어 두고 실제로는 멈춰 있는 상태다.
+
+    수동 실행은 건드리지 않는다. 그건 「지금 실행」이 누를 때 깨운다.
+    이미 있는 작업을 수정할 때 사용자가 일부러 멈춰 둔 것을 되살리지 않도록,
+    **아직 Airflow 가 모르는 새 DAG 일 때만** 깨운다.
+
+    **응답을 붙잡지 않는다.** DAG 프로세서가 파일을 읽는 데 15초쯤 걸리는데
+    그동안 저장 버튼이 멈춰 있으면 안 된다. 뒤에서 기다렸다 켠다.
+    """
+    if (job.get("trigger_type") or "manual") != "schedule":
+        return
+    dag_id = ingestdag.dag_id_of(job["id"])
+    try:
+        if af.dag_get(dag_id):
+            return                    # 이미 아는 DAG — 일시정지 상태는 사용자 것이다
+    except af.AirflowError:
+        return
+
+    def run() -> None:
+        for _ in range(30):           # DAG 프로세서가 파일을 읽을 때까지 (최대 30초)
+            time.sleep(1)
+            try:
+                if af.dag_get(dag_id):
+                    af.dag_unpause(dag_id)
+                    return
+            except af.AirflowError:
+                return
+
+    threading.Thread(target=run, daemon=True).start()
 
 
 # ---------------------------------------------------------------- 실행
@@ -264,9 +402,28 @@ def list_runs(job_id: str, limit: int = 20) -> dict[str, Any]:
         runs = af.dag_runs(ingestdag.dag_id_of(job_id), limit=limit)
     except af.AirflowError:
         runs = []
-    return {"items": [{"runId": r.get("dag_run_id"), "state": r.get("state"),
-                       "start": r.get("start_date"), "end": r.get("end_date"),
-                       "type": r.get("run_type")} for r in runs]}
+    return {"items": [_run_view(r) for r in runs]}
+
+
+@router.get("/ingest/jobs/{job_id}/runs/{run_id}/log")
+def run_log(job_id: str, run_id: str, try_number: int = 1) -> dict[str, Any]:
+    """실행 한 건의 로그. Airflow 태스크 로그를 그대로 돌려준다.
+
+    수집 DAG 은 태스크가 하나(적재 호출)뿐이라 어느 태스크인지 고를 필요가 없다.
+    적재는 API 가 하므로 이 로그에 «적재 결과» 줄과 실패 사유가 함께 남는다.
+    """
+    job = store.ingest_get(job_id)
+    if not job:
+        raise not_found("수집 작업")
+    if job["kind"] != "api":
+        raise ApiError("INVALID_ARGUMENT", "파일 수집은 예약 실행 로그가 없습니다.")
+    try:
+        text = af.task_log(ingestdag.dag_id_of(job_id), run_id,
+                           ingestdag.task_id_of(job["target"]), try_number)
+    except af.AirflowError as e:
+        raise ApiError("UPSTREAM_UNAVAILABLE",
+                       f"로그를 가져오지 못했습니다: {e}", status=503) from e
+    return {"runId": run_id, "try_number": try_number, "log": text}
 
 
 @router.post("/ingest/jobs/{job_id}/execute")

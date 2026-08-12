@@ -11,7 +11,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from .. import audit, dbtproj, manifest, sqlcheck, state
+from .. import audit, dbtproj, manifest, sqlcheck, state, store
 from ..errors import ApiError
 
 router = APIRouter(prefix="/models", tags=["models"])
@@ -64,6 +64,19 @@ def sql_error_code(result: dict[str, Any]) -> str:
     return "VALIDATION_FAILED"
 
 
+def _mart_refs(sql: str, self_id: str | None = None) -> list[str]:
+    """SQL 이 DATA MART 를 입력으로 부르는지.
+
+    마트는 «분석에 내보내는 최종 결과» 다. 다른 모델이 그걸 다시 입력으로 쓰면
+    최종이 아니게 되고, 마트 해제 규칙(분석에서 사용 중이면 해제 불가)이 모델
+    사슬 전체로 번진다. 그래서 방향을 한쪽으로 고정한다 —
+    모델은 마트를 참조하지 않는다.
+    """
+    marts = store.marts()
+    refs = sqlcheck.parse_refs(sql)["refs"]
+    return [r for r in refs if r in marts and r != self_id]
+
+
 def _validate_or_400(sql: str, self_id: str | None = None) -> dict[str, Any]:
     known = _known_ids()
     if self_id:
@@ -74,6 +87,17 @@ def _validate_or_400(sql: str, self_id: str | None = None) -> dict[str, Any]:
                        {"errors": result["errors"], "statements": result["stmts"],
                         "cte": result["cte"], "ddl": result["ddl"],
                         "missingRefs": result["missing_refs"]})
+
+    bad = _mart_refs(sql, self_id)
+    if bad:
+        names = ", ".join(bad)
+        raise ApiError(
+            "MART_AS_INPUT",
+            f"{names} 은(는) DATA MART 라 다른 모델의 입력으로 쓸 수 없습니다. "
+            "DATA MART 는 항상 최종 모델입니다. "
+            "이어서 가공하려면 그 마트의 입력 모델을 참조하거나, "
+            "먼저 DATA MART 지정을 해제해 주세요.",
+            {"martRefs": bad}, status=409)
     return result
 
 
@@ -183,6 +207,17 @@ def delete_model(model_id: str) -> dict[str, Any]:
         raise ApiError("MODEL_IN_USE",
                        f"{model_id} 은(는) 파이프라인 {', '.join(used)} 이(가) 사용 중입니다. "
                        "먼저 실행 대상에서 빼 주세요.", {"pipelines": used})
+    # 마트는 분석이 물고 있을 수 있다. 삭제 경로에서도 같은 규칙을 적용한다 —
+    # 해제는 막고 삭제는 되면 규칙이 없는 것과 같다.
+    if model_id in store.marts():
+        from .mart import mart_usage
+        usage = mart_usage(model_id, True)
+        if not usage["canUnmark"]:
+            raise ApiError("MART_IN_USE", usage["unmarkBlockedReason"],
+                           {"modelId": model_id,
+                            "analysisCount": usage["analysisCount"],
+                            "analyses": usage["analyses"]}, status=409)
+
     try:
         res = dbtproj.delete_model(model_id)
     except KeyError:
@@ -190,6 +225,7 @@ def delete_model(model_id: str) -> dict[str, Any]:
     except ValueError as err:
         raise ApiError("MODEL_IN_USE", str(err)) from err
 
+    store.mart_set(model_id, False)      # 지운 모델의 마트 지정은 남기지 않는다
     dbtproj.reparse()
     state.invalidate()
     return {"deleted": model_id, **res}

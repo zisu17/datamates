@@ -40,25 +40,36 @@ function taskCount(pp) {
   return pgraph(pp).nodes.filter(n => { const d = byId(n.id); return d && d.kind !== 'source'; }).length;
 }
 
+/* 실행 흐름 = 이 DAG 안의 **Task** 그래프.
+
+     노드 = 실제 실행 단위 하나
+     간선 = 선행 → 후행 실행 순서 (데이터가 흐른다는 뜻이 아니다)
+
+   서버의 flow.tasks / flow.task_edges 가 정본이다. 예전에는 모델 그래프를 받아
+   화면이 «실행 대상만» 걸러 그렸는데, 그 방식은 두 곳에서 어긋났다.
+
+     · task_mode=single 이면 Airflow 에 Task 가 하나인데 화면은 모델 수만큼 그렸다.
+     · 완료 표식(pipeline_done)은 실제 Task 인데 화면에 없었다.
+
+   같은 계산을 서버(daggen)와 화면이 따로 하면 언젠가 갈라진다. 이제 DAG 생성기와
+   이 화면이 같은 자료를 읽는다.
+
+   원천·조회 전용 입력은 여기 없다 — 이 파이프라인이 실행하지 않기 때문이다.
+   그건 모델 사이의 계보이고, 계보는 데이터 모델 화면이 그린다. */
 function taskGraph(pp) {
-  const g = pgraph(pp);
-  /* 실행 흐름 = 이 DAG 안의 Task. 서버 flow.order 가 Task 목록의 정본이다
-     (원천도, 다른 파이프라인이 적재하는 조회 전용 입력도 Task 가 아니다 —
-     그건 데이터 모델 관계이지 실행 관계가 아니다).
-     S.pipeUp 이 켜지면 그 상류까지 함께 그린다 — 데이터가 어디서 오는지
-     확인할 때만 잠깐 펼치는 용도라 기본은 꺼둔다. */
-  if (S.pipeUp) return g;
-  const order = (pp.__flow && pp.__flow.order) || null;
-  const nodes = g.nodes.filter(n => order
-    ? order.includes(n.id)
-    : (() => { const d = byId(n.id); return d && d.kind !== 'source'; })());
-  if (!nodes.length) return { nodes: [], edges: [], seq: g.seq };
-  const keys = new Set(nodes.map(n => n.key));
-  const minX = Math.min(...nodes.map(n => n.x)), minY = Math.min(...nodes.map(n => n.y));
+  const f = pp.__flow;
+  const ts = (f && f.tasks) || null;
+  if (!ts) {                       // 서버 flow 가 아직 없으면 이전 방식으로 버틴다
+    const g = pgraph(pp);
+    const nodes = g.nodes.filter(n => { const d = byId(n.id); return d && d.kind !== 'source'; });
+    const keys = new Set(nodes.map(n => n.key));
+    return { nodes, edges: g.edges.filter(e => keys.has(e.from) && keys.has(e.to)), seq: g.seq };
+  }
   return {
-    nodes: nodes.map(n => ({ key: n.key, id: n.id, x: n.x - minX + 40, y: n.y - minY + 40 })),
-    edges: g.edges.filter(e => keys.has(e.from) && keys.has(e.to)),
-    seq: g.seq,
+    nodes: ts.map(t => ({ key: t.key, id: t.key, name: t.name, kind: t.kind,
+                          models: t.models, seq: t.seq, x: t.x, y: t.y })),
+    edges: (f.task_edges || []).map(e => ({ from: e.from, to: e.to })),
+    seq: ts.length,
   };
 }
 
@@ -105,19 +116,12 @@ pipeCanvas = function (pp, edit) {
   const w = Math.max(760, ...g.nodes.map(n => n.x + PW + 60), 0) || 760;
   const h = Math.max(420, ...g.nodes.map(n => n.y + PH + 60), 0) || 420;
   const z0 = S.pipeZoom || 1;
-  /* 머리말 수 — Task 수는 언제나 taskCount 기준이고, 상류를 펼쳤을 때만
-     실제로 더 그려진 만큼을 덧붙인다 (없으면 상류 0개 라고 쓰지 않는다).
-     예전에는 이 문구를 뒤 층이 다시 덮어쓰고 있었다 — 여기가 유일한 자리다. */
-  const nTask = taskCount(pp), nShown = g.nodes.length;
-  const headLabel = S.pipeUp && nShown > nTask
-    ? `Task ${nTask}개 · 상류 ${nShown - nTask}개`
-    : `Task ${nTask}개`;
+  /* 머리말은 실행 단위 수만 센다. 완료 표식은 일을 하지 않으므로 빼고 센다. */
+  const headLabel = `Task ${g.nodes.filter(n => n.kind !== 'marker').length}개`;
   const holder = el(`<div class="f1" style="min-width:0;min-height:0;position:relative;display:flex;flex-direction:column">
     <div class="row g8" style="padding:9px 16px;border-bottom:1px solid var(--line-2);background:var(--surface);flex:none">
       <span class="b6 t13">${edit ? '가공 흐름 구성' : '실행 흐름'}</span>
-      ${edit ? '' : `<span class="t11 fnt">${headLabel}</span>
-        <button class="iconbtn" id="pfUp" style="flex:none;width:24px;height:24px"
-          title="${S.pipeUp ? '상류 닫기' : '상류 보기 — 이 Task 들이 읽는 원천·입력'}">${ic14(S.pipeUp ? 'minus' : 'plus')}</button>`}
+      ${edit ? '' : `<span class="t11 fnt">${headLabel}</span>`}
       <span class="row g6 sp">${edit ? '' : ['ok', 'run', 'err', 'skip', 'wait'].map(s => stBadge(s)).join('')}</span></div>
     <div class="canvas-wrap" id="pfWrap" style="background-color:#F4F6FB">
       <div id="pfSizer" style="position:relative">
@@ -129,15 +133,13 @@ pipeCanvas = function (pp, edit) {
       <span style="margin:0 6px;color:var(--line)">|</span>
       <button class="lnk" id="pfZ1">배율 ${Math.round(z0 * 100)}%</button></div>
   </div>`);
-  const upBtn = $('#pfUp', holder);
-  if (upBtn) upBtn.onclick = () => { S.pipeUp = !S.pipeUp; S.pipeScroll = null; render(); };
   const c = $('#pf', holder), svg = $('#pfEdges', holder);
   if (!g.nodes.length) c.appendChild(el(`<div class="empty" style="position:absolute;left:50%;top:90px;transform:translateX(-50%)">
     ${ic('pipe')}<span class="empty-t">${edit ? '왼쪽 카탈로그에서 SOURCE·DATA MODEL을 추가하세요.' : '실행할 모델이 없습니다.'}</span></div>`));
   g.nodes.forEach(n => {
     const card = pnodeEl(pp, n, runs, edit);
     card.onclick = (ev) => { if (ev.target.closest('[data-prm],[data-pport]')) return;
-      S.pipeNodeK = n.key; S.pipeTab = S.pipeTab || '실행 정보'; render(); };
+      S.pipeNodeK = n.key; S.pipeTab = S.pipeTab || '빌드 정보'; render(); };
     c.appendChild(card);
   });
   setTimeout(() => drawPEdges(pp, c, svg, edit, g), 0);

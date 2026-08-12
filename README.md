@@ -135,7 +135,6 @@ Data Mates는 데이터 정의를 별도로 복제하기보다 dbt를 모델 정
 datamates/
 ├── datamates/        # FastAPI Backend
 ├── ui/               # Web UI
-├── dbt/              # dbt Project
 ├── dags/             # Airflow DAG
 ├── docker/           # Runtime Images
 ├── scripts/          # Bootstrap Scripts

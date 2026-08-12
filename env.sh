@@ -6,11 +6,19 @@
 
 _ENV_SH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 
-# dbt 프로젝트는 저장소 루트가 아니라 dbt/ 안에 있다.
-# DBT_PROJECT_DIR 을 잡아두면 어느 디렉터리에서 `dbt build` 를 쳐도 여기를 찾으므로,
-# 구조를 바꾸기 전과 똑같이 저장소 루트에서 dbt 명령을 쓸 수 있다.
-export DBT_PROJECT_DIR="${_ENV_SH_DIR}/dbt"
+# dbt 프로젝트 위치. 이 저장소는 콘솔(제품)만 담고 dbt 프로젝트는 담지 않는다 —
+# 제품과 그 제품이 다루는 데이터를 가르는 경계가 이 변수다.
+#   export DBT_PROJECT_DIR=~/PycharmProjects/dbt-projects/realestate-gap
+# 미리 잡아 두었으면 그대로 쓰고, 없으면 관례상 저장소 안의 dbt/ 를 본다
+# (거기에 두거나 심볼릭 링크를 걸어도 된다).
+export DBT_PROJECT_DIR="${DBT_PROJECT_DIR:-${_ENV_SH_DIR}/dbt}"
 export DBT_PROFILES_DIR="${DBT_PROJECT_DIR}/profiles"
+
+# 경로가 비어 있으면 dbt·콘솔이 «dbt_project.yml 없음» 으로 죽는다. 미리 말해 준다.
+if [ ! -f "${DBT_PROJECT_DIR}/dbt_project.yml" ]; then
+  echo "경고: dbt 프로젝트가 없습니다 — ${DBT_PROJECT_DIR}" >&2
+  echo "      DBT_PROJECT_DIR 로 dbt 프로젝트를 가리키세요 (SETUP.md 참고)." >&2
+fi
 
 # Spark 4.0 은 Java 17/21 만 지원한다. 기본 java 가 그보다 높으면 기동이 실패한다.
 # brew 의 openjdk@17 은 /Library/Java/JavaVirtualMachines 에 심볼릭 링크가 없어서

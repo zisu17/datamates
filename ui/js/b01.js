@@ -7,9 +7,22 @@ function go(page, arg) {
   // 다른 파이프라인으로 옮기면 보던 스크롤 위치는 무의미하다
   if (page === 'pipeline' && arg && arg !== S.pipe) S.pipeScroll = null;
 
-  if (page === 'catalog') {
-    // 카탈로그 화면은 v2.1 에서 데이터 모델로 합쳐졌다 — 항목만 얹고 넘어간다
-    if (arg && byId(arg)) { addNodeFromCatalog(arg); S.sel = arg; S.mTab = '기본 정보'; }
+  if (page === 'catalog' || (page === 'modeling' && arg)) {
+    /* 카탈로그 화면은 v2.1 에서 데이터 모델로 합쳐졌다 — 항목만 얹고 넘어간다.
+       modeling 에 인자를 준 경우도 같은 뜻이다: «그 모델을 열어라».
+       다른 화면(분석·수집·파이프라인)이 모델로 되돌아오는 통로가 전부 이 줄을
+       지나므로, 여기서 선택까지 해 주지 않으면 «이동은 했는데 아무 것도 안
+       열린» 화면이 된다. */
+    /* 관계도를 먼저 채우고 나서 «있는가» 를 본다.
+       seedCanvas 는 첫 호출에 카탈로그 전체를 올리는데, 그 전에 물어보면 항상
+       «없다» 가 나와 addNodeFromCatalog 가 상류까지 다시 올리려 든다. 그러면
+       이미 올라온 카드마다 «이미 캔버스에 있습니다» 토스트가 한 줌씩 뜬다 —
+       화면 이동은 조용해야 한다. */
+    if (arg && byId(arg)) {
+      seedCanvas();
+      if (!nodeAt(arg)) addNodeFromCatalog(arg);
+      S.sel = arg; S.mTab = '기본 정보';
+    }
     page = 'modeling'; arg = null;
   } else if (page === 'settings') { settingsModal(); return; }
   else if (page === 'quality' && arg && ruleById(arg)) {
@@ -112,30 +125,33 @@ window.addEventListener('resize', () => {
 });
 
 function topbar() {
+  /* 전역 네비게이션 — 브랜드와 페이지 이동이 한 줄이다.
+     Data Mates(브랜드) = 홈 버튼이고, 나머지 페이지가 그 옆에 순서대로 붙는다.
+     드롭다운·사이드바 없이 이 줄이 서비스 전체 이동의 유일한 통로다. */
   const t = el(`<header class="top">
-    <div class="brand"><span class="brand-m" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a2.4 2.4 0 0 0 2 1a2.4 2.4 0 0 0 2 -1a2.4 2.4 0 0 1 2 -1a2.4 2.4 0 0 1 2 1a2.4 2.4 0 0 0 2 1a2.4 2.4 0 0 0 2 -1a2.4 2.4 0 0 1 2 -1a2.4 2.4 0 0 1 2 1a2.4 2.4 0 0 0 2 1a2.4 2.4 0 0 0 2 -1"/><path d="M4 18l-1 -5h18l-2 4"/><path d="M5 13v-6h8l4 6"/><path d="M7 7v-4h-1"/></svg></span>Data Mates</div>
+    <button class="brand" id="brandHome" title="홈으로">
+      <span class="brand-m" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a2.4 2.4 0 0 0 2 1a2.4 2.4 0 0 0 2 -1a2.4 2.4 0 0 1 2 -1a2.4 2.4 0 0 1 2 1a2.4 2.4 0 0 0 2 1a2.4 2.4 0 0 0 2 -1a2.4 2.4 0 0 1 2 -1a2.4 2.4 0 0 1 2 1a2.4 2.4 0 0 0 2 1a2.4 2.4 0 0 0 2 -1"/><path d="M4 18l-1 -5h18l-2 4"/><path d="M5 13v-6h8l4 6"/><path d="M7 7v-4h-1"/></svg></span><span class="brand-l">Data Mates</span></button>
+    <nav class="gnav" aria-label="전체 페이지 이동"></nav>
+    <button class="iconbtn" id="btnHelp" title="현재 메뉴 사용법" style="margin-left:auto">${ic('help')}</button>
     <button class="iconbtn" id="btnNoti" title="알림">${ic('bell')}<span class="dot-n"></span></button>
     <button class="iconbtn" id="btnMe" title="환경 설정">${ic('set')}</button>
   </header>`);
+  $('#brandHome', t).onclick = () => { if (S.page !== 'home') go('home'); };
+  $('#btnHelp', t).onclick = openHelp;
   $('#btnNoti', t).onclick = notiModal;
   $('#btnMe', t).onclick = settingsModal;
 
-  /* GNB — 전역 사이드바를 없애고(v4.6) 현재 메뉴 드롭다운을 브랜드 옆에 둔다 */
-  const cur = MENUS.find(x => x.id === S.page) || MENUS[0];
-  const g = el(`<button class="gnb" title="메뉴 이동">${ic(cur.icon)}` +
-    `<span class="gnb-t">${esc(navLabel(cur))}</span>` +
-    `<span class="gnb-c">${ic14('chevd')}</span></button>`);
-  g.onclick = () => navMenuAt(g);
-  $('.brand', t).insertAdjacentElement('afterend', g);
-
-  /* 도움말 — 알림 아이콘 왼쪽. 오른쪽 묶음을 여기서부터 민다 */
-  const noti = $('#btnNoti', t);
-  const hb = el(`<button class="iconbtn" title="현재 메뉴 사용법">${ic('help')}</button>`);
-  hb.onclick = openHelp;
-  hb.style.marginLeft = 'auto';
-  t.insertBefore(hb, noti);
+  const nav = $('.gnav', t);
+  MENUS.filter(m => m.id !== 'home' && R().menus.includes(m.id)).forEach(m => {
+    const badge = navBadge(m.id);
+    const b = el(`<button class="gnav-i ${S.page === m.id ? 'on' : ''}" title="${esc(m.label)}">
+      ${esc(m.label)}${badge ? `<span class="nav-b">${badge}</span>` : ''}</button>`);
+    b.onclick = () => { if (S.page !== m.id) go(m.id); };
+    nav.appendChild(b);
+  });
   return t;
 }
+
 
 /* 전역 사이드바는 v4.6 에서 헤더 GNB 드롭다운으로 접었다.
    레이아웃 골격(.shell 첫 칸)은 남아야 해서 빈 자리 표시자만 그린다. */
@@ -149,6 +165,8 @@ function pageView() {
     /* 상세(pagePipeDetail)는 v5.4 부터 파이프라인 탭이 대신한다 — 같은 함수였다 */
     case 'pipeline': return pagePipeline();
     case 'quality': return pageQuality();
+    /* 분석은 b53.js 가 정의한다 — 파일이 없으면 메뉴도 없으므로 여기 오지 않는다 */
+    case 'analytics': return pageAnalytics();
   }
 }
 
@@ -157,7 +175,21 @@ function modal(html, opts) {
   const scrim = el(`<div class="scrim"></div>`);
   const m = el(`<div class="modal ${opts && opts.sm ? 'sm' : ''}">${html}</div>`);
   scrim.appendChild(m);
-  scrim.onclick = (e) => { if (e.target === scrim) scrim.remove(); };
+
+  // 바깥을 눌러 닫기 — click 이 아니라 누른 곳과 놓은 곳을 함께 본다.
+  // click 의 타깃은 mousedown 과 mouseup 의 «공통 조상» 이라, 입력칸에서 글자를
+  // 끌어 선택하다 스크림 위에서 손을 떼면 타깃이 스크림이 된다. click 만 보면
+  // 그 순간 창이 닫혀 작성하던 내용이 통째로 날아간다.
+  let downOnScrim = false;
+  scrim.onmousedown = (e) => { downOnScrim = e.target === scrim; };
+  scrim.onmouseup = (e) => {
+    const bg = downOnScrim && e.target === scrim;
+    downOnScrim = false;
+    if (!bg) return;
+    scrim.remove();
+    if (opts && opts.onBackdrop) opts.onBackdrop();
+  };
+
   document.body.appendChild(scrim);
   $$('[data-close]', m).forEach(b => b.onclick = () => scrim.remove());
   fixTerms(scrim);                       // 용어 통일(데이터 모델링→데이터 모델 등)은 모달에도 (v2.5)
