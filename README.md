@@ -15,7 +15,7 @@
 
 </div>
 
-![수집부터 분석까지 이어지는 Data Mates 사용자 흐름](docs/images/datamates-demo-light.gif)
+![수집부터 분석까지 이어지는 Data Mates 사용자 흐름](docs/images/datamates-demo2.gif)
 
 ## ✨ Overview
 
