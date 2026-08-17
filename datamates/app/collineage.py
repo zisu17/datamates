@@ -35,6 +35,11 @@ from . import manifest
 _lock = threading.Lock()
 _cache: dict[str, Any] = {"fp": None, "data": None}
 
+# 모델 SQL 의 방언. 웨어하우스 엔진과 같아야 한다 — dbt-spark 시절에는 "spark"
+# 였고, DuckLake(dbt-duckdb)로 옮기면서 "duckdb" 가 됐다. 어긋나면 파싱이
+# 조용히 실패해 컬럼 계보가 «없음» 으로 비어 버린다(예외를 삼키는 자리가 많다).
+SQL_DIALECT = "duckdb"
+
 _RE_CONFIG = re.compile(r"\{\{-?\s*config\(.*?\}\}", re.S)
 _RE_INCR = re.compile(r"\{%-?\s*if\s+is_incremental\(\)\s*-?%\}.*?\{%-?\s*endif\s*-?%\}", re.S)
 _RE_REF = re.compile(r"\{\{-?\s*ref\(\s*['\"]([^'\"]+)['\"]\s*\)\s*-?\}\}")
@@ -176,7 +181,7 @@ def _build() -> dict[str, Any]:
         if not sql:
             continue
         try:
-            sel = sqlglot.parse_one(sql, dialect="spark").named_selects
+            sel = sqlglot.parse_one(sql, dialect=SQL_DIALECT).named_selects
         except Exception:      # noqa: BLE001 — 못 읽으면 그냥 비워 둔다
             continue
         known = {c[0] for c in e["cols"]}
@@ -235,7 +240,7 @@ def _build() -> dict[str, Any]:
             continue
 
         try:
-            parsed = sqlglot.parse_one(s, dialect="spark")
+            parsed = sqlglot.parse_one(s, dialect=SQL_DIALECT)
             if not isinstance(parsed, (exp.Select, exp.Union)):
                 raise ValueError("SELECT 문이 아닙니다.")
         except Exception as ex:      # noqa: BLE001 — 파싱 실패 = 확인 불가
@@ -247,7 +252,7 @@ def _build() -> dict[str, Any]:
 
         for c in node["cols"]:
             try:
-                ln = sg_lineage(c["col"], s, schema=schema, dialect="spark")
+                ln = sg_lineage(c["col"], s, schema=schema, dialect=SQL_DIALECT)
             except Exception:      # noqa: BLE001 — 컬럼 하나만 확인 불가로
                 c["status"] = "unknown"
                 continue
@@ -267,7 +272,7 @@ def _build() -> dict[str, Any]:
                 elif tx_sql is None and isinstance(x, exp.Alias) \
                         and not isinstance(x.this, exp.Column):
                     # 가장 바깥의 «계산이 실제로 일어난» 식 하나만 기록한다.
-                    tx_sql = x.this.sql(dialect="spark", pretty=False)
+                    tx_sql = x.this.sql(dialect=SQL_DIALECT, pretty=False)
 
             uniq: list[dict[str, str]] = []
             for i in inputs:

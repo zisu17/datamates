@@ -4,13 +4,18 @@
 정제는 dbt 모델이 한다. 타입 캐스팅조차 하지 않고 문자열로 두는 것이 기본이다.
 여기서 한 줄이라도 변환하면 가공 로직이 두 군데로 갈라져 계보가 끊긴다.
 
-적재 엔진은 Spark 가 아니라 pyiceberg 다. dbt-spark 경로는 호출마다 JVM 을 띄워
-약 15초가 고정으로 드는데(이 프로젝트 측정값), 수집은 잦고 양이 작은 일이라
-그 비용을 감당할 이유가 없다. REST 카탈로그에 직접 붙어 쓴다.
+적재 엔진은 DuckDB(DuckLake) 다. 웨어하우스가 Iceberg 였을 때는 pyiceberg 로
+REST 카탈로그에 직접 커밋했다 — dbt-spark 경로가 호출마다 JVM 기동 15초를 물었기
+때문이다. DuckLake 로 옮긴 지금은 dbt 도 같은 엔진을 쓰므로 그 우회의 이유가
+사라졌고, 수집·모델이 하나의 카탈로그(Postgres `ducklake` DB)에 커밋한다.
 
-주의 — Iceberg REST 카탈로그가 SQLite 라 동시 커밋이 반드시 깨진다.
-수집 태스크는 dbt 빌드 태스크와 같은 Airflow 풀(iceberg_write)에 넣어
-전역으로 직렬화해야 한다. daggen 참고.
+전체 교체(overwrite)는 CREATE OR REPLACE 로 한다 — DuckLake 커밋이 스냅샷이라
+읽는 쪽은 교체 도중에도 이전 스냅샷을 본다. 덧붙임(append)은 INSERT BY NAME 으로
+컬럼 순서에 기대지 않는다.
+
+수집 태스크는 dbt 빌드 태스크와 같은 Airflow 풀(iceberg_write)에 넣는다.
+카탈로그가 SQLite 였을 때는 동시 커밋이 반드시 깨져서 슬롯 1로 **직렬화**하려는
+장치였고, 지금은 동시 커밋 수를 한곳에서 조이는 손잡이로 남았다. daggen 참고.
 """
 
 from __future__ import annotations
@@ -74,25 +79,41 @@ def check_table_name(name: str) -> None:
 # ---------------------------------------------------------------- 카탈로그
 
 def catalog() -> Any:
-    """Iceberg REST 카탈로그. dbt 가 쓰는 것과 같은 카탈로그다."""
+    """DuckLake 쓰기 커넥션. dbt 가 쓰는 것과 같은 카탈로그(Postgres)다.
+
+    호출마다 새로 열고 load() 가 닫는다 — 수집은 드물고 한 번에 끝나는 일이라
+    커넥션을 들고 있을 이유가 없고, 짧게 열면 호스트·Airflow 컨테이너 어디서
+    불려도 상태가 남지 않는다. 동시 커밋은 DuckLake 가 Postgres 트랜잭션으로
+    중재한다.
+    """
     try:
-        from pyiceberg.catalog.rest import RestCatalog
+        import duckdb
     except ImportError as e:      # pragma: no cover
         raise ApiError("UPSTREAM_UNAVAILABLE",
-                       "적재 엔진(pyiceberg)이 설치되어 있지 않습니다.",
+                       "적재 엔진(duckdb)이 설치되어 있지 않습니다.",
                        status=503) from e
     env = dbt_env()
-    return RestCatalog("datamates",
-                       uri=env.get("ICEBERG_REST_URI", "http://localhost:8181"),
-                       warehouse="warehouse",
-                       **{"s3.endpoint": env.get("MINIO_ENDPOINT", "http://localhost:9000"),
-                          "s3.access-key-id": env.get("MINIO_ROOT_USER", "minioadmin"),
-                          "s3.secret-access-key": env.get("MINIO_ROOT_PASSWORD", "minioadmin")})
+    minio = env.get("MINIO_ENDPOINT", "http://localhost:9000")
+    host = minio.split("://", 1)[-1].rstrip("/")
+    con = duckdb.connect()
+    con.execute("INSTALL ducklake; INSTALL postgres; LOAD ducklake;")
+    con.execute(
+        "CREATE OR REPLACE SECRET ingest_s3 (TYPE s3, KEY_ID ?, SECRET ?, ENDPOINT ?, "
+        "USE_SSL ?, URL_STYLE 'path', REGION 'us-east-1');",
+        [env.get("MINIO_ROOT_USER", "minioadmin"),
+         env.get("MINIO_ROOT_PASSWORD", "minioadmin"),
+         host, minio.startswith("https://")])
+    con.execute(
+        "ATTACH 'ducklake:postgres:dbname=ducklake host={h} port={p} user={u} password={pw}' AS lake"
+        .format(h=env.get("POSTGRES_HOST", "localhost"),
+                p=env.get("POSTGRES_PORT", "5432"),
+                u=env.get("POSTGRES_USER", "datamates"),
+                pw=env.get("POSTGRES_PASSWORD", "datamates")))
+    return con
 
 
 def ensure_namespace(cat: Any) -> None:
-    if (RAW_SCHEMA,) not in cat.list_namespaces():
-        cat.create_namespace(RAW_SCHEMA)
+    cat.execute(f'CREATE SCHEMA IF NOT EXISTS lake."{RAW_SCHEMA}"')
 
 
 # ---------------------------------------------------------------- 표본 읽기
@@ -523,6 +544,34 @@ def _records(body: Any, record_path: str) -> list[dict[str, Any]]:
     return out
 
 
+def resolve_auth(cfg: dict[str, Any]) -> dict[str, Any]:
+    """요청에 실제로 쓸 인증 값을 만든다.
+
+    커넥터가 자격증명을 가리키고 있으면(auth.credential_id) 저장소에서 꺼내 채운다.
+    가리키지 않으면 예전처럼 auth 안에 직접 든 값을 쓴다 — 자격증명이 생기기 전에
+    만든 커넥터가 그대로 돌아야 한다.
+
+    **비밀은 여기서만 펼친다.** 커넥터 설정에는 참조(id)만 남으므로, 같은 키를 쓰는
+    커넥터가 여럿이어도 사본이 생기지 않고 키 교체가 한 곳에서 끝난다.
+    """
+    auth = dict(cfg.get("auth") or {})
+    cid = auth.get("credential_id")
+    if not cid:
+        return auth
+    cred = store.credential_get(str(cid))
+    if not cred:
+        raise ApiError("INVALID_ARGUMENT",
+                       "이 커넥터가 쓰던 자격증명을 찾지 못했습니다. "
+                       "지워졌을 수 있습니다 — 수정 화면에서 다시 골라 주세요.")
+    kind = cred["kind"]
+    out = {"kind": kind, "name": cred["param"] or auth.get("name") or ""}
+    if kind == "bearer":
+        out["token"] = cred["secret"]
+    else:
+        out["value"] = cred["secret"]
+    return out
+
+
 def _call(cfg: dict[str, Any], extra: dict[str, str] | None) -> tuple[list[dict[str, Any]], Any]:
     """API 한 번 호출 — (레코드, 응답 본문) 을 돌려준다.
 
@@ -539,7 +588,7 @@ def _call(cfg: dict[str, Any], extra: dict[str, str] | None) -> tuple[list[dict[
               for k, v in (cfg.get("params") or {}).items()}
 
     headers = dict(cfg.get("headers") or {})
-    auth = cfg.get("auth") or {}
+    auth = resolve_auth(cfg)
     kind = auth.get("kind")
     if kind == "bearer" and auth.get("token"):
         headers["Authorization"] = f"Bearer {auth['token']}"
@@ -748,54 +797,137 @@ def to_arrow(rows: list[dict[str, Any]], columns: list[dict[str, str]],
 
 # ---------------------------------------------------------------- 적재
 
+def dedupe_key_list(dedupe: str) -> list[str]:
+    """«a, b» → ['a', 'b']. 비어 있으면 빈 목록."""
+    return [k.strip() for k in str(dedupe or "").split(",") if k.strip()]
+
+
+def apply_dedupe(rows: list[dict[str, Any]], dedupe: str) -> tuple[list[dict[str, Any]], int]:
+    """중복 기준이 같은 행은 마지막 것만 남긴다. (남은 행, 버린 수)
+
+    **이번에 적재하는 묶음 안에서만 본다.** 이미 테이블에 들어가 있는 행과는
+    비교하지 않는다 — Iceberg 에서 그것을 하려면 기존 데이터를 읽어 병합(merge)해야
+    하고, 그건 «원본을 그대로 넣는다» 는 수집의 약속을 넘어선다.
+
+    그래서 이 설정이 «완전한 유일성» 을 뜻하는 경우는 전체 교체(overwrite)일 때다.
+    그때는 묶음이 곧 테이블 전체라서 결과가 같다. 덧붙이기(append)에서는 한 번의
+    적재 안에서 생긴 중복만 걸러진다 — 화면도 그렇게 말해야 한다.
+
+    순서는 원본 순서를 지킨다. 남기는 것은 마지막 값이지만 자리는 처음 나온 자리다.
+    적재 순서가 뒤섞이면 같은 파일을 두 번 넣었을 때 행 순서가 달라진다.
+    """
+    keys = dedupe_key_list(dedupe)
+    if not keys or not rows:
+        return rows, 0
+
+    at: dict[tuple, int] = {}          # 키 → 결과에서의 자리
+    out: list[dict[str, Any]] = []
+    dropped = 0
+    for r in rows:
+        k = tuple("" if r.get(c) is None else str(r.get(c)) for c in keys)
+        if k in at:
+            out[at[k]] = r             # 마지막 값으로 덮되 자리는 그대로
+            dropped += 1
+        else:
+            at[k] = len(out)
+            out.append(r)
+    return out, dropped
+
+
 def load(table_name: str, rows: list[dict[str, Any]],
-         columns: list[dict[str, str]], mode: str) -> dict[str, Any]:
+         columns: list[dict[str, str]], mode: str,
+         dedupe: str = "") -> dict[str, Any]:
     """raw 네임스페이스에 적재하고 결과를 돌려준다.
 
     mode — append(덧붙임) · overwrite(전체 교체)
+    dedupe — 이 컬럼(들)이 같으면 한 행만 남긴다(쉼표로 여러 개). apply_dedupe 참고.
     스키마가 이미 있는 테이블과 다르면 «컬럼이 늘어난 경우»만 허용하지 않고
     실패시킨다. 조용히 맞추면 어긋난 데이터가 그대로 쌓인다.
     """
-    cat = catalog()
-    ensure_namespace(cat)
+    rows, dropped = apply_dedupe(rows, dedupe)
     full = f"{RAW_SCHEMA}.{table_name}"
     # 한 번의 적재는 같은 시각을 갖는다. 행마다 다시 찍으면 같은 배치가 초 단위로
     # 갈라져, 최신 행을 고를 때 배치가 아니라 행 순서를 따르게 된다.
     arrow = to_arrow(rows, columns, _now().isoformat(timespec="seconds"))
 
-    exists = True
+    con = catalog()
     try:
-        tbl = cat.load_table(full)
-    except Exception:      # noqa: BLE001 — 없으면 만든다
-        exists = False
+        ensure_namespace(con)
+        have_rows = con.execute(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_catalog = 'lake' AND table_schema = ? AND table_name = ?",
+            [RAW_SCHEMA, table_name]).fetchall()
+        exists = bool(have_rows)
 
-    if not exists:
-        tbl = cat.create_table(full, schema=arrow.schema)
-    else:
-        have = set(tbl.schema().column_names)
-        want = set(arrow.schema.names)
-        if want != have:
-            raise ApiError(
-                "VALIDATION_FAILED",
-                f"{full} 의 컬럼이 기존 테이블과 다릅니다. "
-                f"새로 생긴 컬럼: {', '.join(sorted(want - have)) or '없음'} / "
-                f"사라진 컬럼: {', '.join(sorted(have - want)) or '없음'}. "
-                f"스키마를 확인하고 다시 저장해 주세요.")
+        if exists:
+            have = {r[0] for r in have_rows}
+            want = set(arrow.schema.names)
+            if want != have:
+                raise ApiError(
+                    "VALIDATION_FAILED",
+                    f"{full} 의 컬럼이 기존 테이블과 다릅니다. "
+                    f"새로 생긴 컬럼: {', '.join(sorted(want - have)) or '없음'} / "
+                    f"사라진 컬럼: {', '.join(sorted(have - want)) or '없음'}. "
+                    f"스키마를 확인하고 다시 저장해 주세요.")
 
-    if mode == "overwrite":
-        tbl.overwrite(arrow)
-    else:
-        tbl.append(arrow)
+        con.register("__incoming", arrow)
+        qualified = f'lake."{RAW_SCHEMA}"."{table_name}"'
+        if not exists:
+            con.execute(f"CREATE TABLE {qualified} AS SELECT * FROM __incoming")
+        elif mode == "overwrite":
+            # 스냅샷 커밋이라 원자적이다 — 읽는 쪽은 교체가 끝나기 전까지 이전
+            # 스냅샷을 본다 (Iceberg 시절 tbl.overwrite 와 같은 성질).
+            con.execute(f"CREATE OR REPLACE TABLE {qualified} AS SELECT * FROM __incoming")
+        else:
+            # BY NAME: 컬럼 «이름» 으로 맞춘다. 위에서 집합이 같음을 확인했으므로
+            # 순서가 달라도 어긋나지 않는다.
+            con.execute(f"INSERT INTO {qualified} BY NAME SELECT * FROM __incoming")
+    finally:
+        con.close()
 
-    return {"table": full, "rows": len(rows), "mode": mode, "created": not exists}
+    out = {"table": full, "rows": len(rows), "mode": mode, "created": not exists}
+    if dropped:
+        out["deduped"] = dropped
+    return out
 
 
 # ---------------------------------------------------------------- 실행
 
-def sample(kind: str, cfg: dict[str, Any], text: str | None = None) -> list[dict[str, Any]]:
-    """미리보기·스키마 확인용 표본. 저장도 적재도 하지 않는다."""
+def probe_params(scope: dict[str, Any], watermark: str | None,
+                 now: datetime) -> dict[str, str]:
+    """표본을 부를 때 함께 보낼 «대표 요청 하나» 의 파라미터.
+
+    미리보기와 연결 확인이 이걸 쓴다. 없으면 주소만 들고 원천을 두드리게 되는데,
+    구간·지역을 반드시 받는 원천에서는 그게 곧 «조건 없는 조회» 라 응답은 정상인데
+    행이 0건으로 온다. 화면에는 「응답했지만 행 없음」으로 뜨고, 사용자는 멀쩡한
+    커넥터를 붙잡고 주소와 레코드 경로를 의심하게 된다
+    (실측: 국토부 실거래가 3개 커넥터가 모두 그렇게 보였다).
+
+    실행이 도는 첫 묶음의 첫 호출을 그대로 쓴다. 확인용으로 따로 만든 값이 아니라
+    **실제로 나갈 요청과 같은 모양**이어야 확인에 뜻이 있다.
+    범위 설정이 덜 끝난 커넥터는 빈 값이다 — 그때는 주소만으로 두드린다.
+    """
+    if not scope:
+        return {}
+    try:
+        plan = call_plan(scope, watermark, now)
+    except ApiError:
+        return {}
+    for bucket in plan:
+        calls = bucket.get("calls") or []
+        if calls:
+            return dict(calls[0])
+    return {}
+
+
+def sample(kind: str, cfg: dict[str, Any], text: str | None = None,
+           extra: dict[str, str] | None = None) -> list[dict[str, Any]]:
+    """미리보기·스키마 확인용 표본. 저장도 적재도 하지 않는다.
+
+    extra 는 probe_params 가 만든 구간·반복 파라미터다.
+    """
     if kind == "api":
-        return fetch_api(cfg)
+        return fetch_api(cfg, extra=extra)
     if kind == "file":
         return parse_file(text or "", cfg)
     raise ApiError("INVALID_ARGUMENT", f"{kind} 수집 방식은 아직 지원하지 않습니다.")
@@ -825,7 +957,7 @@ def run_job(job: dict[str, Any], text: str | None = None) -> dict[str, Any]:
             return {"table": f"{RAW_SCHEMA}.{job['target']}", "rows": 0,
                     "mode": job["mode"], "created": False}
         columns = job.get("columns") or infer_columns(rows)
-        return load(job["target"], rows, columns, job["mode"])
+        return load(job["target"], rows, columns, job["mode"], job.get("dedupe") or "")
 
     scope = job.get("scope") or {}
     plan = call_plan(scope, job.get("watermark"), _now())
@@ -857,7 +989,7 @@ def run_job(job: dict[str, Any], text: str | None = None) -> dict[str, Any]:
             # 컬럼은 작업에 저장된 것을 쓴다. 저장 시점에 사용자가 확인한 목록이라
             # 이번 응답에 낯선 필드가 끼어들어도 테이블 모양이 흔들리지 않는다.
             columns = job.get("columns") or infer_columns(rows)
-            res = load(job["target"], rows, columns, mode)
+            res = load(job["target"], rows, columns, mode, job.get("dedupe") or "")
             created = created or res["created"]
             total_rows += len(rows)
             mode = "append"

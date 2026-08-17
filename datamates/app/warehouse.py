@@ -1,18 +1,20 @@
-"""웨어하우스 직접 조회 — Spark 를 거치지 않는다.
+"""웨어하우스 직접 조회 — 화면이 기다릴 수 있는 시간 안에 답한다.
 
-`dbt show` 는 호출할 때마다 JVM 과 Iceberg jar 를 새로 띄운다. 쿼리 자체는 1초도
-안 걸리는데 기동에 15초 이상이 든다. 미리보기처럼 눌렀을 때 바로 나와야 하는
-조회에는 쓸 수 없다.
+웨어하우스가 Iceberg + Spark 였을 때 `dbt show` 는 호출마다 JVM 과 Iceberg jar 를
+새로 띄워 기동에만 15초 이상이 들었다. 미리보기처럼 눌렀을 때 바로 나와야 하는
+조회에는 쓸 수 없어서, DuckDB 로 카탈로그에 직접 붙는 이 모듈이 생겼다.
 
-Iceberg 는 REST 카탈로그 + S3 만 있으면 읽을 수 있으므로 Spark 가 필요 없다.
-여기서는 DuckDB 의 iceberg 확장으로 카탈로그에 직접 붙는다.
+DuckLake 로 옮긴 뒤로는 변환(dbt)도 같은 DuckDB 엔진을 쓰지만, 이 모듈은 그대로
+남는다 — 조회는 **서버 프로세스 안에서** 끝나야 하고(별도 프로세스를 띄우면
+그 왕복이 곧 화면 지연이다), 커넥션 수명·읽기 전용 규약도 여기서만 관리한다.
 
-  측정 (fct_events, 같은 머신)
-    dbt show (Spark)   17.0 초
-    DuckDB             0.035 초
+  측정 (fct_apt_trade 14만 행, 같은 머신)
+    dbt show (Spark)      17.0 초
+    DuckDB + Iceberg      0.014 초
+    DuckDB + DuckLake     아래 preview() 참고
 
-**읽기 전용이다.** 테이블을 만들고 바꾸는 것은 여전히 dbt 와 Spark 의 일이다.
-여기로 쓰기를 하면 dbt 가 관리하는 스냅샷·메타데이터와 어긋난다.
+**읽기 전용이다.** 테이블을 만들고 바꾸는 것은 dbt(모델)와 ingest(수집)의 일이다.
+여기로 쓰면 두 곳이 같은 테이블을 소유하게 되어 계보가 어긋난다.
 """
 
 from __future__ import annotations
@@ -26,7 +28,10 @@ from .errors import ApiError
 _lock = threading.Lock()          # 커넥션 생성 보호
 _con: Any = None
 
-# dbt 가 쓰는 카탈로그 이름과 구분하기 위해 다른 별칭을 쓴다.
+# 카탈로그 별칭. 이름이 `ice` 인 것은 Iceberg 시절의 잔재지만 그대로 둔다 —
+# Superset 데이터셋이 `ice.analytics.<표>` 로 저장돼 있어서(store 의 superset_dataset
+# 매핑), 별칭을 바꾸면 이미 만들어진 차트가 전부 끊긴다.
+# 같은 이유로 superset_config.py 의 ICEBERG_ALIAS 와 항상 같아야 한다.
 ALIAS = "ice"
 
 
@@ -34,6 +39,15 @@ def _endpoint(url: str) -> tuple[str, bool]:
     """http://host:port → (host:port, use_ssl). DuckDB 는 스킴을 빼고 받는다."""
     ssl = url.startswith("https://")
     return url.split("://", 1)[-1].rstrip("/"), ssl
+
+
+def _ducklake_uri(env: dict[str, str]) -> str:
+    """DuckLake 카탈로그 접속 URI. dbt 프로필의 attach 경로와 같은 값이어야 한다."""
+    return ("ducklake:postgres:dbname=ducklake "
+            f"host={env.get('POSTGRES_HOST', 'localhost')} "
+            f"port={env.get('POSTGRES_PORT', '5432')} "
+            f"user={env.get('POSTGRES_USER', 'datamates')} "
+            f"password={env.get('POSTGRES_PASSWORD', 'datamates')}")
 
 
 def connect() -> Any:
@@ -78,18 +92,17 @@ def connect() -> Any:
         con.execute(
             f"SET GLOBAL TimeZone = '{env.get('DATAMATES_DUCKDB_TIMEZONE', 'Asia/Seoul')}';")
 
-        con.execute("INSTALL iceberg; LOAD iceberg;")
+        con.execute("INSTALL ducklake; INSTALL postgres; LOAD ducklake;")
         con.execute(
             "CREATE SECRET (TYPE s3, KEY_ID ?, SECRET ?, ENDPOINT ?, "
             "USE_SSL ?, URL_STYLE 'path', REGION 'us-east-1');",
             [env.get("MINIO_ROOT_USER", "minioadmin"),
              env.get("MINIO_ROOT_PASSWORD", "minioadmin"), host, ssl])
-        # iceberg-rest-fixture 는 인증이 없다. 기본값(oauth2)으로 두면
-        # «no secret was provided» 로 붙지 못한다.
+        # READ_ONLY 는 규약을 코드로 못박는 장치다. 이 모듈로 실수로 쓰기가 들어와도
+        # 커넥션 단계에서 막힌다 — 모듈 docstring 의 «읽기 전용» 이 주석에만 있으면
+        # 언젠가 깨진다.
         con.execute(
-            f"ATTACH 'warehouse' AS {ALIAS} (TYPE iceberg, ENDPOINT ?, "
-            "AUTHORIZATION_TYPE 'none');",
-            [env.get("ICEBERG_REST_URI", "http://localhost:8181")])
+            f"ATTACH '{_ducklake_uri(env)}' AS {ALIAS} (READ_ONLY);")
         _con = con
         return _con
 
@@ -188,6 +201,45 @@ def count(phys: str) -> int | None:
     try:
         return int(_execute(f"select count(*) from {_qualified(phys)}").fetchone()[0])
     except Exception:      # noqa: BLE001 — 건수는 있으면 좋고 없어도 되는 정보다
+        return None
+
+
+def data_files(phys: str) -> list[str] | None:
+    """지금 스냅샷이 가리키는 데이터 파일 경로.
+
+    저장소가 «얼마나 차지하고 있나» 와 «지금 쓰이는 것은 얼마인가» 를 가르는 데 쓴다.
+    덮어쓸 때 옛 파일을 지우지 않고 스냅샷만 새로 가리키므로, 버킷을 세면 지난 판본이
+    전부 섞여 든다(실측: 카탈로그 402MB 중 현재 스냅샷은 70MB). 두 값을 나눠 보여줘야
+    «정리하면 얼마가 빠지는지» 를 말할 수 있다.
+
+    ducklake_list_files 는 현재 스냅샷의 파일만 돌려준다 — Iceberg 의 iceberg_metadata
+    처럼 DELETE 매니페스트나 빠진 항목을 손으로 걸러낼 필요가 없다.
+    """
+    schema, _, table = phys.partition(".")
+    if not table:
+        return None
+    try:
+        cur = _execute(
+            f"select data_file from ducklake_list_files('{ALIAS}', ?, schema => ?) "
+            "where data_file is not null", [table, schema])
+        return [r[0] for r in cur.fetchall()]
+    except Exception:      # noqa: BLE001 — 못 읽으면 «모른다»(None) 로 남긴다
+        return None
+
+
+def file_sizes(phys: str) -> dict[str, int] | None:
+    """데이터 파일 경로 → 바이트. DuckLake 가 메타데이터에 크기를 들고 있어서
+    객체 목록과 대조하지 않고도 «현재 스냅샷이 쓰는 용량» 을 바로 셀 수 있다
+    (Iceberg 시절에는 경로만 나와 storage.py 가 버킷 목록과 맞춰야 했다)."""
+    schema, _, table = phys.partition(".")
+    if not table:
+        return None
+    try:
+        cur = _execute(
+            f"select data_file, data_file_size_bytes from ducklake_list_files('{ALIAS}', ?, "
+            "schema => ?) where data_file is not null", [table, schema])
+        return {r[0]: int(r[1] or 0) for r in cur.fetchall()}
+    except Exception:      # noqa: BLE001
         return None
 
 
