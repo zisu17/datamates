@@ -68,8 +68,12 @@ services:
       SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:-datamates-dev-only-change-me}
       SUPERSET_METADB_URI: postgresql+psycopg2://superset:superset@superset-db:5432/superset
       SUPERSET_REDIS_HOST: superset-redis
-      # 컨테이너 안에서는 서비스 이름으로 부른다 (호스트에서는 localhost:8181 / :9000).
-      ICEBERG_REST_URI: http://iceberg-rest:8181
+      # 컨테이너 안에서는 서비스 이름으로 부른다 (호스트에서는 localhost:5432 / :9000).
+      # DuckLake 카탈로그 — 웨어하우스의 스냅샷·스키마·파일 목록이 여기 있다.
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-datamates}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-datamates}
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}

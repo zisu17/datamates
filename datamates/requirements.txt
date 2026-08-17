@@ -6,14 +6,14 @@ httpx==0.28.1
 python-multipart==0.0.20
 ruamel.yaml==0.18.16
 
-# 데이터 수집의 적재 엔진. Spark 를 띄우지 않고 Iceberg REST 카탈로그에 직접 쓴다
-# (dbt-spark 경로는 호출마다 JVM 기동에 약 15초가 고정으로 든다).
-pyiceberg==0.11.1
+# 데이터 수집이 원본을 Arrow 테이블로 만들어 DuckDB 에 넘긴다.
+# 적재 엔진 자체는 아래 duckdb 다 — DuckLake 이관 전에는 pyiceberg 가 그 자리였다.
 pyarrow==25.0.0
 
-# 미리보기·이력 조회의 읽기 엔진(warehouse.py). iceberg 확장으로 카탈로그에 직접
-# 붙어 dbt show 의 17초를 0.035초로 줄인다. 없으면 화면의 이력 패널이 통째로
-# 503 이 되므로 선택 의존성이 아니다.
+# 웨어하우스 엔진. 세 가지 일을 한다 — 미리보기·이력 조회(warehouse.py),
+# 데이터 수집의 적재(ingest.py), 그리고 dbt 변환(dbt-duckdb, 별도 설치).
+# ducklake 확장으로 카탈로그에 붙는다. 없으면 화면이 통째로 503 이 되므로
+# 선택 의존성이 아니다. docker/superset/requirements-local.txt 와 **같은 핀**이어야 한다.
 duckdb==1.5.5
 
 # 컬럼 계보(collineage.py)가 모델 SQL 을 파싱하는 데 쓴다.
@@ -21,3 +21,8 @@ duckdb==1.5.5
 # venv 에 들어가고(각각 /opt/dbt-venv 와 /opt/datamates-venv), 이걸 import 하는 것은
 # 앱 프로세스다. 저쪽에 두면 앱 이미지에 설치되지 않아 계보 API 만 ImportError 로 죽는다.
 sqlglot==30.14.0
+
+# 메타스토어 드라이버. psycopg 2 가 아니라 3 인 것이 중요하다 — 3 은 커넥션에서
+# 바로 execute 하고 그 결과를 fetch 할 수 있어(conn.execute(...).fetchone())
+# SQLite 시절 호출부를 그대로 쓴다. 2 였다면 51곳에서 커서를 따로 떠야 했다.
+psycopg[binary]==3.2.10
