@@ -38,25 +38,47 @@ def _model_index() -> tuple[dict[int, dict[str, Any]], dict[str, dict[str, Any]]
     return by_ds, by_id
 
 
+def _load_time_sql(where_phys: str | None = None) -> str:
+    """테이블별 마지막 적재 시각 SQL — DuckLake 메타데이터를 한 번에 훑는다.
+
+    Iceberg 시절에는 테이블마다 iceberg_snapshots(...) 를 부르고 UNION ALL 로
+    이어 붙였다. DuckLake 는 스냅샷·파일·테이블·스키마가 카탈로그(Postgres)의
+    표라서, 조인 한 번이면 전체 테이블의 최신 적재 시각이 한 결과로 나온다.
+    카탈로그가 커져도 왕복이 늘지 않는다.
+
+    시간대 처리도 단순해졌다 — snapshot_time 이 이미 timestamptz 라서
+    Iceberg 의 `AT TIME ZONE 'UTC'` 보정이 필요 없다.
+
+    end_snapshot IS NULL 은 «지금 살아 있는 판» 이라는 뜻이다. 빼면 이름이 바뀌거나
+    지워진 옛 항목까지 섞여 든다.
+    """
+    a = warehouse.ALIAS
+    # DuckLake 는 ATTACH 할 때 메타데이터 표를 별도 카탈로그에 붙인다 —
+    # 데이터가 있는 `ice` 가 아니라 `__ducklake_metadata_ice` 다.
+    meta = f"__ducklake_metadata_{a}"
+    where = f"WHERE s.schema_name || '.' || t.table_name = '{where_phys}'" if where_phys else ""
+    return f"""
+        SELECT s.schema_name || '.' || t.table_name AS phys,
+               max(sn.snapshot_time)                AS t
+        FROM {meta}.ducklake_data_file df
+        JOIN {meta}.ducklake_table  t ON t.table_id  = df.table_id  AND t.end_snapshot IS NULL
+        JOIN {meta}.ducklake_schema s ON s.schema_id = t.schema_id  AND s.end_snapshot IS NULL
+        JOIN {a}.snapshots()       sn ON sn.snapshot_id = df.begin_snapshot
+        {where}
+        GROUP BY 1"""
+
+
 def _last_load(phys: str) -> str:
-    """그 테이블이 마지막으로 적재된 시각 — Iceberg 스냅샷 타임스탬프.
+    """그 테이블이 마지막으로 적재된 시각 — DuckLake 스냅샷 타임스탬프.
 
     Superset 은 이걸 모른다. 「이 숫자가 언제 것인가」가 대시보드를 보는 사람의
     첫 질문이므로 화면 B 의 제목줄에 붙인다.
     조회에 실패하면 빈 문자열이다 — 있으면 좋고 없어도 되는 정보다.
-
-    `AT TIME ZONE 'UTC'` 가 필요한 이유가 중요하다. iceberg_snapshots 의
-    timestamp_ms 는 시간대 없는 TIMESTAMP 이고 값은 UTC 다. 세션 TimeZone 은
-    시간대 없는 값에 적용되지 않으므로 그냥 내보내면 «시간대 표시가 없는 UTC»
-    문자열이 된다 — 화면은 그것을 자기 지역 시각으로 읽어 9시간 이르게 그린다.
-    UTC 임을 명시해 변환하면 세션 시간대(KST)가 실린 문자열이 나온다.
     """
     try:
-        out = warehouse.query(
-            "select max(timestamp_ms) AT TIME ZONE 'UTC' from iceberg_snapshots("
-            f"'{warehouse.ALIAS}.{phys}')")
-        v = out["rows"][0][0]
-        return str(v) if v else ""
+        out = warehouse.query(_load_time_sql(where_phys=phys))
+        rows = out["rows"]
+        return str(rows[0][1]) if rows and rows[0][1] else ""
     except Exception:      # noqa: BLE001
         return ""
 
@@ -72,17 +94,14 @@ def _load_times() -> dict[str, str]:
                if e.get("phys")]
     if not entries:
         return {}
-    # AT TIME ZONE 'UTC' 의 이유는 _last_load 주석 참고 — 값은 UTC 인데
-    # 시간대 없는 TIMESTAMP 라서, 명시하지 않으면 화면이 9시간 이르게 읽는다.
-    union = " union all ".join(
-        f"select '{mid}' as mid, max(timestamp_ms) AT TIME ZONE 'UTC' as t "
-        f"from iceberg_snapshots('{warehouse.ALIAS}.{phys}')"
-        for mid, phys in entries)
     try:
-        out = warehouse.query(union)
+        out = warehouse.query(_load_time_sql())
     except Exception:      # noqa: BLE001 — 통째로 실패하면 하나씩 물어본다
         return {mid: _last_load(phys) for mid, phys in entries}
-    return {r[0]: (str(r[1]) if r[1] else "") for r in out["rows"]}
+    # 결과는 물리명 기준이라 모델 id 로 되돌린다. 카탈로그에 있어도 manifest 에
+    # 없는 표(수집 raw, elementary 등)는 여기서 자연히 빠진다.
+    by_phys = {r[0]: (str(r[1]) if r[1] else "") for r in out["rows"]}
+    return {mid: by_phys[phys] for mid, phys in entries if phys in by_phys}
 
 
 def _upstream_load(model_id: str, times: dict[str, str],
@@ -389,6 +408,10 @@ def build_options() -> dict[str, Any]:
             "id": mid, "name": e.get("name"), "phys": e.get("phys"),
             "group": "DATA MART", "kind": e.get("kind"),
             "desc": (e.get("desc") or "").strip(),
+            # 목록 화면의 「분석 대상 데이터」 표가 쓴다. 행 수를 주지 않는 이유는
+            # 마트마다 count 질의를 돌려야 해서다 — 목록 한 번에 마트 수만큼
+            # 웨어하우스 왕복이 생긴다. 컬럼 수는 manifest 에 이미 있다.
+            "cols": len(e.get("cols") or []),
             # 화면이 「엔진에서 직접 만들기」로 넘어갈 때 쓴다. 마법사가 못 그리는
             # 시각화를 같은 데이터로 이어서 만들 수 있게 하는 통로다.
             "datasetId": mapped[mid]["datasetId"],

@@ -149,6 +149,18 @@ CHROME_CSS = """
     animation: dm-skel 1.4s ease-in-out infinite !important;
   }
   [data-test="loading-indicator"] > * { visibility: hidden !important; }
+
+  /* 표 차트 — 마지막 열이 잘려 값이 안 보이는 것을 막는다.
+     원인은 표 차트가 세로 스크롤바 자리를 미리 잡아 두고(scrollbar-gutter: stable)
+     표 폭을 그만큼 넓게 계산하는 데 있다. 칸이 810px 이면 표를 820px 로 잡고,
+     감싼 요소가 overflow:hidden 이라 넘친 10px 이 그냥 잘린다.
+     실측 — 열 10개의 폭 합계 819px, 칸 810px, 표 820px.
+
+     값이 잘리는 것은 «없는 것처럼 보이는 것» 이라 가장 나쁜 실패다. 숫자를 다르게
+     읽게 만들면서 화면은 멀쩡해 보인다. 잘라 내는 대신 가로로 움직이게 해서
+     최소한 닿을 수는 있게 둔다. 표 폭 자체는 차트가 정하므로 바깥에서 줄이지
+     않는다 — 억지로 줄이면 열이 눌려 숫자가 겹친다. */
+  .superset-chart-table > div { overflow-x: auto !important; }
   @keyframes dm-skel { 0%,100% { opacity: 1 } 50% { opacity: .55 } }
 </style>
 """

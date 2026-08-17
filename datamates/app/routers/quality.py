@@ -15,7 +15,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from .. import audit, dbtproj, manifest, state, warehouse
+from .. import audit, dbtproj, manifest, state, store, warehouse
 from ..config import dbt_env
 from ..errors import ApiError, not_found
 
@@ -156,6 +156,13 @@ def delete_rule(rule_id: str) -> dict[str, Any]:
 
 @router.get("/dashboard")
 def dashboard() -> dict[str, Any]:
+    """품질 KPI. 화면의 숫자는 전부 여기서 나온다 — 화면이 따로 세면 갈라진다.
+
+    **아직 안 돌린 규칙은 분모에서 뺀다.** 대신 «몇 개 중 몇 개를 쟀는지» 를 함께
+    내려준다. 빼는 것 자체는 맞다(재지 않은 것을 실패로 칠 수는 없다). 문제는
+    그 사실을 감추는 것이었다 — 잰 규칙이 하나도 없을 때 100 을 돌려주는 바람에
+    화면에 「검증 통과율 100%」가 떴다. 아는 게 없으면 점수도 없다(None).
+    """
     rs = [r for r in state.rules() if r["active"]]
     known = [r for r in rs if r["status"] != "unknown"]
     passed = sum(1 for r in known if r["status"] == "ok")
@@ -163,49 +170,96 @@ def dashboard() -> dict[str, Any]:
     warn = sum(1 for r in rs if r["status"] == "warn")
     affected = sorted({r["modelId"] for r in rs if r["status"] in ("err", "warn")})
     entries = manifest.all_entries()
+    # 오류 행도 «잰 규칙» 만 센다. 지난 실행의 잔존값을 현재 수치로 내보내면
+    # 실패 0건인데 오류 행 7,151 같은 조합이 나온다(실제로 그랬다).
+    err_rows = sum(int(r.get("cnt") or 0) for r in known if r["status"] in ("err", "warn"))
     return {
-        "score": round(passed / len(known) * 100) if known else 100,
-        "ruleTotal": len(rs), "passed": passed,
+        "score": round(passed / len(known) * 100, 1) if known else None,
+        "ruleTotal": len(rs),
+        "measured": len(known),          # 결과를 아는 규칙 수 = 점수의 분모
+        "passed": passed,
         "errCount": err, "warnCount": warn,
+        "errRows": err_rows,
+        "errRuleCount": sum(1 for r in known
+                            if r["status"] in ("err", "warn") and (r.get("cnt") or 0) > 0),
         "notRunCount": len(rs) - len(known),
         "affectedModels": [{"id": m, "name": entries[m]["name"]}
                            for m in affected if m in entries],
     }
 
 
+def backfill_rule_results(days: int = 90) -> dict[str, Any]:
+    """규칙 결과 이력을 Elementary 에서 한 번 채워 넣는다.
+
+    이력 테이블은 오늘부터 쌓이기 시작하므로, 그대로 두면 추이 그래프에 점이
+    하나뿐이다. 그런데 같은 사실이 이미 elementary_test_results 에 실행 단위로
+    남아 있다 — 규칙 id·상태·실패 행 수·검사 시각이 전부 있어 그대로 옮길 수 있다.
+
+    (규칙, 실행) 이 기본키라 몇 번 돌려도 안전하다. run_id 는 Elementary 쪽
+    실행 시각에서 만든다 — 같은 검사가 같은 시각에 두 번 기록되지 않는다.
+    Elementary 가 없거나 저장소가 닫혀 있으면 조용히 건너뛴다.
+    """
+    from .history import EL, TS, _rows, _since
+    try:
+        # 별칭을 at 으로 두면 안 된다 — DuckDB 에서 AT 은 예약어(AT TIME ZONE)라
+        # 바로 다음의 from 에서 파서가 깨진다.
+        rows = _rows(f"""
+            select test_unique_id uid, status,
+                   coalesce(failures, 0) failures,
+                   epoch({TS.format('detected_at')}) ran_at
+            from {EL}.elementary_test_results
+            where {TS.format('detected_at')} >= {_since(days)}
+              and test_unique_id is not null""")
+    except Exception as e:      # noqa: BLE001 — 이력이 없어도 서비스는 떠야 한다
+        return {"filled": 0, "skipped": str(e)[:200]}
+
+    keep = []
+    for r in rows:
+        st = (r.get("status") or "").lower()
+        keep.append({
+            "ruleUid": r["uid"],
+            "runId": f"el:{int(float(r['ran_at']))}",
+            "status": ("ok" if st in ("pass", "success")
+                       else "warn" if st == "warn"
+                       else "err" if st in ("fail", "error") else "unknown"),
+            "failures": int(r.get("failures") or 0),
+            "at": float(r["ran_at"]),
+        })
+    added = store.rule_results_add(keep)
+    return {"read": len(keep), "filled": added}
+
+
+@router.post("/history:backfill")
+def backfill(days: int = Query(90, ge=1, le=365)) -> dict[str, Any]:
+    """화면에서 이력을 다시 채우고 싶을 때. 멱등이라 몇 번 눌러도 안전하다."""
+    return backfill_rule_results(days)
+
+
 @router.get("/trend")
 def trend(days: int = Query(7, ge=1, le=90)) -> dict[str, Any]:
-    """최근 N일 품질 점수.
+    """최근 N일 **검증 통과율**.
 
-    dbt 는 실행별 결과만 남기고 날짜별 집계를 두지 않는다. 여기서는 파이프라인
-    실행 이력을 날짜로 묶어 계산한다 — 이력이 없는 날은 항목을 만들지 않는다
-    (0점으로 채우면 그날 다 실패했다로 읽힌다).
+    예전에는 Airflow dag_run 의 성공 여부를 세었다. 그건 «파이프라인이 끝까지
+    돌았나» 이지 «데이터가 규칙을 지켰나» 가 아니다. 제목만 통과율이라 KPI 옆에
+    나란히 놓이면 같은 지표의 추이로 읽혔고, 실제로 100% 와 90.4% 가 한 화면에
+    함께 떴다.
+
+    지금은 규칙 결과 이력(store.rule_result)을 날짜로 묶는다. 결과가 남지 않은
+    날은 항목을 만들지 않는다 — 0 으로 채우면 «그날 전부 실패» 로 읽힌다.
     """
-    from collections import defaultdict
-    from datetime import datetime
-
-    from .. import airflow_client as af
-    from .. import daggen
-
-    per_day: dict[str, list[bool]] = defaultdict(list)
-    for p in state.snapshot()["pipelines"]:
-        try:
-            runs = af.dag_runs(daggen.dag_id_of(p["id"]), limit=days * 4)
-        except af.AirflowError:
-            continue
-        for r in runs:
-            ts = r.get("end_date") or r.get("start_date")
-            if not ts:
-                continue
-            try:
-                day = datetime.fromisoformat(ts.replace("Z", "+00:00")).strftime("%m.%d")
-            except ValueError:
-                continue
-            per_day[day].append(r.get("state") == "success")
-
-    items = [{"date": d, "score": round(sum(v) / len(v) * 100)}
-             for d, v in sorted(per_day.items())][-days:]
-    return {"items": items, "total": len(items)}
+    # 지금 카탈로그에 있는 규칙만 센다 — 그래야 오늘 점이 KPI 와 같은 분모가 된다.
+    # (이력에는 지운 규칙도 남아 있어, 그대로 세면 마지막 점만 KPI 와 어긋난다)
+    live = [r["uniqueId"] for r in state.rules() if r["active"]]
+    items = store.rule_results_daily(days, only=live)
+    # 날짜는 YYYY-MM-DD 그대로 둔다 — 화면이 축을 날짜로 계산한다(자르는 것은 화면 몫).
+    # passRate 는 /history/tests/daily 와 같은 이름이다. 추이 카드가 두 응답을
+    # 같은 코드로 그릴 수 있어야 출처를 바꿔도 그리는 쪽을 고치지 않는다.
+    for it in items:
+        it["passRate"] = it["score"]
+    return {"items": items, "total": len(items),
+            "metric": "검증 통과율",
+            "note": "그날 마지막으로 검사한 결과를 규칙 단위로 셉니다. "
+                    "실행이 없던 날은 표시하지 않습니다."}
 
 
 @router.get("/by-model")
