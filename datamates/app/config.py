@@ -60,7 +60,7 @@ DATA_DIR = PROJECT_DIR / ".datamates"
 #
 # Postgres 로 옮긴 이유는 동시 쓰기다 — SQLite 는 writer 가 하나뿐이라 수집·파이프라인이
 # 겹치면 뒤에 온 쪽이 기다린다. Airflow 메타DB·Iceberg 카탈로그와 같은 인스턴스를 쓴다
-# (docker-compose.yml 의 postgres 서비스, DB 이름만 다르다).
+# (docker/compose.yml 의 postgres 서비스, DB 이름만 다르다).
 #
 # 서버는 호스트에서 도는데(datamates/run.sh) 컨테이너 안에서 돌릴 때도 있어서
 # 호스트 이름을 환경변수로 뺀다 — 컨테이너에서는 postgres, 호스트에서는 localhost.

@@ -4,7 +4,7 @@
 담지 않는 것: 모델 SQL·컬럼·설명·의존관계. 그건 전부 dbt 프로젝트 파일에 있고
 manifest.json 을 통해 읽는다. 두 곳에 같은 사실을 두면 반드시 어긋난다.
 
-저장소는 Postgres 다(docker-compose.yml 의 postgres 서비스). 원래는 컨테이너를
+저장소는 Postgres 다(docker/compose.yml 의 postgres 서비스). 원래는 컨테이너를
 늘리지 않으려고 SQLite 였는데, 동시 쓰기가 늘어 옮겼다 — SQLite 는 writer 가
 하나뿐이라 수집과 파이프라인 저장이 겹치면 뒤에 온 쪽이 기다린다.
 Airflow 메타DB·Iceberg 카탈로그도 같은 인스턴스를 쓴다(DB 이름만 다르다).

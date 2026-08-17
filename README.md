@@ -91,7 +91,7 @@ export DBT_PROJECT_DIR=/absolute/path/to/your-dbt-project
 docker volume create iceberg-catalog
 
 # 3. 분석 환경을 포함한 전체 스택 실행
-docker-compose -f docker-compose.yml -f docker-compose.superset.yml up -d
+docker compose -f docker/compose.yml -f docker/compose.superset.yml up -d
 
 # 4. Iceberg 카탈로그 초기화
 ./scripts/bootstrap_catalog.sh

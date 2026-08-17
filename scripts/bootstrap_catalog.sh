@@ -2,7 +2,7 @@
 #
 # 로컬 Iceberg REST 카탈로그가 뜰 때까지 기다린 뒤 필요한 네임스페이스를 만든다.
 #
-#   docker-compose up -d && ./scripts/bootstrap_catalog.sh
+#   docker compose -f docker/compose.yml up -d && ./scripts/bootstrap_catalog.sh
 #
 # 왜 필요한가:
 #   elementary 패키지의 on-run-start 훅은 대상 스키마들이 이미 존재한다고 가정하고
@@ -36,7 +36,7 @@ done
 
 if ! curl -sf --max-time 3 "${REST_URI}/v1/config" >/dev/null 2>&1; then
     echo "REST 카탈로그에 접속할 수 없습니다: ${REST_URI}" >&2
-    echo "  docker-compose up -d 로 먼저 기동했는지 확인하세요." >&2
+    echo "  docker compose -f docker/compose.yml up -d 로 먼저 기동했는지 확인하세요." >&2
     exit 1
 fi
 

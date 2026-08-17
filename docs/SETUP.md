@@ -24,7 +24,7 @@ edr_target/       Elementary 리포트
 ```
 
 옮겨야 하는 것은 화면·API 인 `datamates/ ui/` 와
-`dags/ scripts/ docker/ requirements.txt env.sh docker-compose.yml` 이다.
+`dags/ scripts/ docker/ requirements.txt env.sh` 이다 (compose 파일은 `docker/` 안에 있다).
 
 **dbt 프로젝트는 이 저장소에 없다.** 콘솔이 제품이고 dbt 프로젝트는 그 제품이 다루는
 데이터라 저장소를 갈랐다. 새 맥에서는 dbt 프로젝트를 따로 받아 두고 `DBT_PROJECT_DIR`
@@ -135,7 +135,7 @@ colima start --cpu 6 --memory 8
 BI 나 Airflow 병렬 실행을 추가하면 12 GiB 이상으로 올린다.
 
 `docker compose` 플러그인이 없으면 standalone 바이너리를 쓴다. 이 문서의 명령은
-전부 하이픈 형태(`docker-compose`)로 적었다.
+전부 플러그인 형태(`docker compose`)로 적었다 — 하이픈 형태로 바꿔 써도 같다.
 
 ```bash
 docker compose version || which docker-compose
@@ -145,7 +145,11 @@ docker compose version || which docker-compose
 
 ## 4. 스택 기동
 
-**반드시 프로젝트 루트에서** 실행한다. `docker-compose.yml` 이 `${PWD}` 로 경로를 잡는다.
+**저장소 루트에서** 실행한다 — 이 문서의 `-f docker/compose.yml` 이 루트 기준 경로다.
+
+compose 파일 안의 상대경로는 `${PWD}` 가 아니라 **첫 `-f` 파일이 있는 디렉터리**(`docker/`)를
+기준으로 풀린다. 저장소 루트를 거는 마운트가 `../` 로 시작하는 이유다. 다른 데서 부르려면
+`-f` 에 그 파일의 경로만 맞춰 주면 된다.
 
 먼저 카탈로그 볼륨을 만든다. **이걸 빼면 다음 명령이 바로 실패한다.**
 
@@ -159,8 +163,8 @@ docker volume create iceberg-catalog
 되돌릴 유일한 원본이라 선언만 남겨 뒀다(40KB).
 
 ```bash
-docker-compose pull
-docker-compose up -d
+docker compose -f docker/compose.yml pull
+docker compose -f docker/compose.yml up -d
 ```
 
 MinIO, Iceberg REST, Airflow, Data Mates 네 개가 올라온다. 이미지는 도커허브에서 받는다.
@@ -261,7 +265,7 @@ Done. PASS=75 WARN=1 ERROR=0 SKIP=0 TOTAL=76
 붙어서 컨테이너를 다시 만들 필요가 없다. 포트가 겹치므로 컨테이너 쪽을 먼저 멈춘다.
 
 ```bash
-docker-compose stop datamates
+docker compose -f docker/compose.yml stop datamates
 ./datamates/run.sh
 ```
 
@@ -348,7 +352,7 @@ dbt show --inline "select count(*) as rows from {{ ref('stg_apt_trade') }}"
 내보내기 — 원래 맥에서, **스택을 내린 뒤에** 한다. 켜 둔 채로 뜨면 쓰다 만 SQLite 를 뜬다.
 
 ```bash
-docker-compose down
+docker compose -f docker/compose.yml down
 ```
 
 ```bash
@@ -359,7 +363,7 @@ for v in dbt_minio-data iceberg-catalog; do docker run --rm -v $v:/src:ro -v "$H
 > 물려주므로 `/tmp` 같은 경로를 주면 tar 가 VM 안에만 쓰고 끝나 — 오류 없이
 > 호스트에 파일이 안 생긴다.
 
-가져오기 — 새 맥에서, `docker-compose up` **전에** 한다.
+가져오기 — 새 맥에서, `docker compose -f docker/compose.yml up` **전에** 한다.
 
 ```bash
 docker volume create iceberg-catalog && docker volume create dbt_minio-data
@@ -399,7 +403,7 @@ Spark 4.0 은 Java 17/21 만 지원한다. 기본 `java` 가 23 이어도 `env.s
 ### 3. 컨테이너 안에서 `source env.sh` 금지
 
 `env.sh` 는 호스트용이다. 컨테이너에서 실행하면 `SPARK_HOME` 을 macOS 경로로 덮어
-Spark 가 안 뜬다. 컨테이너 환경변수는 `docker-compose.yml` 이 이미 주입한다.
+Spark 가 안 뜬다. 컨테이너 환경변수는 `docker/compose.yml` 이 이미 주입한다.
 DAG 에서는 `/opt/dbt-venv/bin/dbt` 를 절대경로로 부른다.
 
 ### 4. 이미지 pull 실패 (사내망/VPN)
@@ -429,7 +433,7 @@ colima 는 호스트 디렉터리를 통째로 지우고 다시 만들면 파일
 `SQLITE_CANTOPEN` 같은 에러가 난다. 초기화할 때는 **내용만** 지운다.
 
 ```bash
-docker-compose down && find .iceberg-rest -mindepth 1 -delete
+docker compose -f docker/compose.yml down && find .iceberg-rest -mindepth 1 -delete
 ```
 
 ### 6. `docker compose` vs `docker-compose`
@@ -458,7 +462,7 @@ docker volume create iceberg-catalog
 ```
 
 ```bash
-docker-compose up -d && ./scripts/bootstrap_catalog.sh
+docker compose -f docker/compose.yml up -d && ./scripts/bootstrap_catalog.sh
 ```
 
 ```bash
@@ -472,7 +476,7 @@ source ./env.sh && dbt deps && dbt run --select elementary && dbt build --full-r
 ## 종료
 
 ```bash
-docker-compose down
+docker compose -f docker/compose.yml down
 ```
 
 ```bash
@@ -480,4 +484,4 @@ colima stop
 ```
 
 데이터는 named volume(`minio-data`, `airflow-home`, `postgres-data`)에 남으므로
-다시 올리면 그대로 이어진다. 완전히 지우려면 `docker-compose down -v` 를 쓴다.
+다시 올리면 그대로 이어진다. 완전히 지우려면 `docker compose -f docker/compose.yml down -v` 를 쓴다.

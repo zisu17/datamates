@@ -2,11 +2,11 @@
 #
 # 기본 compose 와 **같은 프로젝트(datamates)** 로 묶인다. 항상 두 파일을 함께 넘긴다:
 #
-#   docker-compose -f docker-compose.yml -f docker-compose.superset.yml up -d
-#   docker-compose -f docker-compose.yml -f docker-compose.superset.yml logs -f superset
-#   docker-compose -f docker-compose.yml -f docker-compose.superset.yml down
+#   docker compose -f docker/compose.yml -f docker/compose.superset.yml up -d
+#   docker compose -f docker/compose.yml -f docker/compose.superset.yml logs -f superset
+#   docker compose -f docker/compose.yml -f docker/compose.superset.yml down
 #
-# 이 파일에 name: 을 두지 않는다 — docker-compose.yml 의 name: datamates 를 그대로 쓴다.
+# 이 파일에 name: 을 두지 않는다 — compose.yml 의 name: datamates 를 그대로 쓴다.
 # 프로젝트가 하나여야 네트워크(datamates_default)와 볼륨 접두사가 갈라지지 않는다.
 #
 # 기본 파일만 넘겨 `up` 하면 compose 가 여기 서비스들을 orphan 으로 «경고» 한다
@@ -89,7 +89,7 @@ services:
     volumes:
       # 파일 하나만 마운트한다. 폴더를 통째로 걸면 Dockerfile 까지 pythonpath 에 들어간다.
       # 파일로 두면 재빌드 없이 설정을 고쳐 P0 을 반복할 수 있다.
-      - ./docker/superset/superset_config.py:/opt/superset/pythonpath/superset_config.py:ro
+      - ./superset/superset_config.py:/opt/superset/pythonpath/superset_config.py:ro
     # 들여쓰기를 한 칸도 더 넣지 말 것.
     #
     # YAML folded scalar(>)는 «더 깊게 들여쓴 줄» 의 개행을 그대로 보존한다.
@@ -138,7 +138,7 @@ services:
       # SUPERSET_BASE_URL=http://superset:8088 로 바꾼다.
       - "127.0.0.1:8088:8088"
     volumes:
-      - ./docker/superset/superset_config.py:/opt/superset/pythonpath/superset_config.py:ro
+      - ./superset/superset_config.py:/opt/superset/pythonpath/superset_config.py:ro
     # 이미지의 부트스트랩 스크립트에 의존하지 않고 gunicorn 을 직접 부른다.
     # 워커 4개는 의도적이다 — 워커마다 DuckDB 인스턴스가 따로 생기므로
     # P0 ③(동시 질의)에서 그 영향을 실제로 보게 된다.
