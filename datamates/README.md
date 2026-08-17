@@ -14,8 +14,9 @@ docker-compose up -d
 
 모델의 SQL·컬럼·설명·의존관계는 `models/` 아래 파일에만 있다. API 는 그 파일을 쓰고,
 `dbt parse` 가 만든 `target/manifest.json` 을 읽어 화면 모양으로 바꿔 줄 뿐이다.
-메타스토어(SQLite, `.datamates/datamates.db`)에는 dbt 가 모르는 것 — 파이프라인 정의, 카탈로그
-폴더, 실행 트리거 기록 — 만 둔다.
+메타스토어(Postgres, `datamates` DB)에는 dbt 가 모르는 것 — 파이프라인 정의, 수집 커넥터와
+그 버전 이력, 카탈로그 폴더, DATA MART 지정, 모델 변경 이력, 자격증명, Superset 데이터셋
+매핑, 실행 트리거 기록 — 만 둔다.
 
 같은 사실을 두 곳에 두지 않는 것이 요점이다. 카탈로그·컬럼·계보·테스트를 메타DB 에
 옮겨 적으면 사람이 손으로 고친 dbt 모델과 반드시 어긋난다.

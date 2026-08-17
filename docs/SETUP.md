@@ -14,7 +14,7 @@
 
 ```
 .venv/            macOS 바이너리. 새 맥에서 다시 만든다
-.iceberg-rest/    카탈로그 sqlite
+.iceberg-rest/    구 카탈로그 sqlite (지금은 Postgres 를 쓴다)
 .spark-warehouse/ 구 로컬 웨어하우스 (지금은 MinIO 를 쓴다)
 .spark-events/    Spark 이벤트 로그
 dbt_packages/     dbt deps 로 재생성 (dbt 프로젝트 안)
@@ -81,13 +81,19 @@ python3.11 -m venv .venv && .venv/bin/pip install --upgrade pip
 
 ```
 dbt-core==1.12.0
-dbt-spark==1.11.0
+dbt-duckdb==1.11.0
+duckdb==1.5.5
 elementary-data==0.25.1
+dbt-spark==1.11.0
 pyspark==4.0.4
 ```
 
-`datamates/requirements.txt` 는 화면·API 쪽이다. `pyiceberg`/`pyarrow` 는 데이터 수집이
-Spark 를 띄우지 않고 Iceberg 에 직접 쓰는 데 필요하고(호출마다 JVM 기동 15초를 안 낸다),
+기본 타깃 `local` 이 DuckLake 라 `dbt-duckdb` 가 실제로 쓰이는 어댑터다. `dbt-spark`/`pyspark`
+는 롤백 타깃(`DBT_TARGET=spark_local`) 전용으로 호스트에만 남겨 두었다 — 컨테이너 이미지에는
+없다.
+
+`datamates/requirements.txt` 는 화면·API 쪽이다. `duckdb`/`pyarrow` 는 데이터 수집이
+Spark 를 띄우지 않고 DuckLake 에 직접 쓰는 데 필요하고(호출마다 JVM 기동 15초를 안 낸다),
 `python-multipart` 는 파일 올리기의 multipart 파싱에 필요하다 — 없으면 서버가
 `RuntimeError: Form data requires "python-multipart"` 로 **기동 자체를 못 한다**.
 `duckdb` 는 미리보기·이력 조회의 읽기 엔진이고, `sqlglot` 은 컬럼 계보를 SQL AST 로 뽑는다.
@@ -149,8 +155,8 @@ docker volume create iceberg-catalog
 
 `iceberg-catalog` 만 `external: true` 다 — compose 가 알아서 만들지 않는다. 없는 상태로
 올리면 `external volume "iceberg-catalog" not found` 로 스택이 통째로 안 뜬다.
-이 볼륨이 named volume 인 이유는 Iceberg 카탈로그가 SQLite 이고, 호스트 디렉터리를
-바인드하면 virtiofs 위에서 POSIX 파일 락이 제대로 안 걸려 `SQLITE_BUSY` 가 풀리지 않기 때문이다.
+카탈로그를 Postgres 로 옮긴 뒤로 이 볼륨을 **마운트하는 서비스는 없다.** 이관 전 상태로
+되돌릴 유일한 원본이라 선언만 남겨 뒀다(40KB).
 
 ```bash
 docker-compose pull
@@ -166,9 +172,9 @@ compose 에 `build:` 를 두지 않았으므로 `up` 이 빌드를 시작하는 
 
 | 계층 | 위치 | 안에 든 것 |
 | --- | --- | --- |
-| Airflow | (base) | Airflow 3.2.2 · Java 17 |
-| dbt | `/opt/dbt-venv` | dbt-core 1.12.0 · dbt-spark 1.11.0 · PySpark 4.0.4 · Elementary 0.25.1 |
-| Data Mates | `/opt/datamates-venv` | FastAPI 0.121.2 · PyIceberg 0.11.1 · DuckDB 1.5.5 · sqlglot 30.14.0 |
+| Airflow | (base) | Airflow 3.2.2 |
+| dbt | `/opt/dbt-venv` | dbt-core 1.12.0 · dbt-duckdb 1.11.0 · DuckDB 1.5.5 · Elementary 0.25.1 |
+| Data Mates | `/opt/datamates-venv` | FastAPI 0.121.2 · DuckDB 1.5.5 · psycopg 3.2.10 · sqlglot 30.14.0 |
 | Superset | `/opt/superset-venv` | Superset 5.0.0 · duckdb-engine 0.17.0 · psycopg2 2.9.12 |
 
 venv 를 네 개로 가르는 것은 타협이 아니라 제약이다. Airflow 3 은 자기 API 서버를 FastAPI 로
@@ -268,9 +274,10 @@ docker-compose stop datamates
 
 기동할 때 서버가 두 가지를 스스로 맞춘다. 손으로 할 일은 없다.
 
-- **`iceberg_write` 풀 생성** (슬롯 1). Iceberg 카탈로그가 SQLite 라 동시 커밋이 반드시
-  깨지는데, 수집과 파이프라인은 **서로 다른 DAG** 이라 `max_active_tasks` 로는 못 막는다.
-  DAG 을 가로질러 직렬화하는 수단은 풀뿐이다.
+- **`iceberg_write` 풀 생성** (슬롯 2). 수집과 파이프라인은 **서로 다른 DAG** 이라
+  `max_active_tasks` 로는 서로를 못 막는다 — DAG 을 가로질러 조이는 수단은 풀뿐이다.
+  카탈로그가 SQLite 였을 때는 슬롯이 1이어야 했고(동시 커밋이 깨졌다), Postgres 로
+  옮긴 뒤로는 카탈로그가 아니라 메모리가 상한이라 2 로 둔다.
 - **DAG 파일 재생성**. 메타스토어의 파이프라인·수집 작업을 보고 `dags/datamates_*.py` 를
   다시 쓴다. 그래서 `.datamates/datamates.db` 만 가져오면 DAG 은 따라온다.
 
@@ -334,7 +341,8 @@ dbt show --inline "select count(*) as rows from {{ ref('stg_apt_trade') }}"
 | 볼륨 | 무엇 | 크기(예) |
 | --- | --- | --- |
 | `dbt_minio-data` | Iceberg 데이터 파일 본체 | 113M |
-| `iceberg-catalog` | 네임스페이스·테이블 포인터 (SQLite) | 36K |
+| `postgres-data` | 메타스토어 · Airflow 메타DB · 카탈로그 포인터 | 60M |
+| `iceberg-catalog` | 이관 전 카탈로그 (SQLite, 지금은 미사용) | 40K |
 | `dbt_airflow-home` | 실행 이력·Airflow 비밀번호 (선택) | 37M |
 
 내보내기 — 원래 맥에서, **스택을 내린 뒤에** 한다. 켜 둔 채로 뜨면 쓰다 만 SQLite 를 뜬다.
@@ -471,5 +479,5 @@ docker-compose down
 colima stop
 ```
 
-데이터는 named volume(`minio-data`, `airflow-home`, `ivy-cache`, `spark-events`)에 남으므로
+데이터는 named volume(`minio-data`, `airflow-home`, `postgres-data`)에 남으므로
 다시 올리면 그대로 이어진다. 완전히 지우려면 `docker-compose down -v` 를 쓴다.
