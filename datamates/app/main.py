@@ -19,9 +19,10 @@ from fastapi.staticfiles import StaticFiles
 from . import dbtproj, errors, manifest, state, store
 from .config import AIRFLOW_BASE_URL, DBT_DIR, PROJECT_DIR
 from .analytics import proxy as superset_proxy
-from .routers import (analytics, bootstrap, catalog, history, ingest, lineage,
-                      mart, models, models_extra, pipelines, pipelines_extra,
-                      quality)
+from .routers import (analytics, bootstrap, catalog, credentials, history, home,
+                      ingest,
+                      lineage, mart, models, models_extra, pipelines,
+                      pipelines_extra, quality, storage)
 
 API_PREFIX = "/api/v1"
 
@@ -64,9 +65,26 @@ async def context_headers(request: Request, call_next):
 def _startup() -> None:
     store.init()
     _seed_marts()
+    _backfill_rule_results()
     _ensure_iceberg_pool()
     _regenerate_dags()
     _sync_analytics_datasets()
+
+
+def _backfill_rule_results() -> None:
+    """규칙 결과 이력을 Elementary 에서 채워 둔다.
+
+    이력 테이블은 도입 시점부터 쌓이므로 그대로 두면 통과율 추이에 점이 하나뿐이다.
+    같은 사실이 Elementary 에 이미 남아 있어 옮겨 오면 첫 화면부터 추이가 보인다.
+    멱등이라 기동할 때마다 돌려도 새 실행분만 더해진다.
+    """
+    try:
+        from .routers.quality import backfill_rule_results
+        out = backfill_rule_results(90)
+        if out.get("filled"):
+            print(f"[datamates] 품질 이력 채움: {out['filled']}건 (읽음 {out.get('read')})")
+    except Exception as e:                       # noqa: BLE001
+        print(f"[datamates] 품질 이력 채우기 실패 (기동은 계속): {e}")
 
 
 def _seed_marts() -> None:
@@ -137,6 +155,14 @@ def _regenerate_dags() -> None:
         for j in jobs:
             if j["kind"] == "api":
                 ingestdag.write(j)
+            # 버전 이력이 생기기 전에 만들어진 커넥터에 첫 판을 채워 둔다.
+            # 없으면 상세의 «버전 이력» 이 통째로 비어, 이력 기능이 고장난 것처럼
+            # 보인다. 만든 시각은 알고 있으므로 그 사실만 그대로 적는다 —
+            # 그 사이의 수정 내역은 남은 기록이 없어 지어내지 않는다.
+            if not store.ingest_version_last(j["id"]):
+                from .routers.ingest import _snapshot
+                store.ingest_version_add(j["id"], "커넥터 생성", _snapshot(j),
+                                         at=j.get("created_at"))
         # 수집이 등록한 원천 목록도 같은 이유로 다시 맞춘다. reparse 는 하지 않는다 —
         # 기동을 5초 늦추고, 어차피 첫 저장이나 첫 조회에서 갱신된다.
         dbtproj.write_sources(ingest.source_tables(jobs))
@@ -152,9 +178,14 @@ def _ensure_iceberg_pool() -> None:
     다음 기동 때 다시 시도한다.
     """
     from . import airflow_client as af
-    from .daggen import POOL
+    from .daggen import MAX_ACTIVE_TASKS, POOL
     try:
-        af.ensure_pool(POOL, 1, "Iceberg 카탈로그(SQLite) 동시 커밋 방지 — 슬롯 1")
+        # 카탈로그가 SQLite 였을 때는 슬롯이 1이어야 했다(동시 커밋이 깨졌다).
+        # Postgres 로 옮긴 뒤로는 카탈로그가 아니라 메모리가 상한이라, DAG 안 동시
+        # 실행 수와 같은 값을 쓴다 — 두 곳이 따로 놀면 어느 쪽이 실제로 막는지 알기 어렵다.
+        af.ensure_pool(POOL, MAX_ACTIVE_TASKS,
+                       f"웨어하우스 동시 커밋 상한 — 슬롯 {MAX_ACTIVE_TASKS} "
+                       f"(DuckLake 낙관적 동시성. daggen.MAX_ACTIVE_TASKS 참고)")
     except Exception as e:                       # noqa: BLE001
         print(f"[datamates] Airflow 풀 {POOL} 준비 실패 (기동은 계속): {e}")
 
@@ -197,7 +228,8 @@ for r in (bootstrap.router,
           mart.router, models_extra.router, models.router,
           pipelines_extra.router, pipelines.router,
           ingest.router, catalog.router, quality.router, history.router,
-          lineage.router, analytics.router):
+          home.router, credentials.router,
+          lineage.router, analytics.router, storage.router):
     app.include_router(r, prefix=API_PREFIX)
 
 

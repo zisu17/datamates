@@ -37,7 +37,7 @@ pageModeling = function () {
   const L = (a, b) => full ? a : mid ? b : '';
   center.appendChild(el(`<div class="mod-bar">
     <span class="row g8" style="padding-left:14px;min-width:0;flex:1 1 auto;overflow:hidden">
-      <span class="b6 t13" style="flex:none">데이터 계보</span>
+      <span class="b6 t13" style="flex:none">데이터 맵</span>
       <span class="t11 fnt trunc" id="mhCnt"></span>
       <button class="iconbtn" id="mhTgl" style="flex:none;width:24px;height:24px"></button></span>
     <div class="row g6 sp" style="flex:none">
@@ -73,10 +73,19 @@ pageModeling = function () {
     btnRow.insertBefore(b, $('#mMore', btnRow));
   }
 
-  /* 제목 옆 개수 — 계보 데이터가 오기 전엔 비워 둔다 */
+  /* 제목 옆 개수 — 계보 데이터가 오기 전엔 비워 둔다.
+     제외한 모델이 있으면 몇 개인지 반드시 말한다. 말하지 않으면 «있어야 할 모델이
+     맵에 없다» 가 되어 데이터가 없는 것으로 오해한다 — 가린 것과 없는 것은 다르다.
+     그려진 수를 세므로 제외분은 «모델 N개» 에서 이미 빠져 있다. */
   const cnt = $('#mhCnt', p);
-  if (cnt && LIN.data)
-    cnt.textContent = `모델 ${LIN.data.nodes.length}개 · 연결 ${LIN.data.columnEdges.length}개`;
+  if (cnt && LIN.data) {
+    const hid = Object.keys(S.linHide || {}).filter(k => S.linHide[k]).length;
+    const vis = LIN.data.nodes.filter(n => !(S.linHide || {})[n.id]);
+    const ids = new Set(vis.map(n => n.id));
+    const edges = LIN.data.columnEdges.filter(e => ids.has(e.fromId) && ids.has(e.toId));
+    cnt.textContent = `모델 ${vis.length}개 · 연결 ${edges.length}개`
+      + (hid ? ` · 제외 ${hid}개` : '');
+  }
 
   /* 컬럼 상세 펼치기/접기 — 모드 전환이 아니라 같은 화면의 확장이다.
      기본은 모델 관계만, + 를 누르면 모든 상자가 컬럼까지 펼쳐진다. */

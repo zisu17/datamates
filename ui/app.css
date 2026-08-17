@@ -2,78 +2,199 @@
 *,*::before,*::after{box-sizing:border-box}body{margin:0}
 
 /* ════════ style block 01 (index.html 에서 추출) ════════ */
+/* ══════════════════════════════════════════════════════════════
+   macOS 27 Web Kit 적용 — 앱 토큰을 DS 토큰 위로 올린다
+   ══════════════════════════════════════════════════════════════
+   ds/tokens.css 가 --w-* 를 세우고, 이 블록이 앱이 쓰던 이름(--pri · --muted
+   · --fs-body …)을 그 위에 다시 정의한다. 56개 JS 블록이 찍는 클래스
+   이름을 건드리지 않고 제품 전체의 색·서체·치수를 옮기는 유일한 자리다.
+
+   **여기서 원색을 직접 쓰지 않는다.** 색이 필요하면 --w-* 를 참조하고,
+   농도가 필요하면 같은 accent 의 rgba 를 쓴다 — DS 의 «새 색을 만들지
+   않는다» 규칙이 이 파일에도 적용된다.
+
+   접어 없앤 단계 (화면마다 갈라지던 원인)
+   - --ink(#222 제목) 와 --text(#333 본문) → 하나로. DS 는 제목용 색을
+     따로 두지 않고 Labels 램프의 primary 를 그대로 쓴다.
+   - --line-2(#EDEDED 카드 내부 구분선) → --line 으로. DS 는 테두리를
+     --w-border / --w-border-strong 두 단만 둔다.
+   - --info 가 --pri 와 같은 파랑이던 것 → DS 상태색 규칙대로 Cyan.
+   ══════════════════════════════════════════════════════════════ */
 :root{
   color-scheme: light;
-  /* 색 토큰 */
-  --bg:#F7F8FA; --surface:#FFFFFF; --surface-2:#FAFAFA; --surface-3:#F4F4F4;
-  --ink:#222222; --ink-2:#33333329; --text:#333333; --muted:#777777; --faint:#989898;
-  --line:#E1E1E1; --line-2:#EDEDED; --line-str:#D3D3D3; --line-focus:#4A4A4A;
-  --pri:#105AFF; --pri-hover:#0943C6; --pri-soft:#EFF4FF; --pri-line:#C3D7FF; --pri-ink:#0943C6;
-  --sel:#719BFC;
-  --ok:#27C36F; --ok-soft:#DAF9E1; --ok-line:#68DB8B;
-  --warn:#FFA000; --warn-soft:#FFF2DC; --warn-line:#FFB764;
-  --err:#FA4553; --err-soft:#FFE8EA; --err-line:#FFBABA;
-  --info:#105AFF; --info-soft:#EFF4FF;
-  --hover-o:rgba(0,0,0,.03); --sel-o:rgba(16,90,255,.05);
-  --shadow-1:0 2px 4px rgba(0,0,0,.10);
-  --shadow-2:0 4px 12px rgba(0,0,0,.10);
-  --shadow-3:4px 8px 20px rgba(0,0,0,.10);
-  /* ── 타이포그래피 스케일 ──────────────────────────────────────────
-     화면마다 임의 크기를 쓰던 것을 여덟 단으로 모았다. 원래 8.5 ~ 26px 사이에
-     0.5px 간격으로 20종이 흩어져 있었는데, 같은 역할인데 화면마다 12 / 12.5 로
-     갈리는 식이라 눈에 보이는 차이 없이 규칙만 잃고 있었다.
+  /* ── 표면 ── */
+  --bg:var(--w-bg); --surface:var(--w-surface);
+  --surface-2:var(--w-surface-sunken);        /* 가라앉은 면 — 표머리·읽기전용 입력 */
+  --surface-3:var(--w-hover);                 /* 한 단 더 — 세그먼트 트랙·태그 바탕 */
+  /* ── 글자 — 회색이 아니라 검정 불투명도 램프 ──
+     DS 램프는 네 단(.85 / .5 / .25 / .1)인데 이 앱은 세 단(--text · --muted ·
+     --faint)을 쓴다. 순서대로 .85 / .5 / .25 로 맞추면 --faint 가 .25 가 되고,
+     이 앱에서 --faint 가 맡은 것은 장식이 아니라 캡션급 **내용**이라(차트 날짜축 ·
+     기준 시각 · 카드 헤더의 «최근 7일» · 키·값 라벨) .25 의 대비 1.9:1 로는
+     읽히지 않는다.
+
+     그래서 처음에는 --faint 를 secondary(.5)로 올리고 셋째 단을 크기·굵기로만
+     만들었는데, 그러면 원래 #989898(≒.40)이던 캡션이 #808080 으로 **진해진다.**
+     둘째·셋째 단이 같은 .5 하나로 붙으면서 화면 전체의 회색이 무거워졌다.
+
+     지금은 셋째 단을 색으로 되살리되, 두 단 모두 원래보다 한 톤 옅게 잡는다.
+     값은 여전히 «검정 불투명도» 라 새 색이 아니고, DS 의 .5 / .25 사이에서
+     읽히는 범위를 고른 것이다.
+         --muted .45  (≒#8C8C8C, 대비 3.7:1) — 라벨 · 표머리 · 보조 본문
+         --faint .34  (≒#A8A8A8, 대비 2.5:1) — 캡션 · 메타 · 차트 축
+     --w-text-3(.25)는 placeholder · 빈 상태 아이콘 · 화살표처럼 읽지 않아도 되는
+     자리에 아래에서 이름을 직접 불러 쓴다. */
+  --ink:var(--w-text); --text:var(--w-text);
+  --muted:rgba(0,0,0,.45); --faint:rgba(0,0,0,.34);
+  --ink-2:var(--w-text-disabled);
+  /* ── 테두리 ── */
+  --line:var(--w-border); --line-2:var(--w-border);
+  --line-str:var(--w-border-strong); --line-focus:var(--w-border-focus);
+  /* ── Primary — 원본 12 accents 의 Blue ── */
+  --pri:var(--w-accent); --pri-hover:var(--w-accent-hover);
+  --pri-soft:rgba(0,136,255,.12); --pri-line:rgba(0,136,255,.35); --pri-ink:var(--w-accent);
+  --sel:var(--w-accent);
+  /* ── 상태 — 성공 Green · 경고 Orange · 오류 Red · 정보 Cyan.
+     soft/line 은 같은 accent 의 농도이므로 새 색이 아니다(DS Badge 의 TONES 값). ── */
+  --ok:var(--w-success);   --ok-soft:rgba(52,199,89,.14);   --ok-line:rgba(52,199,89,.35);
+  --warn:var(--w-warning); --warn-soft:rgba(255,141,40,.16); --warn-line:rgba(255,141,40,.38);
+  --err:var(--w-danger);   --err-soft:rgba(255,56,60,.12);   --err-line:rgba(255,56,60,.32);
+  --info:var(--w-info);    --info-soft:rgba(0,192,232,.14);  --info-line:rgba(0,192,232,.35);
+  --hover-o:var(--w-hover); --sel-o:var(--w-selected);
+  --shadow-1:var(--w-shadow-1);
+  --shadow-2:var(--w-shadow-2);
+  --shadow-3:var(--w-shadow-3);
+  /* ── 타이포그래피 스케일 — **원래 스케일로 되돌렸다** ─────────────
+     한때 DS 웹 스케일(본문 14px = Core size)로 한 단씩 올렸다. DS 기준으로는
+     맞지만, 이 제품에서는 표·배지·캡션이 전부 한 단씩 커지면서 한 화면에 들어오는
+     정보가 눈에 띄게 줄었다 — 계보·파이프라인·품질 표를 훑는 도구인데 훑을 거리가
+     늘어난 것이다. 「전체적으로 퍼져 보인다」 는 지적의 뿌리가 여기였다.
+
+     그래서 **크기·간격은 원래 값**으로 돌리고, DS 에서는 색·서체·굵기 체계만
+     가져간다. 서체가 Wanted Sans 로 바뀌어 같은 13px 도 Noto Sans KR 보다 또렷하다.
 
      역할 → 단
-       페이지 제목            --fs-page      18   ← 전역 헤더 브랜드와 같은 급
+       KPI 수치               --fs-display   26
+       페이지 제목            --fs-page      18
        섹션 · 모달 제목        --fs-title     16
        카드 · 패널 제목        --fs-strong    14
        본문 · 버튼 · 입력 · 탭  --fs-body      13   ← 기준
        보조 본문 · 폼 라벨      --fs-sm        12
        캡션 · 메타 · 표머리 · 배지 --fs-cap    11
        캔버스 노드 내부         --fs-micro     10   (좁은 상자 전용 예외)
-       KPI 수치               --fs-display   26
 
      새 크기를 쓰고 싶으면 여기에 단을 더한다 — 규칙 바깥의 px 을 쓰지 않는다. */
   /* 전역 헤더 — 화면 폭과 무관하게 **고정**이다.
      폭에 따라 글자·컨트롤을 키우면 같은 헤더가 모니터마다 다른 제품처럼 보이고,
      본문 글자와의 크기 관계도 화면마다 달라진다. 반응형은 padding·gap·요소 배치와
      보조 정보 숨김·버튼 축약으로만 대응한다(아래 #app.nar / .xnar).
-     값을 여기 모아 두는 이유는, 페이지마다 헤더를 다시 정의하지 못하게 하려는 것이다. */
-  --hd-h:60px;        /* 헤더 높이 */
-  --hd-brand:18px;    /* 브랜드 */
-  --hd-nav:14px;      /* 메뉴 */
-  --hd-logo:32px;     /* 브랜드 배지 */
-  --hd-ctl:34px;      /* 아이콘 버튼 */
-  --hd-ic:18px;       /* 아이콘 버튼 안 아이콘 */
+     값을 여기 모아 두는 이유는, 페이지마다 헤더를 다시 정의하지 못하게 하려는 것이다.
+
+     ── 높이 64 ─────────────────────────────────────────────────────
+     한때 DS TopNav 규격인 52 를 썼다. 그 값은 DS 가 «심볼 28 + 워드마크 15» 를
+     전제로 잡은 것인데, 로고를 규정의 38/24 조합으로 키우면서 52 안에서는 심볼
+     위아래로 7px 밖에 남지 않아 로고가 띠에 끼인 것처럼 보였다.
+
+     로고 규정의 헤더 예시 비율(심볼 28 / 높이 52 ≒ 0.54)을 심볼 38 에 그대로
+     적용하면 70 이 나오지만, 여기는 데이터 도구라 헤더가 세로를 그만큼 가져가면
+     캔버스와 표가 줄어든다. 64 는 심볼 위아래 13px 을 주면서 그 손해를 12px 로
+     막는 지점이다.
+
+     띠가 두꺼워진 만큼 **안에 든 것도 함께 키운다** — 컨트롤 32(MD) → 40(LG),
+     아이콘 18 → 20, 메뉴 14 → 15. 높이만 올리고 내용물을 그대로 두면 빈 띠가
+     두꺼워질 뿐이라 오히려 헐거워 보인다. */
+  --ana-frame-min:1100px;  /* 임베드 대시보드가 눌리지 않는 최소 폭 */
+  --hd-h:64px;        /* 헤더 높이 */
+  /* 브랜드 — 로고 규정의 가로 조합에서 **심볼 38 / 워드마크 24** 짝을 쓴다.
+     규정이 예시로 조판해 둔 조합(「컬러 운용 4종」)이라 둘의 비율(0.63)이 규정 그대로다.
+     규정의 «웹 헤더 권장 심볼 28px» 보다 한 단 크다 — 28/18 로 두면 264px 브랜드 칸
+     안에서 로고가 146px 만 쓰고 70px 을 비워, 칸에 비해 로고가 작아 보였다.
+     38/24 는 194px 이라 칸을 제대로 채우면서 22px 여유가 남는다.
+
+     더 키우려면 헤더 높이부터 올려야 한다 — 64 안에서 심볼 38 은 위아래 13px 이고,
+     44 를 넘기면 다시 띠에 닿는다. */
+  --hd-brand:24px;    /* 워드마크 */
+  --hd-nav:15px;      /* 메뉴 — DS --w-fs-lg. 로고가 커진 만큼 한 단 올린다 */
+  --hd-logo:38px;     /* 심볼 */
+  --hd-ctl:var(--w-h-lg);    /* 아이콘 버튼 40 (DS LG) */
+  --hd-ic:20px;       /* 아이콘 버튼 안 아이콘 */
+  /* 브랜드 영역 폭 — 좌측 패널(.mod-l) 기본 폭과 **같은 값이어야 한다.**
+     헤더의 «DATA MATES» 칸과 그 아래 카탈로그·파이프라인 목록의 오른쪽 경계가
+     한 세로선으로 맞아야 헤더 좌측이 «패널 위의 이름표» 로 읽힌다. 어긋나면
+     4px 씩 밀린 두 개의 선이 보인다.
+     짝: js/b00.js 의 S.leftW(264). 한쪽만 고치면 선이 갈라지므로 함께 고친다. */
+  --brand-w:264px;
+  /* 접힌 좌측 패널(.mod-l.closed) 폭 */
+  --rail-w:44px;
   --fs-micro:10px; --fs-cap:11px; --fs-sm:12px; --fs-body:13px;
   --fs-strong:14px; --fs-title:16px; --fs-page:18px; --fs-display:26px;
   /* 행간 — 제목은 좁게, 본문은 넉넉히, 컨트롤·캡션은 그 사이 */
   --lh-tight:1.3; --lh-snug:1.4; --lh-base:1.5;
-  /* 굵기 — 본문 400 · 라벨 500 · 제목 700.
-     원래 500·600·620·650·700·750·800 일곱 가지를 썼는데, 불러오는 Noto Sans KR 은
-     400·500·700 세 가지뿐이라 600 이상은 전부 700 으로 그려지고 있었다.
-     보이는 것과 적힌 것을 맞춘다. */
-  --fw-reg:400; --fw-med:500; --fw-bold:700;
-  --tab-w:176px;--r-s:6px; --r-m:8px; --r-l:12px;
-  --sans:'Noto Sans KR','Noto Sans CJK KR','Apple SD Gothic Neo',system-ui,-apple-system,sans-serif;
-  --mono:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace;
+  /* 굵기 — DS 5단(400 · 510 · 590 · 700 · 860) 중 넷을 쓴다.
+     Wanted Sans 는 가변 축 400–1000 이라 510·590 이 근사 없이 그대로 그려진다.
+     **--fw-semi(590) 를 새로 둔 것이 이번 개편의 핵심 하나다** — 카드·모달·섹션
+     제목이 전부 700 이라 «굵음»이 위계를 못 만들고 있었다. 700 은 페이지 제목과
+     KPI 수치처럼 화면에 몇 개 없는 것만 쓴다. */
+  --fw-reg:400; --fw-med:var(--fw-medium); --fw-semi:var(--fw-semibold); --fw-bold:700;
+  --tab-w:176px;
+  /* 추이 막대 폭 상한 — 막대(.trend i)와 날짜축(.trend-x span)이 함께 읽는다 */
+  --trend-bar:52px;
+  /* ── 캔버스 면 — DS 팔레트 밖의 값을 의도적으로 남긴 자리 ──────────────
+     원래 화면이 쓰던 파랑 기운 흰색 네 개다. 개편 때 «새 색을 만들지 않는다» 는
+     DS 규칙에 맞춰 --bg + 검정 2% 로 바꿨는데, 그러면 계보·파이프라인 캔버스가
+     250 → **241** 로 내려간다. 캔버스는 노드가 **흰 카드로 떠 있어야** 하는 면이라
+     배경이 카드 흰색에 가까워지면 상자가 면에 잠기고, 반대로 어두워지면 화면
+     절반이 회색 판이 된다. 원래 값이 이 균형을 잡고 있었으므로 그대로 되돌린다.
+
+     이 다섯 개는 **넓은 바탕면 전용**이다. 컴포넌트에서 부르지 않는다 — 팔레트
+     밖의 색이 화면 전체로 번지는 것을 막으려고 이름을 붙여 여기 모아 둔다. */
+  --canvas-bg:#F7F8FA;    /* 계보·모델 캔버스 바탕 */
+  --canvas-dot:#E1E1E1;   /* 점 격자 */
+  --canvas-bar:#F6F7F9;   /* lin-view · pipe-view 툴바 */
+  --canvas-pipe:#F4F6FB;  /* 파이프라인 흐름 캔버스 */
+  /* 거의 흰 스크롤 면. 계보·파이프라인 캔버스가 한 단 더 밝아지는 자리와,
+     데이터 수집·파이프라인의 본문 패널이 같은 값을 쓴다(원래도 같았다). */
+  --panel-bg:#FAFBFC;
+  --r-s:var(--w-r-sm); --r-m:var(--w-r-md); --r-l:var(--w-r-lg);
+  --sans:var(--font-system);
+  --mono:var(--font-mono);
 }
 *{box-sizing:border-box}
 html,body{height:100%}
+/* 전역 letter-spacing:-0.5px 을 걷어냈다. Noto Sans KR 을 좁혀 쓰던 보정인데,
+   Wanted Sans 는 한글 자간이 이미 그렇게 짜여 있어 한 번 더 좁히면 14px 본문에서
+   글자가 서로 붙는다. DS 는 본문 자간 0 이고, 음수 자간은 큰 제목에만 준다
+   (H3 -0.1 · H2 -0.2 · H1 -0.3 · Display -0.4 — 아래 제목 규칙에서 각자 준다). */
 body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);
-  font-size:var(--fs-body);line-height:1.5;letter-spacing:-0.5px;-webkit-font-smoothing:antialiased}
+  font-size:var(--fs-body);line-height:var(--lh-base);-webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale}
 input,select,textarea{font:inherit;color:inherit}
+/* 체크박스·라디오는 브라우저 기본 컨트롤을 그대로 쓴다(14곳). DS Checkbox 는
+   <span> 두 개로 그린 컴포넌트지만, 그걸 쓰려면 14곳의 마크업과 이벤트를 다시
+   써야 하고 얻는 것은 모양뿐이다 — «DS 에 있다고 다 쓰지는 않는다».
+   대신 accent-color 로 채움색만 DS Blue 로 맞춘다. 브라우저가 그리는 체크
+   표시·초점 처리·키보드 동작은 그대로 두는 편이 안전하다. */
+input[type="checkbox"],input[type="radio"]{accent-color:var(--w-accent)}
 /* 브라우저 기본 버튼 스타일 초기화 — 테두리·배경이 남지 않게 한다 */
 button{border:0;background:transparent;appearance:none;-webkit-appearance:none;
   font:inherit;color:inherit;margin:0;padding:0;cursor:pointer;text-align:inherit}
 button::-moz-focus-inner{border:0;padding:0}
 .mono{font-family:var(--mono);letter-spacing:0}
 .num{font-variant-numeric:tabular-nums}
-/* 포커스 링 — 전 컴포넌트 공통 */
+/* 포커스 링 — 전 컴포넌트 공통.
+   DS 의 --w-focus-ring(accent 28% 3px) 하나로 통일한다. 지금까지는 컴포넌트마다
+   테두리 색만 바꿔 «어디에 초점이 있는지» 가 배경색에 따라 보였다 안 보였다 했다.
+   :focus-visible 이라 마우스 클릭에는 링이 뜨지 않고 키보드 이동에만 나타난다. */
+:where(button,a,input,select,textarea,[tabindex]):focus-visible{
+  outline:none;box-shadow:var(--w-focus-ring);border-radius:var(--r-s)}
 /* 모션 감축 — OS 에서 «동작 줄이기» 를 켠 사용자를 위해 전환·애니메이션을 끈다.
    끄지 않고 두면 전정 장애·멀미가 있는 사용자에게 사이드바 슬라이드와 스켈레톤
    파동이 그대로 돈다. 완전히 0 이 아니라 0.01ms 인 이유는, 길이를 0 으로 두면
    transitionend 를 기다리는 코드가 영원히 멈추기 때문이다. */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+}
 /* ── 지원 폭 ──────────────────────────────────────────────────
    **이 도구는 데스크톱·태블릿 가로(1024px 이상)를 지원한다.** 휴대폰 세로는
    지원하지 않는다 — 계보 캔버스·파이프라인 흐름도·다중 패널이 화면의 본체인데
@@ -115,128 +236,217 @@ button::-moz-focus-inner{border:0;padding:0}
    눌린 띠처럼 보였다. clamp 의 최솟값은 지금까지의 크기이므로 좁은 화면은
    그대로이고, 넓어질수록 헤더·브랜드·메뉴·아이콘이 같은 비율로 함께 커진다.
    1180 이하는 아래 #app.nar / .xnar 규칙이 따로 줄인다. */
+/* DS TopNav — 높이 52 · 표면 바탕 · 아래 1px.
+   좌우 배치는 **두 칸**이다 — 왼쪽은 브랜드(고정 --brand-w), 오른쪽은 페이지 이동과
+   컨트롤. gap 을 0 으로 두는 이유는, 헤더에 gap 이 있으면 브랜드 칸의 오른쪽 경계가
+   «264 + gap» 으로 밀려 아래 좌측 패널 경계와 어긋나기 때문이다. 칸 사이 간격은
+   각 칸이 자기 padding 으로 만든다. 우측 컨트롤 간격은 아래 .iconbtn+.iconbtn.
+
+   좌우 패딩을 DS TopNav 의 16 이 아니라 --w-content-pad(24)로 둔다. **왼쪽**을 맞추기
+   위한 것이다 — 로고 · 페이지 제목 · 첫 카드가 한 세로선(24px)에서 시작한다. 16 이었을
+   때는 로고만 본문보다 8px 밖으로 나가 «로고가 왼쪽으로 튀어나와 보인다» 는 느낌의
+   원인이 됐다.
+   오른쪽은 맞지 않는다(맞추려 하지 않는다) — 본문은 1200 에서 잘리는데 헤더는 전역
+   띠라 화면 끝까지 간다. 띠를 본문 폭에 맞춰 자르면 넓은 화면에서 알림·설정 버튼이
+   화면 중간에 떠 보인다. */
 .top{height:var(--hd-h);flex:none;background:var(--surface);
   border-bottom:1px solid var(--line);display:flex;align-items:center;
-  gap:14px;padding:0 16px;position:sticky;top:0;z-index:60}
+  gap:0;padding:0 var(--w-content-pad) 0 0;position:sticky;top:0;z-index:60}
 .top .iconbtn{width:var(--hd-ctl);height:var(--hd-ctl)}
 .top .iconbtn .ic{width:var(--hd-ic);height:var(--hd-ic)}
 /* .brand · .brand-m 의 실제 정의는 «전역 네비게이션» 절에 있다(button.brand).
    여기에 두면 특정도가 낮아 통째로 무효가 되고, 크기를 고칠 때 이쪽만 고쳐
    화면이 바뀌지 않는 일이 생긴다. */
-.brand-m{background:linear-gradient(135deg,var(--pri),#447CFC);
-  color:#fff;display:grid;place-items:center;font-weight:var(--fw-bold)}
+/* 브랜드 심볼 — 로고 규정의 «돛단배»(#dm-mark)를 그대로 쓴다.
+   배지(파란 라운드 사각) 안에 넣지 않는다. 규정에서 파란 사각은 «앱 아이콘·파비콘»
+   운용이고, 웹 헤더는 심볼이 배경 없이 워드마크와 나란히 서는 «가로 조합» 이다.
+   배지를 두면 헤더에 앱 아이콘이 박힌 것처럼 읽힌다.
+   선체가 currentColor 라 .brand 의 색(--ink)을 물려받고, 돛 두 장은 심볼 안에
+   팔레트 고정색으로 박혀 있다. */
+.brand-m{display:block;color:inherit}
 .ctx{display:flex;align-items:center;gap:6px;margin-left:6px}
 .ctx-sep{color:var(--faint);font-size:var(--fs-sm)}
-select.sel{height:32px;border:1px solid var(--line-str);border-radius:var(--r-s);background:var(--surface);
-  padding:0 26px 0 9px;font-size:var(--fs-body);color:var(--text);cursor:pointer;
-  appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23777777' stroke-width='2.2' stroke-linecap='round'><path d='m6 9 6 6 6-6'/></svg>");
-  background-repeat:no-repeat;background-position:right 8px center}
-select.sel:hover{border-color:var(--line-focus)}
-select.sel.env{font-weight:var(--fw-bold)}
+select.sel{height:var(--w-h-md);border:1px solid var(--line-str);border-radius:var(--r-s);
+  background-color:var(--surface);padding:0 28px 0 var(--w-px-sm);font-size:var(--fs-body);
+  color:var(--text);cursor:pointer}
+select.sel.env{font-weight:var(--fw-med)}
 .env-dot{width:7px;height:7px;border-radius:50%;display:inline-block}
 .topsearch{margin-left:auto;position:relative;width:min(420px,32vw)}
-.topsearch input{width:100%;height:32px;border:1px solid var(--line-str);border-radius:var(--r-s);
-  background:var(--surface-2);padding:0 10px 0 32px;font-size:var(--fs-body)}
-.topsearch input::placeholder{color:var(--faint)}
-.topsearch input:focus{background:var(--surface);border-color:var(--line-focus);outline:none}
-.topsearch .ic{position:absolute;left:9px;top:7px;color:var(--muted)}
-.iconbtn{width:32px;height:32px;border:0;background:none;border-radius:var(--r-s);color:var(--muted);
-  display:grid;place-items:center;cursor:pointer;position:relative}
+.topsearch input{width:100%;height:var(--w-h-md);border:1px solid var(--line-str);border-radius:var(--r-s);
+  background:var(--surface-2);padding:0 var(--w-px-sm) 0 32px;font-size:var(--fs-body);color:var(--text)}
+.topsearch input::placeholder{color:var(--w-text-3)}
+.topsearch input:focus{background:var(--surface);border-color:var(--w-border-focus);outline:none;
+  box-shadow:var(--w-focus-ring)}
+.topsearch .ic{position:absolute;left:10px;top:50%;margin-top:-8px;color:var(--w-text-3)}
+/* DS IconButton (ghost · MD 32) — 평소 secondary, 올리면 오버레이 + primary */
+.iconbtn{width:var(--w-h-md);height:var(--w-h-md);border:0;background:none;border-radius:var(--r-s);
+  color:var(--muted);display:grid;place-items:center;cursor:pointer;position:relative;
+  transition:background var(--w-dur) var(--w-ease),color var(--w-dur) var(--w-ease)}
 .iconbtn:hover{background:var(--hover-o);color:var(--text)}
-.dot-n{position:absolute;top:6px;right:6px;width:6px;height:6px;border-radius:50%;background:var(--err)}
-.me{display:flex;align-items:center;gap:7px;height:34px;padding:0 8px 0 5px;border:1px solid var(--line-str);
-  border-radius:999px;background:var(--surface);cursor:pointer}
-.me:hover{border-color:var(--line-focus)}
-.av{width:24px;height:24px;border-radius:6px;background:var(--pri-soft);color:var(--pri-ink);
-  display:grid;place-items:center;font-size:var(--fs-cap);font-weight:var(--fw-bold);flex:none}
+.iconbtn:active{background:var(--w-active)}
+/* 알림 점 — DS Badge 의 dot 변형(8px). 표면과 만나는 자리라 테두리로 떼어 놓는다. */
+.dot-n{position:absolute;top:5px;right:5px;width:8px;height:8px;border-radius:50%;
+  background:var(--err);border:2px solid var(--surface);box-sizing:content-box}
+.me{display:flex;align-items:center;gap:var(--w-s-2);height:var(--w-h-md);padding:0 var(--w-s-2) 0 5px;
+  border:1px solid var(--line-str);border-radius:var(--w-r-pill);background:var(--surface);cursor:pointer}
+.me:hover{background:var(--w-hover)}
+/* DS Avatar — radius sm, accent 12% 바탕에 accent 글자 */
+.av{width:24px;height:24px;border-radius:var(--r-s);background:var(--pri-soft);color:var(--pri-ink);
+  display:grid;place-items:center;font-size:var(--fs-cap);font-weight:var(--fw-semi);flex:none}
 .me-role{font-size:var(--fs-cap);color:var(--muted)}
 
 .shell{flex:1;min-height:0;display:flex}
-.side{width:220px;flex:none;background:var(--bg);border-right:1px solid var(--line);
-  padding:10px 10px 12px;display:flex;flex-direction:column;gap:2px}
-.side-l{font-size:var(--fs-cap);font-weight:var(--fw-bold);letter-spacing:-0.3px;color:var(--faint);
-  text-transform:none;padding:12px 8px 6px}
-.nav-i{display:flex;align-items:center;gap:9px;height:36px;padding:0 9px;border-radius:var(--r-s);
-  color:var(--text);cursor:pointer;font-size:var(--fs-body);border:0;background:none;width:100%;text-align:left}
-.nav-i .ic{color:var(--muted);flex:none}
-.nav-i:hover{background:var(--hover-o)}
-.nav-i.on{background:var(--sel-o);color:var(--pri);font-weight:var(--fw-bold)}
-.nav-i.on .ic{color:var(--pri)}
-.nav-c{margin-left:auto;font-size:var(--fs-cap);color:var(--faint)}
-.nav-i.on .nav-c{color:var(--pri)}
-.nav-b{margin-left:auto;min-width:17px;height:17px;padding:0 5px;border-radius:9px;background:var(--err);
-  color:#fff;font-size:var(--fs-cap);font-weight:var(--fw-bold);display:grid;place-items:center}
-.side-f{margin-top:auto;border-top:1px solid var(--line-2);padding-top:8px}
-.side-note{font-size:var(--fs-cap);color:var(--faint);padding:6px 9px;line-height:1.45}
+/* 전역 사이드바(.side)의 내부 부품 규칙 — .side-l · .nav-i · .nav-c · .side-f ·
+   .side-note — 은 여기 있었으나 지웠다. v4.6 이 사이드바를 걷어낸 뒤로 어느
+   화면에도 실체가 없다(아래 «전역 사이드바 잔해 정리» 절 참고).
+   화면 안의 좌측 목록은 .side 가 아니라 .mod-l 이다.
+
+   .nav-b 만 남는다 — 헤더 메뉴(.gnav-i) 위의 알림 개수 배지가 이 클래스를 쓴다.
+   DS Badge 의 count 변형(최소 20 · pill · danger 채움)을 따른다. */
+.nav-b{margin-left:auto;min-width:20px;height:20px;padding:0 6px;border-radius:var(--w-r-pill);
+  background:var(--err);color:var(--w-text-on-accent);font-size:var(--fs-cap);font-weight:var(--fw-semi);
+  display:grid;place-items:center;font-variant-numeric:tabular-nums}
 
 .main{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
-.page{flex:1;min-height:0;overflow:auto;padding:20px 24px 32px}
+/* 본문 패딩 — DS content pad 24. 아래만 32 로 남긴다(마지막 카드가 뷰포트
+   밑단에 붙지 않게).
+
+   ── 본문 최대 폭 ──────────────────────────────────────────────
+   처음에는 --w-content-max(1200)를 아예 쓰지 않았다. 계보 캔버스·흐름도·컬럼이 많은
+   표가 이 제품의 본체라 1200 에서 자르면 주된 작업이 좁아진다고 봤다. 그 판단은
+   **캔버스 화면에만** 맞았다. 홈·품질처럼 카드와 표가 세로로 쌓이는 문서형 화면은
+   1440 을 꽉 채우면 KPI 다섯 칸이 각각 270px 로 벌어지고 표 네 칸이 780px 에 흩어져,
+   읽을 것은 그대로인데 눈이 훑어야 하는 거리만 늘어난다 — «퍼져 보인다» 는 게 이것이다.
+
+   그래서 문서형 화면(.page)에만 상한을 걸고, 캔버스·패널 화면(.page.flush)은 전폭을
+   유지한다. **가운데 정렬하지 않는다** — margin:0 auto 를 주면 왼쪽 여백이 화면 폭에
+   따라 변해 헤더 로고(24px)와의 세로선이 깨진다. DS 의 .wc-shell__content 도 auto
+   마진 없이 좌측 정렬이다. */
+.page{flex:1;min-height:0;overflow:auto;padding:var(--w-s-5) var(--w-content-pad) var(--w-s-8)}
 .page.flush{padding:0;overflow:hidden;display:flex;flex-direction:column}
+/* ── 제목 — 화면마다 갈라져 있던 것을 두 규격으로 모은다 ────────────────
+   여섯 화면이 제목을 저마다 다른 그릇에 담고 있다 — 홈·데이터 분석은 .page-t,
+   데이터 모델·파이프라인은 46px 툴바(.mod-bar)의 .b6, 데이터 분석 상세는
+   .ana-top .tt. 그릇을 하나로 합치려면 화면 구조를 다시 짜야 하므로(정보 구조
+   유지가 원칙) **그릇은 그대로 두고 제목의 타입 규격만 여기서 정한다.**
+
+   역할이 정말 둘이라 두 단으로 나눈다 — 하나로 눌러 붙이면 46px 툴바에 20px
+   제목이 들어가 바가 제목에 눌린다.
+     본문 흐름의 페이지 제목  → DS H2 20/28/590/-0.2   (.page-t)
+     바 안의 제목            → DS H3 17/24/590/-0.1   (.mod-bar · .ana-top)
+   지금까지 이 자리들은 18 / 16 / 15 / 13px 에 굵기·자간도 각자였다. */
 .page-h{display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;flex-wrap:wrap}
-.page-t{font-size:var(--fs-page);font-weight:var(--fw-bold);color:var(--ink);letter-spacing:-0.5px;margin:0}
-.page-d{font-size:var(--fs-sm);color:var(--muted);margin:3px 0 0}
+.page-t{font-size:var(--fs-page);line-height:var(--lh-tight);font-weight:var(--fw-semi);
+  color:var(--ink);letter-spacing:-0.2px;margin:0}
+.page-d{font-size:var(--fs-sm);color:var(--muted);margin:var(--w-s-1) 0 0}
 .page-a{margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 
-/* ───────── 기본 컴포넌트 ───────── */
-.btn{height:32px;padding:0 12px;border-radius:var(--r-s);border:1px solid #B4B4B4;background:var(--surface);
-  color:var(--text);font-size:var(--fs-body);display:inline-flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap}
-.btn:hover{border-color:var(--line-focus);background:var(--surface)}
-.btn.pri{background:var(--pri);border-color:var(--pri);color:#fff;font-weight:var(--fw-bold)}
-.btn.pri:hover{background:var(--pri-hover);border-color:var(--pri-hover)}
+/* ───────── 기본 컴포넌트 ─────────
+   DS 규격: 컨트롤 4단(LG 40 · MD 32 · SM 28 · XS 24), radius sm 6,
+   글자 MD 14 / SM 13, 라벨 굵기 510. 이 앱은 MD 를 기본으로 쓰고 좁은 바에서
+   SM 을 쓴다 — LG·XS 는 쓸 자리가 없어 두지 않았다. */
+.btn{height:var(--w-h-md);padding:0 var(--w-px-md);border-radius:var(--r-s);
+  border:1px solid var(--line-str);background:var(--surface);
+  color:var(--text);font-size:var(--fs-body);font-weight:var(--fw-med);
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;white-space:nowrap;
+  transition:background var(--w-dur) var(--w-ease),border-color var(--w-dur) var(--w-ease),
+    color var(--w-dur) var(--w-ease)}
+/* DS 의 secondary 버튼은 마우스를 올릴 때 **테두리가 아니라 바탕**이 바뀐다.
+   테두리 색만 바꾸던 방식은 흰 카드 위에서 변화가 거의 안 보였다. */
+.btn:hover{background:var(--w-hover)}
+.btn:active{background:var(--w-active)}
+.btn.pri{background:var(--pri);border-color:transparent;color:var(--w-text-on-accent);font-weight:var(--fw-med)}
+.btn.pri:hover{background:var(--pri-hover)}
+.btn.pri:active{filter:brightness(.92)}
 .btn.gho{border-color:transparent;background:none;color:var(--muted)}
 .btn.gho:hover{background:var(--hover-o);color:var(--text)}
-.btn.sm{height:28px;padding:0 10px;font-size:var(--fs-sm);gap:4px}
+.btn.gho:active{background:var(--w-active)}
+.btn.sm{height:var(--w-h-sm);padding:0 var(--w-px-sm);font-size:var(--fs-sm);gap:4px}
 .btn.dngr{color:var(--err);border-color:var(--err-line)}
-.btn:disabled{background:#F4F4F4;border-color:#D3D3D3;color:#B4B4B4;cursor:not-allowed}
-.btn.pri:disabled{background:#D3D3D3;border-color:#D3D3D3;color:#fff}
-.btn:disabled:hover{background:#F4F4F4;border-color:#D3D3D3}
+.btn.dngr:hover{background:var(--err-soft)}
+/* 비활성 — DS 는 회색을 새로 만들지 않고 hover 오버레이 + disabled 글자색을 쓴다 */
+.btn:disabled,.btn.pri:disabled{pointer-events:none;background:var(--w-hover);
+  border-color:transparent;color:var(--w-text-disabled)}
 
-.inp{height:32px;border:1px solid var(--line-str);border-radius:var(--r-s);background:var(--surface);
-  padding:0 10px;font-size:var(--fs-body);width:100%}
-.inp::placeholder{color:#B4B4B4}
-.inp:disabled{background:#FAFAFA;color:#B4B4B4}
-.inp::placeholder{color:var(--faint)}
-.inp:focus{outline:none;border-color:var(--line-focus)}
-textarea.inp{height:auto;padding:8px 10px;line-height:1.6;resize:vertical}
-select.inp{appearance:none;-webkit-appearance:none;color:var(--text);cursor:pointer;
-  padding:0 28px 0 10px;
-  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23777777' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
-  background-repeat:no-repeat;background-position:right 9px center}
-select.inp:hover{border-color:var(--line-focus)}
+.inp{height:var(--w-h-md);border:1px solid var(--line-str);border-radius:var(--r-s);background:var(--surface);
+  padding:0 var(--w-px-sm);font-size:var(--fs-body);width:100%;color:var(--text);
+  transition:border-color var(--w-dur) var(--w-ease),box-shadow var(--w-dur) var(--w-ease)}
+.inp::placeholder{color:var(--w-text-3)}
+.inp:disabled{background:var(--surface-2);border-color:var(--line);color:var(--w-text-disabled)}
+/* 초점은 테두리 색 + 링을 함께 준다. 색만 바꾸면 흰 배경에서 눈에 띄지 않는다. */
+.inp:focus{outline:none;border-color:var(--w-border-focus);box-shadow:var(--w-focus-ring)}
+textarea.inp{height:auto;padding:var(--w-s-2) var(--w-px-sm);line-height:var(--lh-base);resize:vertical}
+/* 캐럿 색을 --w-text-3 의 실제 값으로 굽는다 — data URI 안에서는 var() 가 풀리지 않는다 */
+select.inp,select.sel{appearance:none;-webkit-appearance:none;color:var(--text);cursor:pointer;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(0,0,0,0.5)' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat:no-repeat;background-position:right 10px center}
+select.inp{padding:0 28px 0 var(--w-px-sm)}
+select.inp:hover,select.sel:hover{background-color:var(--w-hover)}
 .srch{position:relative;flex:none}
-.srch input{padding-left:30px}
-.srch .ic{position:absolute;left:9px;top:7px;color:var(--muted);pointer-events:none}
+.srch input{padding-left:32px}
+.srch .ic{position:absolute;left:10px;top:50%;margin-top:-8px;color:var(--faint);pointer-events:none}
 
-.chip{height:28px;padding:0 11px;border-radius:1000px;border:1px solid var(--line-str);background:var(--surface);
-  font-size:var(--fs-sm);color:var(--text);display:inline-flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap}
-.chip:hover{border-color:var(--line-focus)}
-.chip.on{background:#333333;border-color:#333333;color:#fff}
-.chip-c{font-weight:var(--fw-bold);color:var(--pri);font-variant-numeric:tabular-nums}
-.chip.on .chip-c{color:#fff;opacity:.85}
+/* 필터 칩 — DS 에 칩 컴포넌트는 없다. Tabs 의 pill 변형(높이 30 · pill · 활성은
+   accent 채움)을 칩으로 재해석했다. 활성색이 검정(#333)이던 것을 accent 로 바꾼
+   이유는, 검정 채움이 화면에서 가장 강한 요소가 되어 Primary 버튼보다 세게
+   읽혔기 때문이다. */
+.chip{height:28px;padding:0 11px;border-radius:var(--w-r-pill);
+  border:1px solid var(--line-str);background:var(--surface);
+  font-size:var(--fs-sm);color:var(--muted);display:inline-flex;align-items:center;gap:6px;
+  cursor:pointer;white-space:nowrap;transition:background var(--w-dur) var(--w-ease),
+    color var(--w-dur) var(--w-ease),border-color var(--w-dur) var(--w-ease)}
+.chip:hover{background:var(--w-hover);color:var(--text)}
+.chip.on{background:var(--pri);border-color:transparent;color:var(--w-text-on-accent);font-weight:var(--fw-med)}
+.chip-c{font-weight:var(--fw-semi);color:var(--pri);font-variant-numeric:tabular-nums}
+.chip.on .chip-c{color:var(--w-text-on-accent);opacity:.85}
 
-.bdg{height:20px;padding:0 7px;border-radius:4px;font-size:var(--fs-cap);font-weight:var(--fw-bold);letter-spacing:-0.1px;
-  display:inline-flex;align-items:center;gap:4px;white-space:nowrap;border:1px solid transparent}
-.bdg.ok{background:var(--ok-soft);color:var(--ok);border-color:var(--ok-line)}
-.bdg.warn{background:var(--warn-soft);color:var(--warn);border-color:var(--warn-line)}
-.bdg.err{background:var(--err-soft);color:var(--err);border-color:var(--err-line)}
-.bdg.info{background:var(--info-soft);color:var(--info);border-color:#C3D7FF}
-.bdg.pri{background:var(--pri-soft);color:var(--pri-ink);border-color:var(--pri-line)}
-.bdg.mute{background:var(--surface-3);color:var(--muted);border-color:var(--line)}
-.bdg.wait{background:var(--surface-3);color:var(--faint);border-color:var(--line);border-style:dashed}
-.bdg .dt{width:6px;height:6px;border-radius:50%;background:currentColor}
-.tag{height:19px;padding:0 6px;border-radius:4px;background:var(--surface-3);color:var(--muted);
+/* 배지 · 태그 — DS 는 둘의 모양을 다르게 준다. 지금까지 둘 다 radius 4 라
+   «상태»(성공·실패)와 «분류표»(테이블명·계층)가 같은 부품처럼 보였다.
+     .bdg 상태 → pill · 12px · 590 · 테두리 없음 (DS Badge)
+     .tag 분류 → radius 4 · 12px · 510 (DS Tag)
+   색은 DS Badge 의 TONES 값 그대로다 — 바탕은 accent 의 12~16% 농도, 글자는
+   accent 원색. 테두리를 뺀 이유는 DS Badge 에 테두리가 없고, 20px 높이에
+   1px 테두리까지 넣으면 표 안에서 배지가 버튼처럼 눌러보이기 때문이다. */
+.bdg{height:20px;padding:0 var(--w-s-2);border-radius:var(--w-r-pill);
+  font-size:var(--fs-cap);font-weight:var(--fw-semi);line-height:1;
+  display:inline-flex;align-items:center;gap:5px;white-space:nowrap;border:1px solid transparent}
+.bdg.ok{background:var(--ok-soft);color:var(--ok)}
+.bdg.warn{background:var(--warn-soft);color:var(--warn)}
+.bdg.err{background:var(--err-soft);color:var(--err)}
+.bdg.info{background:var(--info-soft);color:var(--info)}
+.bdg.pri{background:var(--pri-soft);color:var(--pri-ink)}
+.bdg.mute{background:rgba(0,0,0,.06);color:var(--muted)}
+/* 대기는 «아직 아무 일도 일어나지 않았다» 는 뜻이라 색만으로는 mute 와 구별되지
+   않는다. 파선 테두리를 남겨 색이 아닌 형태로도 읽히게 한다. */
+.bdg.wait{background:transparent;color:var(--muted);border-color:var(--line-str);border-style:dashed}
+.bdg .dt{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.tag{height:19px;padding:0 6px;border-radius:var(--w-r-xs);
+  background:rgba(0,0,0,.06);color:var(--muted);font-weight:var(--fw-med);
   font-size:var(--fs-cap);display:inline-flex;align-items:center;white-space:nowrap}
-.tag.cert{background:var(--pri-soft);color:var(--pri-ink);font-weight:var(--fw-bold)}
+.tag.cert{background:var(--pri-soft);color:var(--pri-ink);font-weight:var(--fw-semi)}
 
+/* 카드 — DS Card. 헤더 최소높이 56 · 본문 패딩 16 · 구분선 --w-border.
+   패딩이 12/14 로 4배수를 벗어나 있었고 카드 제목이 700 이라 페이지 제목과
+   구별되지 않았다. 제목을 590(H4 15px)으로 내려 페이지 제목(20px)과 카드
+   제목 사이에 실제 단차를 만든다.
+   그림자는 DS shadow-1 이 테두리 역할까지 겸하므로(0 0 0 1px 포함) 테두리와
+   함께 쓰면 선이 두 겹이 된다 — 테두리를 두고 그림자는 뺀다. */
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-m);
-  box-shadow:var(--shadow-1);display:flex;flex-direction:column;min-width:0}
-.card-h{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line-2)}
-.card-t{font-size:var(--fs-strong);font-weight:var(--fw-bold);color:var(--ink)}
+  display:flex;flex-direction:column;min-width:0}
+/* 카드 헤더 — DS 는 min-height 56 인데 44 로 둔다. DS 의 56 은 제목 아래 보조 설명이
+   한 줄 더 붙는 구성(.wc-card__sub)을 담기 위한 높이이고, 이 앱의 카드 헤더는 제목
+   한 줄 + 오른쪽 메타 한 줄이라 56 이면 위아래로 빈 띠가 남는다. */
+.card-h{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line);min-height:44px}
+.card-t{font-size:var(--fs-strong);font-weight:var(--fw-semi);color:var(--ink)}
 .card-b{padding:14px}
 .card-b.tight{padding:0}
-.card-f{padding:9px 14px;border-top:1px solid var(--line-2);display:flex;align-items:center;gap:8px}
-.lnk{color:var(--pri);font-size:var(--fs-sm);cursor:pointer;text-decoration:none;background:none;border:0;padding:0}
-.lnk:hover{text-decoration:underline}
+.card-f{padding:9px 14px;border-top:1px solid var(--line);display:flex;align-items:center;gap:8px}
+.lnk{color:var(--pri);font-size:var(--fs-sm);font-weight:var(--fw-med);cursor:pointer;
+  text-decoration:none;background:none;border:0;padding:0}
+/* 올렸을 때 밑줄을 긋지 않는다 — 색이 진해지는 것만으로 «누를 수 있다» 가 읽히고,
+   밑줄이 생기면 글자 아래 1px 이 들어오면서 줄 높이가 흔들려 보인다.
+   이 앱의 .lnk 는 대부분 <button> 이라 문서 안 하이퍼링크도 아니다. */
+.lnk:hover{color:var(--w-accent-hover)}
 
 .grid{display:grid;gap:14px}
 .row{display:flex;align-items:center;gap:8px}
@@ -246,35 +456,79 @@ select.inp:hover{border-color:var(--line-focus)}
 .f1{flex:1;min-width:0}
 .g4{gap:4px}.g6{gap:6px}.g10{gap:10px}.g12{gap:12px}.g14{gap:14px}
 .mut{color:var(--muted)}.fnt{color:var(--faint)}
-.t11{font-size:var(--fs-cap)}.t12{font-size:var(--fs-sm)}.t13{font-size:var(--fs-body)}.t15{font-size:var(--fs-title)}.t17{font-size:var(--fs-title)}
-.b6{font-weight:var(--fw-bold)}.b7{font-weight:var(--fw-bold)}
+/* 크기 유틸리티 — 마크업이 t11 · t12 · t13 · t15 네 개를 쓴다(t17 은 쓰이지 않아
+   지웠다. t15 와 같은 값을 가리키는 중복이기도 했다).
+   .t15 는 «페이지 안 섹션 제목»(확인이 필요한 규칙 · 데이터별 품질)과 «바·독의
+   대상 이름»(모델명 · 파이프라인명) 두 곳에 쓰이는데, 둘 다 카드 제목(15)보다
+   한 단 위여야 읽히므로 H3 17 로 둔다. 카드 제목 15 → 섹션 제목 17 → 페이지
+   제목 20 세 단이 이렇게 만들어진다. */
+.t11{font-size:var(--fs-cap)}.t12{font-size:var(--fs-sm)}.t13{font-size:var(--fs-body)}
+.t15{font-size:var(--fs-title)}
+/* 마크업이 쓰는 굵기 유틸리티는 .b6 하나다(56곳). 이름이 «600» 을 가리키는데
+   실제로는 700 이 나가고 있었다 — 불러오는 Noto Sans KR 에 600 이 없어 700 으로
+   떨어졌기 때문이다. Wanted Sans 는 가변 축이라 590 이 그대로 그려지므로 이름과
+   결과를 맞춘다. 이 한 줄이 이름·제목·강조 56곳의 굵기를 한꺼번에 내린다.
+   (.b7 은 마크업에서 쓰이지 않아 지웠다.) */
+.b6{font-weight:var(--fw-semi)}
 .trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-/* KPI */
+/* KPI — 수치가 화면의 주인공인 자리다. DS Display(32/40 700)를 수치에 주고
+   라벨은 Small(13) secondary, 보조는 Caption(12) secondary 로 세 단을 만든다.
+   패딩을 13/15 → 16(4배수)으로, 수치 자간을 -1px → DS Display 의 -0.4px 로. */
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:12px}
 .kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-m);padding:13px 15px;
-  display:flex;flex-direction:column;gap:3px;box-shadow:var(--shadow-1);min-width:0}
+  display:flex;flex-direction:column;gap:3px;min-width:0}
 .kpi-l{font-size:var(--fs-sm);color:var(--muted);display:flex;align-items:center;gap:5px}
-.kpi-v{font-size:var(--fs-display);font-weight:var(--fw-bold);letter-spacing:-1px;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.15}
-.kpi-s{font-size:var(--fs-cap);color:var(--faint)}
-.kpi.act{cursor:pointer}
-.kpi.act:hover{border-color:var(--pri-line);box-shadow:var(--shadow-2)}
+/* DS Display 는 700 이다 — 화면에서 700 을 쓰는 자리는 KPI 수치와 브랜드뿐이다 */
+.kpi-v{font-size:var(--fs-display);font-weight:var(--fw-bold);letter-spacing:-0.4px;color:var(--ink);
+  font-variant-numeric:tabular-nums;line-height:1.25}
+.kpi-s{font-size:var(--fs-cap);color:var(--muted)}
+.kpi.act{cursor:pointer;transition:background var(--w-dur) var(--w-ease),
+  border-color var(--w-dur) var(--w-ease)}
+.kpi.act:hover{border-color:var(--pri-line);background:var(--sel-o)}
+/* 차트 툴팁 — 홈의 도넛·용량 막대·추이 막대가 함께 쓴다.
+   바탕이 불투명 검정 85% 인 이유는 차트 색 위에 떠도 글자가 읽혀야 하기 때문이다.
+   표면색(--surface)으로 두면 같은 밝기의 조각 위에서 경계가 사라진다.
+   위치(left/top/transform)는 쓰는 쪽이 정한다 — 도넛은 가운데 위, 막대는 끝에 붙는다. */
+.chart-tip{position:absolute;z-index:3;background:rgba(0,0,0,.85);color:#fff;
+  padding:7px 10px;border-radius:var(--w-r-sm);white-space:nowrap;pointer-events:none;
+  box-shadow:var(--w-shadow-2);font-size:var(--fs-cap);line-height:16px;
+  font-variant-numeric:tabular-nums}
+/* position 을 준 요소라 hidden 만으로는 안 사라진다 */
+.chart-tip[hidden]{display:none}
+/* 조각을 가리키면 굵어지고, 나머지 조각은 흐려진다 — DS 의 전환값(150ms) */
+.donut-seg{transition:stroke-width var(--w-dur) var(--w-ease);cursor:pointer}
+.bar-seg{transition:opacity var(--w-dur) var(--w-ease);cursor:pointer}
 
-/* 표 */
+/* 홈의 KPI 4장. auto-fit 에 맡기면 폭에 따라 3+1 로 끊겨 한 장이 혼자 남는다 —
+   4 아니면 2 로만 끊어 그 줄이 생기지 않게 한다. 1040 은 사이드 화면이 접히는
+   폭 단계(widthTier 의 xnar)와 같은 값이다. */
+.kpis.home4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:1040px){.kpis.home4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* 표 — DS DataTable 의 **compact 단계**(헤더 36 · 본문 40).
+   DS 는 본문 행을 compact 40 / default 48 / comfortable 56 세 단으로 두는데,
+   이 제품은 한 화면에서 표를 훑어 이상한 값을 찾는 쓰임이 많아 default 48 은
+   화면당 보이는 줄이 줄고 «퍼져 보인다». 데이터 도구에는 compact 가 맞는다.
+   헤더 글자를 700 → 510 으로 내렸다. 표머리가 굵으면 데이터보다 머리가 먼저
+   읽혀, 정작 봐야 할 값이 뒤로 밀린다. */
 .tbl{display:flex;flex-direction:column;min-width:0}
 .th,.tr{display:grid;grid-template-columns:var(--cols);align-items:center;gap:0}
-.th{height:40px;background:var(--bg);border-bottom:1px solid var(--line);
-  font-size:var(--fs-cap);font-weight:var(--fw-bold);color:var(--muted);position:sticky;top:0;z-index:2}
+.th{height:36px;background:var(--surface-2);border-bottom:1px solid var(--line);
+  font-size:var(--fs-sm);font-weight:var(--fw-med);color:var(--muted);position:sticky;top:0;z-index:2}
 .th>*,.tr>*{padding:0 12px;min-width:0;overflow:hidden}
-.tr{min-height:48px;border-bottom:1px solid var(--line-2);cursor:pointer}
+.tr{min-height:46px;border-bottom:1px solid var(--line);cursor:pointer}
 .tr:hover{background:var(--hover-o)}
 .tr.on{background:var(--sel-o)}
 .tr.static{cursor:default}
 .tr.static:hover{background:none}
+/* 마지막 줄의 구분선은 카드 테두리와 겹쳐 2px 로 보인다 */
+.tbl .tr:last-child{border-bottom:0}
 .c2{display:flex;flex-direction:column;justify-content:center;gap:1px;line-height:1.35;min-width:0}
 .c2>*{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.rt{text-align:right}
-.sub{font-size:var(--fs-cap);color:var(--faint);font-family:var(--mono);letter-spacing:0}
+/* 표 안 숫자는 우측 정렬 + tabular-nums (DS CONTENT FUNDAMENTALS) */
+.rt{text-align:right;font-variant-numeric:tabular-nums}
+.sub{font-size:var(--fs-cap);color:var(--muted);font-family:var(--mono);letter-spacing:0}
 
 /* 탭 ──────────────────────────────────────────────────────────
    여기는 모든 탭이 공유하는 모양만 정한다(높이·색·밑줄).
@@ -283,35 +537,48 @@ select.inp:hover{border-color:var(--line-focus)}
    보라. 섹션 전환 탭(홈·품질·모델 만들기 등)과 하단 독 탭(모델 상세·
    파이프라인 실행 상세)은 화면마다 사정이 달라 따로 관리한다 — 제목 길이에
    맞춰 폭이 잡히던 기존 방식 그대로다. */
+/* DS Tabs 의 underline 변형 — 높이 40 · 라벨 510 · 활성은 accent 2px 밑줄.
+   활성 탭을 700 으로 굵히던 것을 510 으로 낮췄다. 굵기까지 바꾸면 탭 폭이
+   전환할 때마다 움찔거리고(글자폭 변화), 밑줄과 색만으로도 충분히 읽힌다. */
 .tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);flex:none;overflow-x:auto}
-.tab{height:36px;padding:0 13px;border:0;background:none;color:var(--muted);font-size:var(--fs-body);cursor:pointer;
+.tab{height:36px;padding:0 13px;border:0;background:none;color:var(--muted);
+  font-size:var(--fs-body);font-weight:var(--fw-med);cursor:pointer;
   border-bottom:2px solid transparent;white-space:nowrap;display:flex;align-items:center;gap:6px}
 /* 제목. 이것만 줄어들고 말줄임표가 붙는다. */
 .tab-l{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
 /* 제목 외 요소는 압축 대상이 아니다. */
 .tab > .ic,.tab > .tab-c,.tab > .ptab-x,.tab > .t11{flex:none}
 .tab:hover{color:var(--text)}
-.tab.on{color:var(--pri);font-weight:var(--fw-bold);border-bottom-color:var(--pri)}
-.tab-c{font-size:var(--fs-cap);color:var(--faint)}
+.tab.on{color:var(--pri);border-bottom-color:var(--pri)}
+.tab-c{font-size:var(--fs-cap);color:var(--muted);font-variant-numeric:tabular-nums}
 .tab.on .tab-c{color:var(--pri)}
+/* DS Tabs 의 segment 변형 — 트랙은 hover 오버레이, 알약은 표면 + shadow-1,
+   내부 radius 는 xs 4 (바깥 6 안에 들어가야 모서리가 어긋나지 않는다) */
 .seg{display:inline-flex;background:var(--surface-3);border-radius:var(--r-s);padding:2px;gap:2px}
-.seg button{height:28px;padding:0 11px;border:0;background:none;border-radius:5px;font-size:var(--fs-sm);
+.seg button{height:28px;padding:0 11px;border:0;background:none;border-radius:var(--w-r-xs);
+  font-size:var(--fs-sm);font-weight:var(--fw-med);
   color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:5px}
-.seg button.on{background:var(--surface);color:var(--ink);font-weight:var(--fw-bold);box-shadow:var(--shadow-1)}
+.seg button:hover{color:var(--text)}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow-1)}
 
-/* 안내 박스 */
-.note{border-radius:var(--r-m);padding:11px 13px;display:flex;gap:9px;font-size:var(--fs-sm);line-height:1.55;border:1px solid}
-.note .ic{flex:none;margin-top:1px}
-.note.info{background:var(--info-soft);border-color:#C3D7FF;color:#002D93}
+/* 안내 박스 — DS 에 알림/콜아웃 컴포넌트가 없어 Badge 의 톤 규칙을 상자에 옮겼다.
+   **본문 글자색을 상태색으로 물들이지 않는다.** 지금까지는 파랑 상자의 글자가
+   #002D93, 주황이 #EB6400 처럼 상태별 어두운 색이었는데, 이렇게 하면 팔레트에
+   없는 색이 네 개 늘고 상자마다 본문 명도가 달라 같은 안내문인데 무게가 달랐다.
+   상태는 **아이콘과 바탕**이 나르고, 글자는 어디서나 --w-text 로 읽는다. */
+.note{border-radius:var(--r-m);padding:11px 13px;display:flex;gap:9px;
+  font-size:var(--fs-sm);line-height:1.55;border:1px solid;color:var(--text)}
+.note .ic{flex:none;margin-top:2px}
+.note.info{background:var(--info-soft);border-color:var(--info-line)}
 .note.info .ic{color:var(--info)}
-.note.warn{background:var(--warn-soft);border-color:var(--warn-line);color:#EB6400}
+.note.warn{background:var(--warn-soft);border-color:var(--warn-line)}
 .note.warn .ic{color:var(--warn)}
-.note.err{background:var(--err-soft);border-color:var(--err-line);color:#C4001E}
+.note.err{background:var(--err-soft);border-color:var(--err-line)}
 .note.err .ic{color:var(--err)}
-.note.ok{background:var(--ok-soft);border-color:var(--ok-line);color:#007E47}
+.note.ok{background:var(--ok-soft);border-color:var(--ok-line)}
 .note.ok .ic{color:var(--ok)}
 .note.mute{background:var(--surface-2);border-color:var(--line);color:var(--muted)}
-.note b{font-weight:var(--fw-bold)}
+.note b{font-weight:var(--fw-semi)}
 
 /* 스켈레톤 — 불러오는 동안 자리를 지킨다. 빈 화면을 보여주고 나중에 표가 나타나면
    그 사이 레이아웃이 튀어 무엇을 기다리는지 알기 어렵다. */
@@ -319,26 +586,38 @@ select.inp:hover{border-color:var(--line-focus)}
   background-size:400% 100%;animation:skl 1.4s ease-in-out infinite;border-radius:4px;height:10px;flex:none}
 @keyframes skl{0%{background-position:100% 50%}100%{background-position:0 50%}}
 
-.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
-  padding:36px 20px;color:var(--faint);text-align:center;font-size:var(--fs-sm)}
-.empty .ic{width:26px;height:26px;color:#B4B4B4}
-.empty-t{font-size:var(--fs-body);color:var(--muted);font-weight:var(--fw-bold)}
+/* 빈 상태 — DS DataTable 의 __empty(패딩 56 · tertiary · 14px)를 따른다.
+   안내문은 문장형 + 마침표, 아이콘은 장식이므로 tertiary. */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--w-s-2);
+  padding:36px 20px;color:var(--muted);text-align:center;font-size:var(--fs-sm)}
+.empty .ic{width:28px;height:28px;color:var(--w-text-3)}
+.empty-t{font-size:var(--fs-body);color:var(--text);font-weight:var(--fw-semi)}
 
-.code{background:#222222;color:#E1E1E1;border-radius:var(--r-m);padding:12px 14px;font-family:var(--mono);
+.code{background:rgb(34,34,34);color:rgba(255,255,255,.85);border-radius:var(--r-m);padding:12px 14px;font-family:var(--mono);
   font-size:var(--fs-sm);line-height:1.7;overflow:auto;white-space:pre;letter-spacing:0}
 .code.light{background:var(--surface-2);color:var(--text);border:1px solid var(--line)}
-.k{color:#97BAFF}.s{color:#68DB8B}.c{color:#65707E}.f{color:#97BAFF}.r{color:#FFB764}
+/* 코드 하이라이트 — DS 에 문법 테마가 없어 12 accents 안에서 골랐다.
+   어두운 코드 면(rgb(34,34,34)) 위라 accent 원색이 그대로 대비를 낸다. */
+.k,.f{color:var(--accents-blue)}   /* 키워드 · 함수 */
+.s{color:var(--accents-green)}     /* 문자열 */
+.r{color:var(--accents-orange)}    /* 숫자 */
+.c{color:rgba(255,255,255,.45)}    /* 주석 */
 
-/* 진행 단계 */
+/* 진행 단계 — 배지와 같은 톤 규칙을 쓰되 높이가 있는 알약이다.
+   .note 와 같은 이유로 글자를 상태색으로 물들이지 않는다. */
 .steps{display:flex;align-items:center;gap:0;flex-wrap:wrap}
-.step{display:flex;align-items:center;gap:7px;padding:7px 11px;border:1px solid var(--line);
-  border-radius:999px;background:var(--surface);font-size:var(--fs-sm);white-space:nowrap}
-.step .ic{width:14px;height:14px}
-.step.ok{border-color:var(--ok-line);background:var(--ok-soft);color:#007E47}
-.step.run{border-color:var(--pri-line);background:var(--pri-soft);color:var(--pri-ink)}
-.step.err{border-color:var(--err-line);background:var(--err-soft);color:#C4001E}
-.step.wait{border-style:dashed;color:var(--faint)}
-.step-arw{color:#989898;margin:0 5px;flex:none}
+.step{display:flex;align-items:center;gap:7px;padding:7px 11px;
+  border:1px solid var(--line);border-radius:var(--w-r-pill);background:var(--surface);
+  font-size:var(--fs-sm);font-weight:var(--fw-med);color:var(--text);white-space:nowrap}
+.step .ic{width:14px;height:14px;flex:none}
+.step.ok{border-color:transparent;background:var(--ok-soft)}
+.step.ok .ic{color:var(--ok)}
+.step.run{border-color:transparent;background:var(--pri-soft)}
+.step.run .ic{color:var(--pri)}
+.step.err{border-color:transparent;background:var(--err-soft)}
+.step.err .ic{color:var(--err)}
+.step.wait{border-style:dashed;color:var(--muted)}
+.step-arw{color:var(--w-text-3);margin:0 5px;flex:none}
 
 .bars{display:flex;align-items:flex-end;gap:6px;height:64px}
 .bars i{flex:1;border-radius:3px 3px 0 0;background:var(--ok);min-width:5px;display:block}
@@ -350,49 +629,80 @@ select.inp:hover{border-color:var(--line-focus)}
 .meter i.warn{background:var(--warn)}
 .meter i.err{background:var(--err)}
 
-/* 우측 상세 패널 */
+/* 우측 상세 패널 — DS Drawer 의 치수를 쓴다(헤더 56 · 본문 패딩 20).
+   폭 322 는 화면 분할이 이미 잡혀 있어 그대로 둔다 — DS Drawer 442 는 떠 있는
+   서랍 기준이고, 이 패널은 셸에 붙어 캔버스와 폭을 나눠 쓴다. */
 .panel{width:322px;flex:none;background:var(--surface);border-left:1px solid var(--line);
   display:flex;flex-direction:column;overflow:hidden;min-height:0}
-.panel-h{padding:12px 14px;border-bottom:1px solid var(--line-2);display:flex;align-items:flex-start;gap:8px}
+.panel-h{padding:12px 14px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;gap:8px}
 .panel-b{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:14px}
-.panel-f{padding:10px 14px;border-top:1px solid var(--line-2);display:flex;gap:6px}
+.panel-f{padding:10px 14px;border-top:1px solid var(--line);display:flex;gap:6px}
+/* 키·값 목록 — 라벨은 명사구 secondary, 값은 primary. 라벨이 tertiary 였을 때는
+   «저장 위치»·«가공 단계» 같은 항목명이 값보다 두 단 흐려 짝이 안 읽혔다. */
 .kv{display:flex;flex-direction:column;gap:7px}
 .kv-r{display:flex;align-items:baseline;gap:10px;font-size:var(--fs-sm)}
-.kv-k{width:88px;flex:none;color:var(--faint);font-size:var(--fs-sm)}
+.kv-k{width:88px;flex:none;color:var(--muted);font-size:var(--fs-sm)}
 .kv-v{flex:1;min-width:0;color:var(--text)}
-.sect-t{font-size:var(--fs-cap);font-weight:var(--fw-bold);letter-spacing:.05em;text-transform:uppercase;color:var(--faint)}
+/* 섹션 라벨 — DS Sidebar 의 group 라벨 규격(11px · 590 · tertiary · 자간 .2px).
+   text-transform:uppercase 를 뺐다. 한글에는 대문자가 없어 아무 효과가 없고,
+   섞여 있는 영문 식별자만 낯설게 늘어난다. */
+.sect-t{font-size:var(--fs-micro);font-weight:var(--fw-semi);letter-spacing:.2px;color:var(--faint)}
 
-/* 모달 */
-.scrim{position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:100;display:grid;place-items:center;padding:24px}
+/* 모달 — DS Modal. radius lg 12 · 제목 H3(17/590) · 본문 패딩 24 ·
+   푸터는 우측 정렬. 스크림 불투명도는 DS 의 0.32 로 내렸다(0.42 는 뒤 화면을
+   너무 지워 «어디서 열린 창인지» 를 잃는다). */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.32);z-index:100;display:grid;place-items:center;padding:24px}
 .modal{background:var(--surface);border-radius:var(--r-l);box-shadow:var(--shadow-3);width:min(880px,100%);
   max-height:88vh;display:flex;flex-direction:column;overflow:hidden}
 .modal.sm{width:min(460px,100%)}
 .modal-h{padding:15px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
-.modal-t{font-size:var(--fs-title);font-weight:var(--fw-bold);color:var(--ink);letter-spacing:-0.3px}
+.modal-t{font-size:var(--fs-title);font-weight:var(--fw-semi);color:var(--ink);letter-spacing:-0.1px}
 .modal-b{flex:1;overflow:auto;padding:18px}
-.modal-f{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center;background:var(--surface-2)}
+/* 푸터 바탕을 회색에서 표면으로 돌렸다 — DS Modal 푸터는 별도 바탕이 없고,
+   회색 띠가 있으면 모달 안에 카드가 하나 더 있는 것처럼 층이 늘어난다.
+   버튼은 우측으로 모으고(DS), 좌측 보조 항목은 .sp 가 밀어낸다. */
+.modal-f{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center;justify-content:flex-end}
+/* 폼 — DS FormLayout 은 세로 간격 20 / 가로 24. 라벨은 13/510 이고 굵기를
+   700 에서 내렸다(라벨이 값보다 굵으면 폼이 라벨 목록처럼 읽힌다). */
 .frm{display:flex;flex-direction:column;gap:13px}
 .fr{display:flex;flex-direction:column;gap:5px}
-.fr-l{font-size:var(--fs-sm);font-weight:var(--fw-bold);color:var(--text);display:flex;align-items:center;gap:6px}
-.fr-h{font-size:var(--fs-cap);color:var(--faint);line-height:1.45}
-.pick{display:flex;flex-wrap:wrap;gap:6px;padding:8px;border:1px solid var(--line);border-radius:var(--r-s);
-  background:var(--surface-2);max-height:120px;overflow:auto}
-.pk{height:26px;padding:0 9px;border-radius:999px;border:1px solid var(--line);background:var(--surface);
-  font-size:var(--fs-sm);cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);letter-spacing:0}
-.pk.on{background:var(--pri-soft);border-color:var(--pri-line);color:var(--pri-ink);font-weight:var(--fw-bold)}
+.fr-l{font-size:var(--fs-sm);font-weight:var(--fw-med);color:var(--text);display:flex;align-items:center;gap:4px}
+.fr-h{font-size:var(--fs-cap);color:var(--muted);line-height:1.45}
+.pick{display:flex;flex-wrap:wrap;gap:6px;padding:8px;border:1px solid var(--line);
+  border-radius:var(--r-s);background:var(--surface-2);max-height:120px;overflow:auto}
+.pk{height:26px;padding:0 9px;border-radius:var(--w-r-pill);border:1px solid var(--line);
+  background:var(--surface);font-size:var(--fs-cap);cursor:pointer;display:inline-flex;align-items:center;
+  gap:5px;font-family:var(--mono);letter-spacing:0;color:var(--muted)}
+.pk:hover{background:var(--w-hover);color:var(--text)}
+.pk.on{background:var(--pri-soft);border-color:transparent;color:var(--pri-ink);font-weight:var(--fw-semi)}
 
-/* 토스트 */
-.toasts{position:fixed;right:18px;bottom:18px;z-index:200;display:flex;flex-direction:column;gap:8px}
-.toast{background:var(--ink);color:#fff;border-radius:var(--r-m);padding:11px 14px;font-size:var(--fs-sm);
-  box-shadow:var(--shadow-3);display:flex;align-items:center;gap:9px;max-width:380px;animation:tin .18s ease}
+/* 토스트 — DS Toast. 어두운 알약(rgb(34,34,34) · pill · 높이 44 · 본문 14).
+   바탕을 --ink(검정 85% 반투명) 에서 DS 의 불투명한 값으로 바꿨다. 반투명이면
+   토스트 뒤에 무엇이 있느냐에 따라 색이 달라져 같은 알림이 화면마다 다르게
+   보인다. 아이콘 색은 accent 원색을 그대로 쓴다 — 어두운 바탕에서는 밝은
+   accent 가 오히려 대비가 높다. */
+.toasts{position:fixed;right:var(--w-s-5);bottom:var(--w-s-5);z-index:200;
+  display:flex;flex-direction:column;gap:var(--w-s-2)}
+.toast{background:rgb(34,34,34);color:var(--labels-white);border-radius:var(--w-r-pill);
+  padding:0 var(--w-s-4);height:44px;font-size:var(--fs-body);
+  box-shadow:var(--shadow-2);display:flex;align-items:center;gap:var(--w-s-2);
+  max-width:520px;animation:tin .18s ease}
 .toast .ic{flex:none}
-.toast.ok .ic{color:#68DB8B}.toast.err .ic{color:#FFBABA}.toast.warn .ic{color:#FFB764}
+.toast span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.toast.ok .ic{color:var(--ok)}.toast.err .ic{color:var(--err)}.toast.warn .ic{color:var(--warn)}
 @keyframes tin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 
 /* ───────── 모델링 캔버스 ───────── */
 .mod{flex:1;min-height:0;display:flex}
 .mod-l{width:264px;flex:none;border-right:1px solid var(--line);background:var(--surface);display:flex;flex-direction:column}
-.mod-c{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--surface-3)}
+/* 본문 영역 배경을 --surface-3 에서 --bg 로 내렸다.
+   --surface-3 은 DS 의 --w-hover(검정 5%) 다 — 21곳 중 13곳이 :hover 인 «올렸을 때
+   깔리는 오버레이» 이고, 나머지는 세그먼트·미터 트랙처럼 작은 칸이다. 그 값을
+   화면 절반을 덮는 면에 쓰고 있어서, 페이지 배경(246,246,246) 위에 5% 가 한 번 더
+   얹혀 ≈#EAEAEA 가 되고 카드와의 대비가 필요 이상으로 셌다. 면에는 면의 토큰을 쓴다. */
+.mod-c{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--bg)}
+/* 바 높이 46 → 48. DS 컨트롤 MD 32 를 담으면서 위아래 여백이 4배수(8)로 떨어지고,
+   TopNav 52 와 함께 놓았을 때 두 띠의 높이 차가 규칙적으로 읽힌다. */
 .mod-bar{height:46px;flex:none;background:var(--surface);border-bottom:1px solid var(--line);
   display:flex;align-items:center;gap:6px;padding:0 10px;overflow-x:auto;scrollbar-width:none}
 .mod-bar::-webkit-scrollbar{display:none}
@@ -404,29 +714,31 @@ select.inp:hover{border-color:var(--line-focus)}
    갈려 있었다. 페이지를 옮길 때마다 같은 자리의 글자가 커졌다 작아졌다 하면
    헤더가 화면마다 다른 부품처럼 읽힌다.
    여기서 강제하므로 화면 쪽 마크업이 t13·t15 중 무엇을 쓰든 결과는 같다. */
-.mod-bar .b6{font-size:var(--fs-title)}                 /* 페이지명 */
+/* 바 안의 제목 = DS H3. 굵기와 자간까지 여기서 정해, 마크업이 b6(700)을 달고
+   있어도 결과는 590/-0.1 하나로 모인다. */
+.mod-bar .b6,.ana-top.bar .b6,.ana-top.bar .tt{
+  font-size:var(--fs-title);font-weight:var(--fw-semi);letter-spacing:-0.1px;color:var(--ink)}
 /* 제목은 «b6 t13» 처럼 크기 클래스를 함께 달고 있어, :not(.b6) 로 빼 두지 않으면
    뒤에 오는 이 규칙이 제목까지 메타 크기로 끌어내린다. */
 .mod-bar .t11:not(.b6),.mod-bar .t12:not(.b6),
-.mod-bar .t13:not(.b6){font-size:var(--fs-sm)}          /* 메타정보 */
+.mod-bar .t13:not(.b6),
+.ana-top.bar .t12:not(.b6),.ana-top.bar .t13:not(.b6){
+  font-size:var(--fs-sm);color:var(--muted)}            /* 메타정보 */
 .mod-bar .bdg{font-size:var(--fs-cap)}                  /* 상태 */
-/* 데이터 분석 상세도 같은 역할의 바다 — 같은 토큰을 쓴다. */
-.ana-top.bar .b6,.ana-top.bar .tt{font-size:var(--fs-title)}
-.ana-top.bar .t12,.ana-top.bar .t13{font-size:var(--fs-sm)}
 .canvas-wrap{flex:1;min-height:0;position:relative;overflow:auto;scrollbar-width:none;-ms-overflow-style:none;
-  background-color:#F7F8FA;
-  background-image:radial-gradient(circle,#E1E1E1 1px,transparent 1px);
+  background-color:var(--canvas-bg);
+  background-image:radial-gradient(circle,var(--canvas-dot) 1px,transparent 1px);
   background-size:18px 18px}
 .canvas{position:relative;width:1800px;height:1100px}
 .edges{position:absolute;inset:0;pointer-events:none;overflow:visible}
 .node{position:absolute;width:186px;background:var(--surface);border:1px solid var(--line);
   border-radius:10px;box-shadow:var(--shadow-1);cursor:grab;user-select:none;overflow:hidden}
-.node:hover{box-shadow:var(--shadow-2);border-color:#B4B4B4}
+.node:hover{box-shadow:var(--shadow-2);border-color:var(--line-str)}
 .node.sel{border-color:var(--pri);box-shadow:0 0 0 3px var(--pri-soft),var(--shadow-2)}
 .node.drag{cursor:grabbing;box-shadow:var(--shadow-3);z-index:30}
 .node-top{height:4px}
 .node-b{padding:9px 10px;display:flex;flex-direction:column;gap:4px}
-.node-n{font-size:var(--fs-sm);font-weight:var(--fw-bold);color:var(--ink);line-height:1.3}
+.node-n{font-size:var(--fs-sm);font-weight:var(--fw-semi);color:var(--ink);line-height:1.3}
 .node-p{font-size:var(--fs-cap);color:var(--faint);font-family:var(--mono);letter-spacing:0;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .node-m{display:flex;align-items:center;gap:5px;margin-top:2px}
@@ -441,12 +753,103 @@ select.inp:hover{border-color:var(--line-focus)}
   box-shadow:var(--shadow-1);z-index:20}
 
 .dock{flex:none;background:var(--surface);border-top:1px solid var(--line);display:flex;flex-direction:column;height:224px}
-.dock.min{height:37px}
+/* 접으면 탭 줄만 남는다 — 머리(제목·설명)와 본문이 함께 접힌다 */
+.dock.min{height:41px}
+.dock.min .dk-head,.dock.min .dock-b{display:none}
+/* 스크롤은 **독 전체가 한 겹**이다. 예전에는 .dock-b 만 스크롤돼서, 제목·설명은
+   붙박이고 탭 안쪽만 움직였다 — 독을 낮게 줄이면 볼 수 있는 칸이 탭 본문 몇 줄로
+   쪼그라들었다. 이제 머리부터 본문 끝까지 한 번에 흐르고, 탭 줄만 위에 붙어 남는다
+   (탭이 함께 흘러가면 다른 탭으로 옮기려고 매번 위로 되감아야 한다). */
+.dock-scroll{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column}
+.dock.min .dock-scroll{overflow:hidden}
 .dock-h .btn{margin:0;flex:none}
 .dock-h .dock-act{margin-left:auto;display:flex;gap:6px;align-items:center;padding-right:6px;flex:none}
-.dock-h{height:37px;flex:none;display:flex;align-items:center;gap:2px;padding:0 6px 0 10px;border-bottom:1px solid var(--line-2)}
-.dock-b{flex:1;min-height:0;overflow:auto;padding:12px 14px}
-.dock.min .dock-b{display:none}
+.dock-h{height:40px;flex:none;display:flex;align-items:center;gap:2px;padding:0 8px 0 20px;
+  border-bottom:1px solid var(--line);position:sticky;top:0;z-index:3;background:var(--surface)}
+.dock-b{flex:none;padding:16px 20px 24px}
+
+/* ── 독 머리 — 제목줄 · 설명 · 메타 스트립 ─────────────────────────
+   탭 위에 고정으로 얹혀, 탭을 옮겨도 «지금 무엇을 보고 있는지» 가 같은 자리에
+   남는다. 디자인 «모델 상세» 의 머리 블록을 그대로 옮겼다. */
+.dk-head{flex:none}
+.dk-head-in{padding:14px 20px 0;display:flex;flex-direction:column;gap:8px}
+.dk-title{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+/* 모델 이름은 이 화면의 주어다 — DS H1(24/32/700). 탭 라벨(14)과 두 단 이상
+   벌어져야 «제목 + 그 아래 탭» 으로 읽힌다. */
+.dk-name{margin:0;font-size:var(--fs-page);line-height:1.3;font-weight:var(--fw-bold);
+  letter-spacing:-0.3px;color:var(--ink)}
+.dk-phys{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;
+  border:1px solid var(--line);border-radius:var(--r-s);background:var(--surface-2);
+  color:var(--muted);font-size:var(--fs-cap);cursor:pointer}
+.dk-phys:hover{background:var(--w-hover);color:var(--text)}
+.dk-title-act{margin-left:auto;display:flex;align-items:center;gap:6px;flex:none}
+/* 설명 — 디자인에서는 테두리 없는 문단이다(max-width 78ch, secondary).
+   이 앱은 고칠 수 있어야 하므로 «평소엔 문단, 누르면 입력칸» 으로 둔다.
+   읽기 상태(.dk-desc-ro)와 편집 가능 상태(.dk-desc-in)가 **같은 자리에서 같은
+   글자로** 보여야, 원천과 모델을 오갈 때 줄이 튀지 않는다. */
+.dk-desc{display:flex;align-items:flex-start;gap:8px}
+.dk-desc-ro,.dk-desc-in{margin:0;font-family:inherit;font-size:var(--fs-body);
+  line-height:1.6;color:var(--muted);max-width:78ch;text-wrap:pretty}
+.dk-desc-in{flex:1;min-width:0;border:1px solid transparent;border-radius:var(--r-s);
+  /* -7px = 테두리 1 + 안쪽 여백 6. 글자 시작을 제목줄의 색 점과 같은 세로선에 둔다 —
+     편집칸이라는 것을 여백으로 티내면 디자인의 «그냥 문단» 이 아니게 된다. */
+  background:transparent;padding:3px 6px;margin-left:-7px;
+  resize:none;overflow:hidden;display:block;
+  transition:background var(--w-dur) var(--w-ease),border-color var(--w-dur) var(--w-ease)}
+.dk-desc-in::placeholder{color:var(--w-text-3)}
+/* 고칠 수 있다는 것은 마우스를 올렸을 때만 말한다 — 평소에 테두리를 두면
+   디자인의 문단이 아니라 입력 상자가 된다. */
+.dk-desc-in:hover{background:var(--w-hover)}
+.dk-desc-in:focus{outline:none;background:var(--surface);border-color:var(--w-border-focus);
+  box-shadow:var(--w-focus-ring);color:var(--text)}
+.dk-dirty{flex:none;font-size:var(--fs-cap);color:var(--warn);padding-top:4px;white-space:nowrap}
+/* 메타 스트립 — 여섯 칸을 세로선으로 끊는다. 값이 짧아 줄로 쌓으면 자리만
+   차지하고, 가로로 늘어놓으면 «이 모델의 제원» 한 덩어리로 읽힌다. */
+/* (.dk-meta 요약 스트립은 지웠다 — 여섯 칸이 전부 속성 카드·탭 배지·흐름 줄과
+   겹쳐 같은 값을 두 번 그리고 있었다. 근거는 dkHeader 주석.) */
+
+/* ── 모델 정보 — 왼쪽 «무엇인가», 오른쪽 «어떻게 만드는가» ────────── */
+.dk-info{display:grid;grid-template-columns:320px minmax(0,1fr);gap:14px;align-items:start;
+  max-width:1400px}
+.dk-col{display:flex;flex-direction:column;gap:12px;min-width:0}
+.dk-card{border:1px solid var(--line);border-radius:var(--r-m);overflow:hidden;min-width:0;
+  background:var(--surface)}
+.dk-card-h{display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;
+  border-bottom:1px solid var(--line);font-size:var(--fs-sm);font-weight:var(--fw-semi)}
+.dk-kv{display:flex;flex-direction:column}
+.dk-kv>div{display:flex;align-items:center;gap:10px;padding:7px 12px;min-width:0}
+.dk-kv>div+div{border-top:1px solid var(--line)}
+.dk-kv span{flex:none;width:68px;font-size:var(--fs-cap);color:var(--faint)}
+.dk-kv b{font-weight:400;font-size:var(--fs-sm);min-width:0;overflow:hidden;text-overflow:ellipsis}
+.dk-pipe{display:flex;align-items:center;gap:10px;padding:9px 12px;min-width:0}
+.dk-pipe+.dk-pipe{border-top:1px solid var(--line)}
+/* SQL 은 어두운 면에 둔다 — 코드는 주변 UI 와 섞이면 어디까지가 코드인지 모른다 */
+.dk-sql{display:flex;flex-direction:column;min-width:0}
+.dk-sql-b{margin:0;padding:14px 16px;background:rgb(24,26,30);color:rgba(255,255,255,.88);
+  font-family:var(--mono);font-size:var(--fs-sm);line-height:1.7;letter-spacing:0;
+  overflow:auto;max-height:320px;white-space:pre}
+/* (.dk-tail — 「데이터 흐름」·「DATA MART」·「다음 단계」를 담던 꼬리. 세 블록을
+   독에서 뺐으므로 함께 제거.) */
+
+/* ── 품질 규칙 ───────────────────────────────────────────────── */
+.dk-rules{display:flex;flex-direction:column;gap:12px;max-width:1000px}
+.dk-rules-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dk-rules-t{border:1px solid var(--line);border-radius:var(--r-m);overflow:hidden}
+
+/* ── 데이터 미리보기 ─────────────────────────────────────────── */
+.dk-prev{display:flex;flex-direction:column;gap:12px;max-width:1400px}
+.dk-prev-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+/* ── 변경 이력 — 세로 타임라인 ───────────────────────────────── */
+.dk-hist{display:flex;gap:14px;max-width:820px}
+.dk-hist-rail{flex:none;display:flex;flex-direction:column;align-items:center;width:10px}
+.dk-hist-dot{width:9px;height:9px;border-radius:50%;margin-top:5px;flex:none}
+.dk-hist-line{flex:1;width:1px;background:var(--line);min-height:8px}
+.dk-hist:last-child .dk-hist-line{background:transparent}
+.dk-hist-b{padding-bottom:18px;min-width:0}
+.dk-hist-t{font-size:var(--fs-sm);font-weight:var(--fw-semi);color:var(--ink)}
+.dk-hist-d{font-size:var(--fs-sm);color:var(--muted);margin-top:2px;word-break:break-all}
+.dk-hist-w{font-size:var(--fs-cap);color:var(--faint);margin-top:4px;font-family:var(--mono);letter-spacing:0}
 
 .list-i{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:var(--r-s);cursor:pointer;min-width:0}
 .list-i:hover{background:var(--surface-3)}
@@ -475,75 +878,40 @@ select.inp:hover{border-color:var(--line-focus)}
 select.sel{max-width:150px;text-overflow:ellipsis}
 .topsearch{margin-left:auto;flex:1 1 220px;min-width:180px;max-width:420px}
 .me{flex:none;white-space:nowrap}
-.me-name{font-size:var(--fs-sm);font-weight:var(--fw-bold);line-height:1.15;white-space:nowrap}
+.me-name{font-size:var(--fs-sm);font-weight:var(--fw-semi);line-height:1.15;white-space:nowrap}
 .me-role{font-size:var(--fs-cap);color:var(--muted);line-height:1.15;white-space:nowrap}
 #app.nar select.sel{max-width:112px}
 #app.nar .me-role{display:none}
 #app.xnar .topsearch{flex:1 1 160px;min-width:150px}
 
-/* 사이드바 — 기본은 v1.0 형태, 사용자가 직접 접고 편다 */
-.side{transition:width .12s ease}
-.side.mini{width:56px;padding:10px 6px 12px;align-items:stretch}
-.side.mini .side-l,.side.mini .side-note,.side.mini .nav-i span:not(.nav-b){display:none}
-.side.mini .nav-i{justify-content:center;padding:0;position:relative}
-.side.mini .nav-i .nav-b{position:absolute;top:3px;right:3px;margin:0}
-.side.mini .side-f{border-top:0}
-.side-tgl{display:flex;align-items:center;gap:9px;height:32px;padding:0 9px;border-radius:var(--r-s);
-  color:var(--muted);font-size:var(--fs-sm);width:100%}
-.side-tgl:hover{background:var(--surface-3);color:var(--text)}
-.side.mini .side-tgl{justify-content:center;padding:0}
-.side.mini .side-tgl span{display:none}
+/* (사이드바 접기 규칙 .side.mini · .side-tgl 도 함께 지웠다 — 접을 사이드바가
+   없다. 아래 절 참고.) */
 
-/* 사이드바 다크 */
-.side{background:#222222;border-right:1px solid #333333;color:#E1E1E1}
-.side-l{color:#777777}
-.nav-i{color:#D3D3D3}
-.nav-i .ic{color:#989898}
-.nav-i:hover{background:rgba(255,255,255,.06);color:#FFFFFF}
-.nav-i:hover .ic{color:#D3D3D3}
-.nav-i.on{background:rgba(113,155,252,.22);color:#FFFFFF;font-weight:var(--fw-bold)}
-.nav-i.on .ic{color:#719BFC}
-.nav-c{color:#777777}
-.nav-i.on .nav-c{color:#719BFC}
-.side-f{border-top:1px solid #333333}
-.side-tgl{color:#989898}
-.side-tgl:hover{background:rgba(255,255,255,.06);color:#E1E1E1}
-.side-note{color:#777777}
+/* ───── 전역 사이드바 잔해 정리 (v4.6 이 남긴 것) ─────────────────────
+   v4.6 이 좌측 GNB 를 걷어내고 메뉴를 헤더 한 줄로 옮겼다. 그런데 걷어낸 방식이
+   «규칙을 지우기» 가 아니라 «뒤에서 되돌리기» 였다 — 어두운 사이드바 색 15줄과
+   고정 배치·폭 200/48px 규칙 12줄이 그대로 남고, 그 아래에서
+   .side{display:none} · .top{margin-left:0} · .shell{padding-left:0} 로
+   되돌려 놓았다. 서로를 지우는 두 층이 80줄 가까이 쌓여 있었다.
 
-/* ───── 셸 골격 — GNB 48px 고정 / Open 200px, Header 54px ───── */
-/* GNB 는 화면 좌측 전체 높이를 차지하고 Header·Contents 가 그 오른쪽에 온다 */
-.side{position:fixed;top:0;left:0;bottom:0;width:200px;z-index:70;
-  padding:8px 8px 12px;border-right:0;overflow-y:auto;transition:width .14s ease}
-.side.mini{width:48px;padding:8px 4px 12px}
-.side.mini .nav-i{height:40px}
-/* 접힌 GNB 에서는 카운트 배지를 알림 dot 으로 축약해 아이콘을 가리지 않게 한다 */
-.side.mini .nav-i .nav-b{min-width:6px;width:6px;height:6px;padding:0;font-size:0;
-  border-radius:50%;top:5px;right:5px}
-.nav-i{height:36px}
-.top,.shell{transition:margin-left .14s ease,padding-left .14s ease}
-.top{margin-left:200px}
-.shell{padding-left:200px}
-#app:has(.side.mini) .top{margin-left:48px}
-#app:has(.side.mini) .shell{padding-left:48px}
-/* ───── PC 앱 창 셸 — 타이틀바 36px + GNB/Header 오프셋 ───── */
+   지금 markup 에서 sidebar() 는 빈 <nav class="side" aria-hidden="true"> 하나를
+   돌려주고, .nav-i · .side-l · .nav-c · .side-f · .side-note · .side-tgl ·
+   .side.mini 은 어느 화면에도 실체가 없다(마크업은 전부 js/ 가 찍고, 거기에
+   이 클래스들이 없다). 그래서 두 층을 통째로 지웠다.
+
+   .nav-b 만 살아 있다 — 헤더 메뉴(.gnav-i)의 알림 개수 배지가 그 클래스를 쓴다.
+   화면 안의 좌측 목록(수집 작업 · 파이프라인 · 대시보드 트리)은 .side 가 아니라
+   .mod-l 이고, 그건 아래 «사이드바 공통 규격» 절이 담당한다. */
+.side{display:none}
+/* 아래 두 줄은 이 절에서 유일하게 살아 있는 규칙이다 — 지우면 본문이 두 번
+   스크롤되고(body + .page) 헤더가 sticky 로 떠 캔버스 위에 그림자를 남긴다. */
 html,body{overflow:hidden}
 .top{position:static}
-.side::-webkit-scrollbar{width:6px}
-.side::-webkit-scrollbar-thumb{background:#4A4A4A;border-radius:3px}
-
-/* ───── v4.6 — 전역 사이드바 제거, 메뉴는 헤더 드롭다운으로 ─────
-   좌측 GNB 가 항상 200px(접어도 48px)를 가져가는데 메뉴는 4개뿐이라
-   폭 대비 얻는 것이 적었다. 헤더로 접고 그 폭을 캔버스에 준다. */
-.side{display:none}
-.top{margin-left:0}
-.shell{padding-left:0}
-#app:has(.side.mini) .top{margin-left:0}
-#app:has(.side.mini) .shell{padding-left:0}
 
 /* 페이지 전환 드롭다운(.gnb / .gnb-t / .gnb-k)은 전역 네비게이션으로 대체돼
    규칙까지 걷어냈다 — 맨 아래 «전역 네비게이션» 블록이 그 자리를 대신한다.
    아래 .menu 규칙은 남은 다른 드롭다운(분석 카드 메뉴 등)이 계속 쓴다. */
-.menu button.on{color:var(--pri);font-weight:var(--fw-bold)}
+.menu button.on{color:var(--pri);font-weight:var(--fw-semi)}
 .menu button.on .ic{color:var(--pri)}
 
 /* ───── v4.7 — 본문 제목 줄 제거 ─────
@@ -565,8 +933,13 @@ html,body{overflow:hidden}
 
 /* ───── v4.9 — 좌측 패널 확대 ─────
    폭 228 → 264, 글자도 한 단씩 올린다. 카탈로그 트리와 파이프라인 목록이
-   같은 .mod-l 을 쓰므로 여기 한 곳만 손대면 두 화면이 함께 커진다. */
-.mod-l-head .b6{font-size:var(--fs-strong)}
+   같은 .mod-l 을 쓰므로 여기 한 곳만 손대면 두 화면이 함께 커진다.
+
+   데이터 품질의 사이드바 머리(.q-sidehead)도 여기서 함께 정한다. 그 화면은
+   .mod-l 이 아니라 DS 사이드바를 쓰지만 **머리 제목은 같은 자리의 같은 역할**
+   이므로, 선택자를 여기 얹지 않으면 세 번째 사이드바가 또 갈라진다(실제로
+   13px 로 갈라져 있었다 — 다른 둘은 14px). */
+.mod-l-head .b6, .q-sidehead .b6{font-size:var(--fs-strong)}
 .mod-l .tg-r{height:26px;font-size:var(--fs-body);gap:5px}
 .mod-l .tg-r.g{height:28px}
 .mod-l .fdr{font-size:var(--fs-body);padding:7px 8px}
@@ -587,13 +960,13 @@ html,body{overflow:hidden}
 .lin-h{height:44px;padding:6px 11px 0;background:var(--surface-2);border-bottom:1px solid var(--line);
   cursor:pointer;border-radius:0}
 .lin-h:hover{background:var(--surface-3)}
-.lin-n{font-size:var(--fs-sm);font-weight:var(--fw-bold);color:var(--ink);display:flex;align-items:center;gap:6px;
+.lin-n{font-size:var(--fs-sm);font-weight:var(--fw-semi);color:var(--ink);display:flex;align-items:center;gap:6px;
   white-space:nowrap;overflow:hidden}
 .lin-n > span:first-child{overflow:hidden;text-overflow:ellipsis}
 .lin-p{font-size:var(--fs-cap);color:var(--faint);font-family:var(--mono);display:block;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lin-badge{flex:none;height:15px;line-height:15px;padding:0 5px;border-radius:4px;
-  background:var(--warn-soft);color:var(--warn);font-size:var(--fs-micro);font-weight:var(--fw-bold)}
+  background:var(--warn-soft);color:var(--warn);font-size:var(--fs-micro);font-weight:var(--fw-semi)}
 .lin-r{display:flex;align-items:center;gap:6px;height:24px;padding:0 10px;
   border-bottom:1px solid var(--line-2);position:relative;cursor:pointer}
 .lin-r:last-child{border-bottom:0;border-radius:0 0 8px 8px}
@@ -607,17 +980,17 @@ html,body{overflow:hidden}
 .lin-y{font-size:var(--fs-micro);color:var(--faint);font-family:var(--mono);flex:none;max-width:88px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lin-fx{flex:none;height:15px;line-height:15px;padding:0 5px;border-radius:4px;
-  background:var(--pri-soft);color:var(--pri-ink);font-size:var(--fs-micro);font-weight:var(--fw-bold);
+  background:var(--pri-soft);color:var(--pri-ink);font-size:var(--fs-micro);font-weight:var(--fw-semi);
   font-family:var(--mono);cursor:pointer}
-.lin-fx:hover{background:var(--pri);color:#fff}
-.lin-q{flex:none;width:13px;text-align:center;color:var(--warn);font-weight:var(--fw-bold);font-size:var(--fs-cap)}
+.lin-fx:hover{background:var(--pri);color:var(--w-text-on-accent)}
+.lin-q{flex:none;width:13px;text-align:center;color:var(--warn);font-weight:var(--fw-semi);font-size:var(--fs-cap)}
 .lin-port{position:absolute;top:50%;width:8px;height:8px;border-radius:50%;
-  background:#C9D2E4;border:2px solid var(--surface);transform:translateY(-50%);pointer-events:none}
+  background:rgba(0,0,0,.22);border:2px solid var(--surface);transform:translateY(-50%);pointer-events:none}
 .lin-port.l{left:-4.5px}
 .lin-port.r{right:-4.5px}
 .lin-r.sel .lin-port,.lin-r.up .lin-port{background:var(--ok)}
 .lin-r.down .lin-port{background:var(--warn)}
-.lin-e{fill:none;stroke:#C9D2E4;stroke-width:1.6}
+.lin-e{fill:none;stroke:rgba(0,0,0,.22);stroke-width:1.6}
 .lin-e.up{stroke:var(--ok);stroke-width:2}
 .lin-e.down{stroke:var(--warn);stroke-width:2}
 .lin-e.dim{stroke-opacity:.12}
@@ -633,12 +1006,12 @@ html,body{overflow:hidden}
 .lin-node.compact .lin-n .tag{display:none}
 /* 조회 전용 카드 — 다른 파이프라인이 적재하는 모델. 여기서는 읽기만 한다 */
 .pn.pn-ro{border-style:dashed}
-.pn.pn-ro .pn-seq{background:var(--warn-soft);color:var(--warn);font-size:var(--fs-micro);font-weight:var(--fw-bold)}
+.pn.pn-ro .pn-seq{background:var(--warn-soft);color:var(--warn);font-size:var(--fs-micro);font-weight:var(--fw-semi)}
 
 /* 완료 표식 Task — 실제 Airflow 태스크이므로 그리되, 일을 하지 않는다는 것이
    보여야 한다. 실행 순번 대신 체크만 달고 테두리를 점선으로 둔다. */
 .pn.done{border-style:dashed;background:var(--bg)}
-.pn.done .pn-seq{background:var(--ok-soft,#E6F6EF);color:var(--ok);font-weight:var(--fw-bold)}
+.pn.done .pn-seq{background:var(--ok-soft);color:var(--ok);font-weight:var(--fw-semi)}
 /* 전체 흐름의 파이프라인 상자는 배지가 들어가 머리가 살짝 높다 */
 .pf-n .lin-h{height:52px}
 .pf-n .lin-n{margin-top:2px}
@@ -650,12 +1023,18 @@ html,body{overflow:hidden}
    길이를 예측할 수 없으므로 폭을 고정하고 넘치는 제목은 말줄임표로 끊는다.
    폭은 --tab-w 하나로 정한다. 파이프라인·적재·데이터 분석이 이를 공유한다. */
 .ptabs .tab{height:44px;width:var(--tab-w);flex:none;justify-content:flex-start;overflow:hidden}
+/* 이름이 고정인 첫 탭(커넥터 목록 · 파이프라인 흐름 · 데이터 분석)은 글자에 맞춘다.
+   폭 고정과 말줄임은 «제목이 사용자 데이터라 길이를 예측할 수 없다» 는 이유로 두는
+   것인데, 이 셋은 화면이 정한 이름이라 그 이유가 없다. 176px 을 잡아 두면 네 글자
+   뒤로 빈 자리가 남아, 옆에 붙는 진짜 문서 탭(대시보드·커넥터 이름)과 경계가
+   흐려졌다. 말줄임 규칙(.tab-l)은 그대로 두되 잘릴 일이 없다. */
+.ptabs .tab.tab-fit{width:auto;padding-right:14px}
 .ptab-x{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;
   border-radius:4px;margin-left:2px;color:var(--faint)}
 .ptab-x:hover{background:var(--err-soft);color:var(--err)}
 /* deps 노드 연결점 · 드롭 대상 표시 */
 .pf-port{position:absolute;top:50%;width:10px;height:10px;border-radius:50%;
-  background:#C9D2E4;border:2px solid var(--surface);transform:translateY(-50%);z-index:2}
+  background:rgba(0,0,0,.22);border:2px solid var(--surface);transform:translateY(-50%);z-index:2}
 .pf-port.l{left:-5px}
 .pf-port.r{right:-5px;cursor:crosshair}
 .pf-port.r:hover{background:var(--ok);box-shadow:0 0 0 3px var(--ok-soft)}
@@ -669,7 +1048,7 @@ html,body{overflow:hidden}
 .pf-x:hover{background:var(--err-soft);border-color:var(--err-line);color:var(--err)}
 /* 파이프라인 생성 다중 선택 — 경로 강조(up/down)와 구분되는 선택 표시 */
 .lin-node.psel{border-color:var(--pri);box-shadow:0 0 0 2px var(--pri-soft),var(--shadow-2)}
-.psel-chk{flex:none;width:16px;height:16px;border-radius:50%;background:var(--pri);color:#fff;
+.psel-chk{flex:none;width:16px;height:16px;border-radius:50%;background:var(--pri);color:var(--w-text-on-accent);
   display:inline-flex;align-items:center;justify-content:center}
 /* 남이 적재하는 모델을 함께 고른 경우 — 적재가 아니라 조회 전용 입력.
    수식어를 psel-ro 로 길게 두는 이유: 두 글자짜리 .ro 는 예전 규칙 안내 줄의
@@ -686,9 +1065,9 @@ html,body{overflow:hidden}
    사이드바(흰색) | 헤더(연회색) / 캔버스(아주 연한 회색) / 상세 패널(흰색).
    구조·컴포넌트·노드 색은 그대로 두고 배경 층위만 가른다.
    lin-view 는 데이터 모델 화면에서만 붙는 클래스라 다른 화면은 영향이 없다. */
-#app.lin-view .mod-bar,#app.pipe-view .mod-bar{background:#F6F7F9}
-#app.lin-view .erd-wrap,#app.pipe-view .erd-wrap{background-color:#FAFBFC}
-#app.pipe-view .canvas-wrap{background-color:#FAFBFC !important}
+#app.lin-view .mod-bar,#app.pipe-view .mod-bar{background:var(--canvas-bar)}
+#app.lin-view .erd-wrap,#app.pipe-view .erd-wrap{background-color:var(--panel-bg)}
+#app.pipe-view .canvas-wrap{background-color:var(--panel-bg) !important}
 /* ───── 사이드바 공통 규격 — 데이터 모델(카탈로그)·데이터 파이프라인(목록) ─────
    두 화면의 사이드바가 머리 높이(47 vs 38)와 본문 패딩(0 vs 8)이 달라 첫 줄이
    어긋나 보였다. 오른쪽 첫 줄(.mod-bar 46px / .ptabs)과도 같은 높이로 맞춘다. */
@@ -711,13 +1090,13 @@ html,body{overflow:hidden}
 .taskline{display:flex;align-items:flex-start;gap:9px;padding:8px 9px;width:100%}
 .taskline .ic-lead{margin-top:2px;flex:none}
 .taskline .tl-b{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
-.taskline .tl-t{font-size:var(--fs-body);font-weight:var(--fw-bold);line-height:1.4}
+.taskline .tl-t{font-size:var(--fs-body);font-weight:var(--fw-semi);line-height:1.4}
 .taskline .tl-d{font-size:var(--fs-cap);color:var(--muted)}
 .card.eqh{min-height:186px}
 
 /* 카탈로그 */
 .tr.pick{background:var(--pri-soft);box-shadow:inset 3px 0 0 var(--pri)}
-.cat-name{font-size:var(--fs-body);font-weight:var(--fw-bold);color:var(--ink)}
+.cat-name{font-size:var(--fs-body);font-weight:var(--fw-semi);color:var(--ink)}
 .cat-phys{font-size:var(--fs-cap);color:var(--faint);font-family:var(--mono);letter-spacing:0}
 .cat-desc{font-size:var(--fs-sm);color:var(--muted);line-height:1.45}
 .rowgo{width:26px;height:26px;border-radius:5px;display:grid;place-items:center;color:var(--faint)}
@@ -725,7 +1104,7 @@ html,body{overflow:hidden}
 
 /* 모델링 — 접기 · 크기 조절 */
 .mod-l{position:relative;transition:width .12s ease}
-.mod-l.closed{width:44px}
+.mod-l.closed{width:var(--rail-w)}
 .mod-l.closed .mod-l-body{display:none}
 .mod-l-head{display:flex;align-items:center;gap:6px;padding:10px 10px 8px;border-bottom:1px solid var(--line-2)}
 .mod-l.closed .mod-l-head{flex-direction:column;padding:8px 4px;border-bottom:0}
@@ -744,8 +1123,14 @@ html,body{overflow:hidden}
 .dock{position:relative;transition:height .12s ease}
 .canvas{transform-origin:0 0}
 .node-n,.node-p{cursor:inherit}
+/* 캔버스 위에 떠 있는 배율 컨트롤.
+   글자를 캡션(11) → 본문(13)으로 올렸다. 「화면에 맞추기」·「배율 56%」는 읽는
+   설명이 아니라 **누르는 버튼**인데 화면에서 가장 작은 글자로 그려져 있어,
+   캔버스 구석의 상태 표시처럼 보이고 누를 수 있다는 것도 잘 읽히지 않았다.
+   높이도 알약이 컨트롤로 보이도록 키운다(내부 버튼 포함 30px). */
 .zoomlbl{position:absolute;right:12px;bottom:12px;background:var(--surface);border:1px solid var(--line);
-  border-radius:999px;padding:4px 10px;font-size:var(--fs-cap);color:var(--muted);box-shadow:var(--shadow-1);z-index:20}
+  border-radius:999px;padding:0 6px;font-size:var(--fs-body);color:var(--muted);
+  box-shadow:var(--shadow-1);z-index:20;display:flex;align-items:center;height:30px}
 
 /* 툴바 — 스크롤 숨김 대신 더보기 메뉴 사용 */
 .mod-bar{overflow:visible}
@@ -771,14 +1156,11 @@ html,body{overflow:hidden}
 .chkrow{display:flex;align-items:center;gap:9px;font-size:var(--fs-body);padding:5px 0;cursor:pointer}
 .chkrow:hover{color:var(--ink)}
 
-/* 표 · 배지 · 버튼 규격 통일 */
-.th{height:36px}
-.tr{min-height:46px}
-.bdg{height:21px}
-.btn{height:32px}
-.btn.sm{height:28px}
-.card-h{min-height:44px}
-.page-t{line-height:1.3}
+/* (여기 있던 «표 · 배지 · 버튼 규격 통일» 패치를 지웠다 — th 36 · tr 46 · bdg 21 ·
+   btn 32 · card-h 44 를 다시 선언하고 있었는데, 그 값들은 이제 앞쪽 «기본 컴포넌트»
+   절이 정본으로 갖고 있다. 두 곳에 같은 규격이 있으면 한쪽만 고쳐 어긋나고, 실제로
+   이 패치의 th/tr/bdg 가 앞쪽 DS 값과 1~8px 씩 달라 서로를 덮고 있었다.
+   높이 값은 앞쪽에서 DS compact 단계로 통일했다.) */
 
 /* ════════ style block 02 (index.html 에서 추출) ════════ */
 /* ══════════════ v1.2 ══════════════ */
@@ -786,13 +1168,13 @@ html,body{overflow:hidden}
   border-radius:999px;padding:2px 9px;font-size:var(--fs-cap);color:var(--muted);white-space:nowrap;z-index:6;
   box-shadow:var(--shadow-1);max-width:170px;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
 .elabel:hover{border-color:var(--pri-line);color:var(--pri-ink);background:var(--pri-soft)}
-.elabel.on{border-color:var(--pri);color:var(--pri-ink);background:var(--pri-soft);font-weight:var(--fw-bold)}
-.elabel .op{color:var(--pri);font-weight:var(--fw-bold)}
+.elabel.on{border-color:var(--pri);color:var(--pri-ink);background:var(--pri-soft);font-weight:var(--fw-semi)}
+.elabel .op{color:var(--pri);font-weight:var(--fw-semi)}
 .node-x{position:absolute;top:6px;right:6px;width:20px;height:20px;border-radius:5px;display:none;
   align-items:center;justify-content:center;color:var(--faint);background:var(--surface)}
 .node:hover .node-x{display:flex}
 .node-x:hover{background:var(--surface-3);color:var(--err)}
-.node-st{display:flex;align-items:center;gap:4px;font-size:var(--fs-cap);font-weight:var(--fw-bold);padding:1px 6px;border-radius:4px;border:1px solid}
+.node-st{display:flex;align-items:center;gap:4px;font-size:var(--fs-cap);font-weight:var(--fw-semi);padding:1px 6px;border-radius:4px;border:1px solid}
 /* (.node.ro — 옛 캔버스의 조회 전용 카드. 'ro' 를 붙이던 코드가 없어 도달하지 않는다.) */
 
 /* (.wscard · .wsgrid · .crumbs — 홈의 워크 스페이스 탭에서만 쓰던 규칙이라
@@ -808,7 +1190,7 @@ html,body{overflow:hidden}
 .mp{width:360px;flex:none;background:var(--surface);border-left:1px solid var(--line);
   display:flex;flex-direction:column;overflow:hidden;min-height:0}
 .split{display:flex;flex:1;min-height:0;gap:0}
-.logbox{background:#222222;color:#E1E1E1;border-radius:var(--r-s);padding:10px 12px;font-family:var(--mono);
+.logbox{background:rgb(34,34,34);color:rgba(255,255,255,.85);border-radius:var(--r-s);padding:10px 12px;font-family:var(--mono);
   font-size:var(--fs-cap);line-height:1.75;white-space:pre-wrap;overflow:auto;max-height:230px;letter-spacing:0}
 .statrow{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r-s)}
 
@@ -836,15 +1218,18 @@ html,body{overflow:hidden}
 .sover-bg{position:absolute;inset:0;background:rgba(0,0,0,.28)}
 .sover .mp{position:relative;z-index:1;box-shadow:-8px 0 28px rgba(0,0,0,.18);
   width:min(80vw,460px);height:100%;border-left:1px solid var(--line)}
-.hmrow{display:flex;align-items:flex-start;gap:10px;padding:11px 12px;border:1px solid var(--line);
-  border-radius:var(--r-m);background:var(--surface);width:100%;text-align:left}
-.hmrow:hover{border-color:var(--pri-line);background:var(--surface-2)}
-.hmrow .ic-l{margin-top:1px;flex:none}
+/* 홈 흐름 칸 — 카드 규격에 맞춰 패딩을 4배수(12/16)로. 올렸을 때 회색으로
+   가라앉던 것을 accent 8% 로 바꿨다(누를 수 있는 것은 accent 로 반응한다). */
+.hmrow{display:flex;align-items:flex-start;gap:10px;padding:11px 12px;
+  border:1px solid var(--line);border-radius:var(--r-m);background:var(--surface);width:100%;text-align:left;
+  transition:background var(--w-dur) var(--w-ease),border-color var(--w-dur) var(--w-ease)}
+.hmrow:hover{border-color:var(--pri-line);background:var(--sel-o)}
+.hmrow .ic-l{margin-top:2px;flex:none}
 .pop{position:absolute;z-index:90;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-m);
   box-shadow:var(--shadow-3);padding:12px 14px;min-width:240px;display:flex;flex-direction:column;gap:7px}
 .logline.hl{background:rgba(250,69,83,.18);display:block;border-radius:3px;padding:0 4px;margin:0 -4px}
 .tfsec{border:1px solid var(--line);border-radius:var(--r-m);padding:11px 12px;display:flex;flex-direction:column;gap:9px}
-.tfsec-t{font-size:var(--fs-sm);font-weight:var(--fw-bold);color:var(--ink);display:flex;align-items:center;gap:6px}
+.tfsec-t{font-size:var(--fs-sm);font-weight:var(--fw-semi);color:var(--ink);display:flex;align-items:center;gap:6px}
 
 /* ════════ style block 04 (index.html 에서 추출) ════════ */
 /* ══════════════ v2.1 ══════════════ */
@@ -868,27 +1253,45 @@ html,body{overflow:hidden}
 .info2 > div > span:first-child{width:92px;flex:none;color:var(--muted);font-size:var(--fs-sm)}
 .info2 > div > span:last-child{flex:1;min-width:0;font-size:var(--fs-sm);overflow-wrap:anywhere}
 .sec{border:1px solid var(--line);border-radius:var(--r-m);padding:12px 13px;display:flex;flex-direction:column;gap:10px}
-.sec-t{font-size:var(--fs-sm);font-weight:var(--fw-bold);color:var(--ink);display:flex;align-items:center;gap:6px}
+.sec-t{font-size:var(--fs-sm);font-weight:var(--fw-semi);color:var(--ink);display:flex;align-items:center;gap:6px}
 .qtabs{display:flex;border-bottom:1px solid var(--line);margin-bottom:14px}
-.sevb{height:20px;padding:0 7px;border-radius:5px;font-size:var(--fs-cap);font-weight:var(--fw-bold);border:1px solid;display:inline-flex;align-items:center}
+.sevb{height:20px;padding:0 7px;border-radius:5px;font-size:var(--fs-cap);font-weight:var(--fw-semi);border:1px solid;display:inline-flex;align-items:center}
 .sev-error{background:var(--err-soft);color:var(--err);border-color:var(--err-line)}
 .sev-warn{background:var(--warn-soft);color:var(--warn);border-color:var(--warn-line)}
-.tgl{width:34px;height:19px;border-radius:10px;background:var(--line);position:relative;flex:none;transition:background .12s}
+/* DS Toggle 의 sm 변형 — 트랙 34×20 · 노브 16 · 이동 14. 꺼진 트랙을 --line(10%)
+   에서 --line-str(22%) 로 올렸다. 10% 회색 트랙은 흰 카드 위에서 «꺼짐» 이 아니라
+   «비활성» 처럼 보여, 켤 수 있는 스위치인지 알기 어려웠다.
+   노브 흰색과 그림자는 DS 값 그대로다. */
+/* display 를 명시한다 — <span> 이라 flex 컨테이너 밖에 놓이면 inline 이 되어
+   width·height 가 통째로 무시된다(품질 규칙 표의 «사용» 칸에서 실제로 사라졌다). */
+.tgl{display:inline-block;width:34px;height:20px;border-radius:var(--w-r-pill);
+  background:var(--line-str);position:relative;flex:none;
+  transition:background var(--w-dur) var(--w-ease)}
 .tgl.on{background:var(--pri)}
-.tgl i{position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#fff;transition:left .12s}
-.tgl.on i{left:17px}
+.tgl i{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;
+  box-shadow:0 0.5px 1px rgba(0,0,0,.18),0 1px 2px rgba(0,0,0,.15);
+  transition:left var(--w-dur) var(--w-ease)}
+.tgl.on i{left:16px}
+/* 7일 추이 — 막대 폭 상한을 52 → 88 로 올렸다. 전폭 카드 안에서 52px 막대
+   일곱 개는 카드의 3분의 1만 쓰고 나머지가 빈 채로 남아, 차트가 덜 그려진 것처럼
+   보였다. 아래 날짜 라벨도 같은 상한을 쓰므로(b14.js · api.js 의 .qtrend-x)
+   한쪽만 고치면 축이 어긋난다 — 상한을 변수로 묶어 둔 이유다. */
 .trend{display:flex;align-items:flex-end;gap:6px;height:104px}
-.trend i{flex:1;max-width:52px;border-radius:4px 4px 0 0;background:var(--ok);min-width:5px;display:block}
+.trend i{flex:1;max-width:var(--trend-bar);border-radius:var(--w-r-xs) var(--w-r-xs) 0 0;
+  background:var(--ok);min-width:5px;display:block}
 .trend i.w{background:var(--warn)}
 .trend i.e{background:var(--err)}
-.hmrow{display:flex;align-items:flex-start;gap:10px;padding:11px 12px;border:1px solid var(--line);
-  border-radius:var(--r-m);background:var(--surface);width:100%;text-align:left}
-.hmrow:hover{border-color:var(--pri-line);background:var(--surface-2)}
+/* 날짜 축 — 막대와 **같은 상한·같은 gap** 이어야 눈금이 맞는다. 그래서 상한을
+   --trend-bar 로 묶어 :root 에 두었다(형제 요소라 .trend 에 선언하면 상속되지 않는다). */
+.trend-x{display:flex;gap:6px;margin-top:7px}
+.trend-x span{flex:1;max-width:var(--trend-bar);text-align:center;
+  font-size:var(--fs-cap);color:var(--muted)}
+/* (.hmrow 정의가 여기 한 번 더 있었다 — 위쪽 것과 글자까지 같은 중복이라 지웠다.) */
 
 /* ════════ style block 05 (index.html 에서 추출) ════════ */
 /* ══════════════ v2.2 ══════════════ */
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden;background:var(--surface);flex:none}
-.seg button{height:28px;padding:0 11px;font-size:var(--fs-sm);font-weight:var(--fw-bold);color:var(--muted);
+.seg button{height:28px;padding:0 11px;font-size:var(--fs-sm);font-weight:var(--fw-semi);color:var(--muted);
   background:transparent;border:0;border-right:1px solid var(--line);display:inline-flex;align-items:center;gap:5px;cursor:pointer}
 .seg button:last-child{border-right:0}
 .seg button.on{background:var(--pri-soft);color:var(--pri)}
@@ -917,8 +1320,8 @@ html,body{overflow:hidden}
 
 /* ════════ style block 06 (index.html 에서 추출) ════════ */
 /* ══════════════ v2.3 — ERD ══════════════ */
-.erd-wrap{flex:1;min-height:0;overflow:auto;position:relative;background:#F7F8FA;
-  background-image:radial-gradient(#E1E1E1 1px,transparent 1px);background-size:20px 20px}
+.erd-wrap{flex:1;min-height:0;overflow:auto;position:relative;background:var(--canvas-bg);
+  background-image:radial-gradient(var(--canvas-dot) 1px,transparent 1px);background-size:20px 20px}
 .erd-wrap::-webkit-scrollbar{width:0;height:0}
 .ent{position:absolute;width:266px;background:var(--surface);border:1px solid var(--line);
   border-radius:9px;box-shadow:var(--shadow-1);overflow:hidden;cursor:grab;user-select:none}
@@ -927,12 +1330,12 @@ html,body{overflow:hidden}
 .ent.drag{cursor:grabbing;box-shadow:var(--shadow-3);z-index:5}
 .ent-t{height:5px}
 .ent-h{padding:8px 11px 8px;background:var(--surface-2);border-bottom:1px solid var(--line)}
-.ent-n{font-size:var(--fs-sm);font-weight:var(--fw-bold);color:var(--ink);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ent-n{font-size:var(--fs-sm);font-weight:var(--fw-semi);color:var(--ink);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ent-p{font-size:var(--fs-cap);color:var(--faint);font-family:var(--mono);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ent-r{display:flex;align-items:center;gap:7px;height:24px;padding:0 11px;border-bottom:1px solid var(--line-2)}
 .ent-r:last-child{border-bottom:0}
 .ent-r.pk{background:rgba(99,102,241,.05)}
-.ent-k{width:22px;flex:none;font-size:var(--fs-micro);font-weight:var(--fw-bold);letter-spacing:.2px;text-align:center;
+.ent-k{width:22px;flex:none;font-size:var(--fs-micro);font-weight:var(--fw-semi);letter-spacing:.2px;text-align:center;
   border-radius:3px;line-height:13px;height:13px}
 .ent-k.p{background:var(--pri-soft);color:var(--pri)}
 .ent-k.f{background:var(--warn-soft);color:var(--warn)}
@@ -945,7 +1348,7 @@ html,body{overflow:hidden}
   border-radius:5px;padding:1px 6px;font-size:var(--fs-cap);color:var(--muted);font-family:var(--mono);
   white-space:nowrap;pointer-events:auto;cursor:pointer}
 .rel-l:hover{border-color:var(--pri);color:var(--pri)}
-.card-n{position:absolute;transform:translate(-50%,-50%);font-size:var(--fs-cap);font-weight:var(--fw-bold);color:var(--muted);
+.card-n{position:absolute;transform:translate(-50%,-50%);font-size:var(--fs-cap);font-weight:var(--fw-semi);color:var(--muted);
   background:var(--surface);border-radius:4px;padding:0 3px;pointer-events:none}
 .erd-lg{position:absolute;left:14px;bottom:12px;display:flex;gap:9px;align-items:center;
   background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:6px 10px;
@@ -963,17 +1366,17 @@ html,body{overflow:hidden}
 .ent-f input:focus{border-color:var(--pri)}
 .ent-m{display:flex;align-items:center;gap:6px}
 .ent-m .lnk{font-size:var(--fs-cap)}
-.ent-g{padding:3px 11px;font-size:var(--fs-micro);font-weight:var(--fw-bold);letter-spacing:.3px;color:var(--faint);
+.ent-g{padding:3px 11px;font-size:var(--fs-micro);font-weight:var(--fw-semi);letter-spacing:.3px;color:var(--faint);
   background:var(--surface-2);border-bottom:1px solid var(--line-2)}
 .relk{display:inline-flex;align-items:center;gap:4px}
-.relk b{font-weight:var(--fw-bold);color:var(--pri)}
+.relk b{font-weight:var(--fw-semi);color:var(--pri)}
 
 /* ════════ style block 08 (index.html 에서 추출) ════════ */
 /* ══════════════ v2.5 ══════════════ */
 .kindt{display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:4px;
-  font-family:var(--mono);font-size:var(--fs-micro);font-weight:var(--fw-bold);letter-spacing:.4px;flex:none}
+  font-family:var(--mono);font-size:var(--fs-micro);font-weight:var(--fw-semi);letter-spacing:.4px;flex:none}
 .grp-h{display:flex;align-items:center;gap:6px;padding:9px 9px 5px;font-family:var(--mono);
-  font-size:var(--fs-micro);font-weight:var(--fw-bold);letter-spacing:.6px;color:var(--faint)}
+  font-size:var(--fs-micro);font-weight:var(--fw-semi);letter-spacing:.6px;color:var(--faint)}
 .grp-h i{width:8px;height:8px;border-radius:2px;display:block;flex:none}
 .rule{display:flex;align-items:flex-start;gap:7px;padding:8px 11px;border-radius:var(--r-m);
   background:var(--pri-soft);color:var(--pri);font-size:var(--fs-cap);line-height:1.5}
@@ -989,7 +1392,7 @@ html,body{overflow:hidden}
 .pn.linking{border-color:var(--ok);box-shadow:0 0 0 2px rgba(14,159,110,.25)}
 .pn-t{height:5px;border-radius:8px 8px 0 0}
 .pn-b{padding:8px 11px 9px;display:flex;flex-direction:column;gap:3px;min-width:0}
-.pn-n{font-size:var(--fs-sm);font-weight:var(--fw-bold);color:var(--ink)}
+.pn-n{font-size:var(--fs-sm);font-weight:var(--fw-semi);color:var(--ink)}
 .pn-p{font-size:var(--fs-cap);font-family:var(--mono);color:var(--faint)}
 .pn-m{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:2px}
 .pn-x{position:absolute;top:-8px;right:-8px;width:20px;height:20px;border-radius:50%;
@@ -1021,8 +1424,9 @@ html,body{overflow:hidden}
 /* 클릭 영역 · 컴포넌트 크기 통일 */
 .lp-add{width:24px;height:24px}
 .pn-x{width:22px;height:22px;top:-9px;right:-9px}
-.zoomlbl{padding:4px 8px}
-.zoomlbl .lnk{padding:4px 4px;display:inline-block}
+/* 안의 버튼도 알약 글자 크기를 그대로 쓴다 — .lnk 가 자기 font-size(12)를 갖고
+   있어 여기서 풀어 주지 않으면 알약만 커지고 글자는 작은 채로 남는다. */
+.zoomlbl .lnk{font-size:inherit;padding:0 6px;height:100%;display:inline-flex;align-items:center}
 .kindt{font-size:var(--fs-micro);height:17px}
 .grp-h{font-size:var(--fs-cap)}
 /* 안내 배너는 한 줄로 슬림하게 */
@@ -1040,8 +1444,8 @@ html,body{overflow:hidden}
 /* ════════ style block 10 (index.html 에서 추출) ════════ */
 /* ══════════════ v2.8 — DAG task 캔버스 ══════════════ */
 .pn-hd{display:flex;align-items:center;gap:6px;min-width:0}
-.pn-seq{width:19px;height:19px;border-radius:50%;background:var(--pri);color:#fff;
-  font-size:var(--fs-cap);font-weight:var(--fw-bold);display:grid;place-items:center;flex:none;font-family:var(--mono)}
+.pn-seq{width:19px;height:19px;border-radius:50%;background:var(--pri);color:var(--w-text-on-accent);
+  font-size:var(--fs-cap);font-weight:var(--fw-semi);display:grid;place-items:center;flex:none;font-family:var(--mono)}
 .pn.src .pn-seq{background:var(--surface-3);color:var(--faint);font-size:var(--fs-micro)}
 .pn.src{border-style:dashed}
 
@@ -1054,7 +1458,7 @@ html,body{overflow:hidden}
 .fdr-c{width:16px;height:16px;display:grid;place-items:center;flex:none;color:var(--faint);
   transition:transform .12s}
 .fdr.open .fdr-c{transform:rotate(90deg)}
-.fdr-n{font-size:var(--fs-sm);font-weight:var(--fw-bold);color:var(--text);flex:1;min-width:0;
+.fdr-n{font-size:var(--fs-sm);font-weight:var(--fw-semi);color:var(--text);flex:1;min-width:0;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fdr-k{font-size:var(--fs-cap);color:var(--faint);flex:none}
 .fdr-m{width:20px;height:20px;border-radius:4px;display:none;place-items:center;color:var(--muted);flex:none}
@@ -1065,7 +1469,7 @@ html,body{overflow:hidden}
 .lp.in-f{padding-left:26px}
 .lp .lp-n{font-size:var(--fs-sm);color:var(--text);flex:1;min-width:0;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.lp.on .lp-n{color:var(--pri);font-weight:var(--fw-bold)}
+.lp.on .lp-n{color:var(--pri);font-weight:var(--fw-semi)}
 .fdr-add{display:flex;align-items:center;gap:5px;padding:6px 8px;border-radius:var(--r-s);
   font-size:var(--fs-cap);color:var(--muted);cursor:pointer;width:100%;background:none;border:0}
 .fdr-add:hover{background:var(--surface-3);color:var(--pri)}
@@ -1082,7 +1486,7 @@ html,body{overflow:hidden}
 .ct-grp{position:sticky;top:0;z-index:3;background:var(--surface);
   display:flex;align-items:center;gap:7px;padding:9px 6px 6px;margin-top:2px}
 .ct-grp i{width:7px;height:7px;border-radius:2px;flex:none}
-.ct-grp-n{font-size:var(--fs-cap);font-weight:var(--fw-bold);letter-spacing:.07em;color:var(--muted)}
+.ct-grp-n{font-size:var(--fs-cap);font-weight:var(--fw-semi);letter-spacing:.07em;color:var(--muted)}
 .ct-grp-k{font-size:var(--fs-cap);color:var(--faint);margin-left:auto;flex:none}
 .ct-grp.over{background:var(--pri-soft);border-radius:var(--r-s);box-shadow:inset 0 0 0 1px var(--pri-line)}
 .ct-kids{margin-left:14px;padding-left:9px;border-left:1px solid var(--line-2)}
@@ -1096,7 +1500,7 @@ html,body{overflow:hidden}
 .ct-f.open .ct-f-c{transform:rotate(90deg)}
 .ct-f-i{color:var(--faint);flex:none;display:flex}
 .ct-f.open .ct-f-i{color:var(--muted)}
-.ct-f-n{font-size:var(--fs-sm);font-weight:var(--fw-bold);color:var(--text);flex:1;min-width:0;
+.ct-f-n{font-size:var(--fs-sm);font-weight:var(--fw-semi);color:var(--text);flex:1;min-width:0;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ct-f-k{font-size:var(--fs-cap);color:var(--faint);flex:none;font-variant-numeric:tabular-nums}
 .ct-f:hover .ct-f-k,.ct-f:focus-within .ct-f-k{display:none}
@@ -1132,7 +1536,7 @@ html,body{overflow:hidden}
 .tg-sel{display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--pri-soft);
   border-bottom:1px solid var(--pri-line);font-size:var(--fs-cap);color:var(--pri)}
 .tg-sel button{border:0;background:none;cursor:pointer;font-size:var(--fs-cap);color:var(--pri);
-  font-weight:var(--fw-bold);padding:2px 4px;border-radius:4px}
+  font-weight:var(--fw-semi);padding:2px 4px;border-radius:4px}
 .tg-sel button:hover{background:var(--surface)}
 .tg-r{display:flex;align-items:center;gap:4px;height:22px;padding-right:4px;cursor:default;
   min-width:0;position:relative;white-space:nowrap;outline:none}
@@ -1151,12 +1555,12 @@ html,body{overflow:hidden}
 .tg-i svg{width:14px;height:14px}
 .tg-r.g .tg-i{display:none}
 .tg-n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
-.tg-r.f .tg-n{font-weight:var(--fw-bold)}
+.tg-r.f .tg-n{font-weight:var(--fw-semi)}
 .tg-r.g{height:24px;margin-top:3px}
-.tg-r.g .tg-n{font-size:var(--fs-cap);font-weight:var(--fw-bold);letter-spacing:.06em;color:var(--muted)}
+.tg-r.g .tg-n{font-size:var(--fs-cap);font-weight:var(--fw-semi);letter-spacing:.06em;color:var(--muted)}
 .tg-r.g:hover{background:var(--surface-3)}
 .tg-r.i .tg-n{color:var(--text)}
-.tg-r.i.on .tg-n,.tg-r.f.on .tg-n{color:var(--pri);font-weight:var(--fw-bold)}
+.tg-r.i.on .tg-n,.tg-r.f.on .tg-n{color:var(--pri);font-weight:var(--fw-semi)}
 .tg-sw{width:6px;height:6px;border-radius:2px;flex:none;margin-right:1px}
 .tg-k{font-size:var(--fs-cap);color:var(--faint);flex:none;font-variant-numeric:tabular-nums;padding-left:2px}
 .tg-r:hover .tg-k{display:none}
@@ -1166,6 +1570,17 @@ html,body{overflow:hidden}
   border:0;background:none;padding:0;color:var(--muted);cursor:pointer}
 .tg-b svg{width:14px;height:14px}
 .tg-r:hover .tg-b,.tg-r.dim .tg-b.eye{display:grid}
+.tg-b:hover{background:var(--w-hover);color:var(--text)}
+
+/* ── 데이터 맵에서 제외한 항목 ───────────────────────────────────
+   지운 것이 아니라 가린 것이므로 목록에 남기고 흐리게만 둔다. 목록에서 사라지면
+   되돌릴 자리도 함께 사라진다 — 되돌리는 + 버튼이 이 행에 있다.
+   흐리게 하는 대상에서 + 버튼은 뺀다(눌러야 하는 것이 같이 흐려지면 안 된다). */
+.tg-r.off .tg-i,.tg-r.off .tg-n,.tg-r.off .tg-path{opacity:.4}
+.tg-r.off .tg-n{text-decoration:line-through;text-decoration-color:var(--line-str)}
+/* 제외한 항목의 + 는 항상 보인다 — 마우스를 올려야 나타나면 무엇을 가렸는지
+   훑어볼 때 되돌릴 버튼이 어디 있는지 알 수 없다. */
+.tg-r.off .tg-b[data-mapon]{display:grid;color:var(--pri)}
 .tg-b:hover{background:var(--line);color:var(--ink)}
 .tg-e{height:20px;display:flex;align-items:center;font-size:var(--fs-cap);color:var(--faint);font-style:normal}
 .tg-e.over{color:var(--pri);background:var(--pri-soft)}
@@ -1201,35 +1616,86 @@ html,body{overflow:hidden}
 /* 페이지 헤더 — 목록·상세 공통 */
 .ana-top{flex:none;background:var(--surface);border-bottom:1px solid var(--line);
   padding:16px 24px}
-.ana-top .tt{font-size:var(--fs-page);font-weight:var(--fw-bold);color:var(--ink);letter-spacing:-0.5px;margin:0}
-.ana-top .td{font-size:var(--fs-sm);color:var(--muted);margin:4px 0 0}
+/* 본문이 .ana-inner 로 가운데 모이는 화면(목록 · 새 분석)에서는 머리도 그 자리에
+   맞춘다. 안 맞추면 1920 화면에서 제목이 자기가 가리키는 목록보다 120px 왼쪽에
+   서서, 제목과 내용이 다른 단에 있는 것처럼 보인다.
+
+   바탕과 아래 선은 전폭 그대로다(그래서 max-width 가 아니라 padding 이다).
+   띠는 화면을 가로지르고 글자만 본문에 맞춰 선다. 창이 1680 보다 좁으면 계산값이
+   음수라 max() 가 24 를 고르고, 그때는 본문 여백도 24 라 역시 맞는다.
+
+   **본문이 전폭인 화면에는 붙이지 않는다.** 대시보드 상세는 본문이 임베드된
+   iframe 이라 화면을 꽉 채우는데, 거기까지 머리를 들여쓰면 이번에는 반대로
+   어긋난다. 기준은 «머리의 여백 = 그 화면 본문의 여백» 이지 «분석 화면은 전부
+   들여쓴다» 가 아니다. */
+.ana-top.inset{padding-inline:max(24px, calc((100% - 1680px) / 2 + 24px))}
+/* 바 안의 제목이므로 위쪽 «제목» 절의 H3 규격을 그대로 쓴다 — 여기서 --fs-page
+   700 -0.5px 로 따로 잡고 있던 것이 화면마다 제목이 갈리던 원인 중 하나였다. */
+.ana-top .tt{font-size:var(--fs-title);font-weight:var(--fw-semi);color:var(--ink);
+  letter-spacing:-0.1px;margin:0}
+.ana-top .td{font-size:var(--fs-sm);color:var(--muted);margin:var(--w-s-1) 0 0}
 
 /* 스크롤 담당자 — 여기 하나만 세로로 움직인다 */
 .ana-scroll{flex:1;min-height:0;overflow:auto}
-.ana-inner{max-width:1440px;margin:0 auto;padding:24px}
+/* 넓은 화면에서 콘텐츠가 좌측에 몰려 보이던 폭. 1440 은 카드 4장 기준인데
+   1920 화면에서는 오른쪽 480px 이 통째로 비었다. 1680 까지 열어 카드가 5장까지
+   들어가게 하고, 그 이상은 가운데 정렬로 남긴다 — 더 넓히면 한 줄이 너무 길어져
+   카드 사이를 눈으로 잇기 어려워진다. */
+.ana-inner{max-width:1680px;margin:0 auto;padding:24px}
 
 .ana-sec+.ana-sec{margin-top:24px}
 .ana-sec-h{display:flex;align-items:center;gap:8px;margin:0 0 12px}
-.ana-sec-h .t{font-size:var(--fs-strong);font-weight:var(--fw-bold);color:var(--text)}
-.ana-sec-h .n{font-size:var(--fs-strong);font-weight:var(--fw-bold);color:var(--pri)}
+.ana-sec-h .t{font-size:var(--fs-strong);font-weight:var(--fw-semi);color:var(--text)}
+.ana-sec-h .n{font-size:var(--fs-strong);font-weight:var(--fw-semi);color:var(--pri)}
 
 /* 카드 그리드 */
-.ana-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
-.ana-c{position:relative;height:132px;background:var(--surface);
+.ana-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+/* 높이를 고정하지 않는다. 담긴 것이 늘어나면 그만큼 자란다 — 고정하면
+   내용이 잘리거나(적재 시각·갱신 배지) 남는 자리가 그대로 빈칸이 된다. */
+.ana-c{position:relative;min-height:150px;background:var(--surface);
   border:1px solid var(--line);border-radius:var(--r-m);padding:16px;cursor:pointer;
   display:flex;flex-direction:column}
-.ana-c:hover{border-color:#4A4A4A}
-.ana-c .ct{font-size:var(--fs-strong);font-weight:var(--fw-bold);color:var(--ink);letter-spacing:-0.5px;
+.ana-c:hover{border-color:var(--pri-line)}
+.ana-c .ct{font-size:var(--fs-strong);font-weight:var(--fw-semi);color:var(--ink);
   padding-right:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ana-c .cd{display:flex;gap:4px;margin-top:8px;overflow:hidden}
+/* 모델 태그 줄 — 줄바꿈을 허용한다. 한 줄에 억지로 넣으면 두 번째 태그가 잘리는데,
+   여기 잘리는 것은 사용자가 눌러 확인할 대상(테이블 이름)이라 끝 글자가 사라지면
+   mart_gap_by_region 과 mart_gap_watch 를 구별할 수 없다. 카드 높이가 한 줄 늘어난다. */
+.ana-c .cd{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
 .ana-c .cacts{position:absolute;top:10px;right:10px;display:flex;gap:2px}
-.ana-c .cfoot{margin-top:auto;padding-top:10px;border-top:1px solid #F0F0F0;
+/* 데이터가 언제 적재됐는지 — 대시보드를 열기 전에 궁금한 값이다. */
+.ana-c .cmeta{margin-top:9px;font-size:var(--fs-sm);color:var(--muted);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ana-c .cmeta.trunc2{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;
+  -webkit-box-orient:vertical;line-height:1.5}
+.ana-tag.more{background:transparent;color:var(--faint)}
+/* 갱신 필요 — 카드 안에서는 작게. 상세 화면의 같은 표시와 색을 공유한다. */
+.ana-stale.sm{display:inline-flex;align-items:center;gap:3px;font-size:var(--fs-cap);
+  color:var(--warn);white-space:nowrap}
+.ana-stale.sm .ic{width:12px;height:12px}
+/* 데이터 카드 — 누르면 그 데이터로 분석이 시작된다. */
+.ana-c.mart:hover .ana-start{color:var(--pri)}
+.ana-start{display:inline-flex;align-items:center;gap:3px;color:var(--faint);
+  white-space:nowrap}
+.ana-start .ic{width:12px;height:12px}
+.ana-c .cfoot{margin-top:auto;padding-top:10px;border-top:1px solid var(--line);
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
   font-size:var(--fs-sm);color:var(--muted)}
-.ana-tag{height:20px;display:inline-flex;align-items:center;background:var(--surface-3);
-  border-radius:4px;padding:0 6px;font-family:var(--mono);font-size:var(--fs-sm);color:var(--muted);
+/* 위쪽 .tag 와 같은 역할(분류표)이므로 같은 규격으로 맞춘다 — 높이 22 · radius 4 ·
+   12px · 검정 6%. display 를 inline-block 으로 바꾼 이유는, inline-flex 안의 맨
+   텍스트는 익명 flex 항목이 되어 text-overflow:ellipsis 가 걸리지 않기 때문이다.
+   그래서 넘칠 때 «…» 없이 그냥 잘려 있었다. */
+.ana-tag{height:20px;display:inline-block;line-height:20px;background:rgba(0,0,0,.06);
+  border-radius:var(--w-r-xs);padding:0 6px;font-family:var(--mono);
+  font-size:var(--fs-cap);color:var(--muted);
   max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 즐겨찾기 — 꺼짐은 테두리만, 켜짐은 채운다.
+   색만 바꾸면 «주황 테두리 별» 이라 켜졌는지 한눈에 안 보인다.
+   아이콘이 stroke 로 그려져 있어 fill 을 따로 켜야 한다. */
 .ana-fav{color:var(--faint)}
+.ana-fav:hover{color:var(--warn)}
 .ana-fav.on{color:var(--warn)}
+.ana-fav.on .ic{fill:currentColor}
 .ana-empty{text-align:center;padding:48px 20px;font-size:var(--fs-body);color:var(--muted)}
 
 /* 상세 — 분석 엔진 화면을 그대로 띄우는 프레임.
@@ -1238,8 +1704,13 @@ html,body{overflow:hidden}
    render() 가 #app 을 비워도 이 층은 건드려지지 않아 대시보드가 다시 로드되지 않는다.
    z-index 50 — 헤더(60) 아래, 모달 스크림(100) 아래. */
 #anaFrames{position:fixed;inset:0;pointer-events:none;z-index:50}
-#anaFrames .ana-frame{position:absolute;pointer-events:auto;border:0;display:none;
-  background:var(--surface)}
+/* 상자가 자리표시자 크기로 잘라 낸다. 그 안에서 프레임은 최소 폭을 지키고,
+   자리가 그보다 좁으면 눌리는 대신 가로로 스크롤된다 — 분석 엔진의 대시보드는
+   좁아지면 칸을 접지 않고 눌러 담아서, 그대로 두면 숫자가 중간에서 끊긴다. */
+#anaFrames .ana-frame-box{position:absolute;pointer-events:auto;display:none;
+  overflow-x:auto;overflow-y:hidden;background:var(--surface)}
+#anaFrames .ana-frame{border:0;display:block;width:100%;height:100%;
+  min-width:var(--ana-frame-min);background:var(--surface)}
 /* 자리표시자 — 프레임이 놓일 자리를 잡아 준다. 자신은 그리지 않는다. */
 .ana-frame-slot{flex:1;min-height:0;width:100%;background:var(--surface)}
 
@@ -1248,16 +1719,16 @@ html,body{overflow:hidden}
    오래된 것이기 때문이다 — 보고 판단할 사람에게 사실만 알린다. */
 .ana-stale{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;
   background:var(--warn-soft);border:1px solid var(--warn-line);border-radius:999px;
-  font-size:var(--fs-sm);font-weight:var(--fw-bold);color:#EB6400;cursor:default}
+  font-size:var(--fs-sm);font-weight:var(--fw-semi);color:var(--text);cursor:default}
 
 /* 차트 카드 */
 .ana-ch{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-m);
   padding:20px}
 .ana-ch+.ana-ch{margin-top:16px}
 .ana-ch-h{display:flex;align-items:center;gap:8px;margin:0 0 12px}
-.ana-ch-h .t{font-size:var(--fs-strong);font-weight:var(--fw-bold);color:var(--ink);letter-spacing:-0.5px}
+.ana-ch-h .t{font-size:var(--fs-strong);font-weight:var(--fw-semi);color:var(--ink)}
 .ana-txt{border:0;background:none;padding:0;font-size:var(--fs-sm);color:var(--muted);cursor:pointer}
-.ana-txt:hover{color:var(--text);text-decoration:underline}
+.ana-txt:hover{color:var(--text)}
 .ana-txt.off{color:var(--faint)}
 
 /* 범례 — 차트 하단 중앙 */
@@ -1273,7 +1744,7 @@ html,body{overflow:hidden}
 .ana-donut .hole{position:absolute;inset:44px;background:var(--surface);border-radius:50%;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
 .ana-donut .hole .k{font-size:var(--fs-sm);color:var(--muted)}
-.ana-donut .hole .v{font-size:var(--fs-page);font-weight:var(--fw-bold);color:var(--ink);letter-spacing:-0.5px}
+.ana-donut .hole .v{font-size:var(--fs-page);font-weight:var(--fw-bold);color:var(--ink);letter-spacing:-0.2px}
 .ana-dlist{flex:1;min-width:220px;display:flex;flex-direction:column}
 .ana-dl{display:grid;grid-template-columns:10px 1fr auto auto;align-items:center;
   gap:10px;height:36px;padding:0 8px;border-radius:var(--r-s)}
@@ -1289,12 +1760,12 @@ html,body{overflow:hidden}
   border:1px solid var(--line-str);border-radius:var(--r-s);background:var(--surface);cursor:pointer}
 .ana-opt:hover{background:var(--hover-o)}
 .ana-opt.on{border-color:var(--pri);background:var(--sel-o)}
-.ana-opt .on1{font-size:var(--fs-body);font-weight:var(--fw-bold);color:var(--text)}
+.ana-opt .on1{font-size:var(--fs-body);font-weight:var(--fw-semi);color:var(--text)}
 .ana-opt .on2{font-size:var(--fs-sm);color:var(--muted);overflow:hidden;text-overflow:ellipsis;
   white-space:nowrap}
-.ana-name{font-size:var(--fs-page);font-weight:var(--fw-bold);color:var(--ink);letter-spacing:-0.5px;
+.ana-name{font-size:var(--fs-page);font-weight:var(--fw-bold);color:var(--ink);letter-spacing:-0.2px;
   border:0;background:none;padding:0;min-width:200px;outline:none}
-.ana-name::placeholder{color:var(--faint);font-weight:var(--fw-bold)}
+.ana-name::placeholder{color:var(--faint);font-weight:var(--fw-semi)}
 
 .inp.sm{height:28px;font-size:var(--fs-sm);padding:0 8px}
 .menu button.dngr{color:var(--err)}
@@ -1354,42 +1825,77 @@ html,body{overflow:hidden}
 /* display:flex 를 여기서 빼면 배지와 글자가 두 줄로 쌓인다 — 버튼의 기본 display 는
    inline-block 이라 gap 도 듣지 않는다. 중복 정의를 정리할 때 «크기만 겹친다» 고
    보고 앞쪽 .brand 규칙을 지웠는데, 거기에 이 레이아웃이 함께 들어 있었다. */
+/* 브랜드 칸 — 폭을 --brand-w 로 **고정**한다. 화면·메뉴가 바뀌어도 이 칸의 폭은
+   변하지 않는다(글자 길이를 따라가지 않는다). 그래서 어느 화면에서든 그 다음 칸,
+   즉 「데이터 수집」이 시작되는 x 좌표가 같다.
+
+   경계선은 두지 않는다. 264px 이라는 고정 폭 자체가 두 칸을 갈라 놓고, 그 선이
+   아래 좌측 패널 경계와 이어져 헤더에서 본문까지 한 줄로 내려간다 — 헤더에만 선을
+   더하면 그 줄이 두 번 그어진 것처럼 보인다.
+
+   간격 9px · 심볼 28px · 워드마크 18/22 는 로고 규정의 «웹 서비스 헤더(52px)» 값이다. */
 button.brand{display:flex;align-items:center;flex:none;height:100%;position:relative;
-  border:0;background:none;cursor:pointer;padding:0 4px;font:inherit;color:var(--ink);
-  font-size:var(--hd-brand);font-weight:var(--fw-bold);gap:10px;letter-spacing:-0.5px}
-.brand-m{width:var(--hd-logo);height:var(--hd-logo);border-radius:9px;flex:none}
-.brand-m svg{width:20px;height:20px}
-.brand:hover .brand-m{filter:brightness(1.08)}
+  width:var(--brand-w);border:0;background:none;
+  cursor:pointer;padding:0 var(--w-content-pad);font:inherit;color:var(--ink);
+  font-size:var(--hd-brand);line-height:28px;gap:11px}
+/* 워드마크 — DATA 는 Heavy(860), MATES 는 Regular(400). 굵기 대비가 이 로고의
+   조판이므로 한 굵기로 눌러 붙이면 로고가 아니라 그냥 글자가 된다.
+   Wanted Sans 가변 축이 400–1000 이라 860 이 근사 없이 그대로 그려진다.
+   자간 -0.4px 는 규정이 24px 조판에 붙여 둔 값이다(18px 일 때는 -0.3px 였다).
+   간격 11px 은 규정의 «심볼 폭의 0.3배» 규칙 — 38 × 0.3 ≒ 11. */
+.brand-w1{font-weight:var(--fw-heavy);letter-spacing:-0.4px}
+.brand-w2{font-weight:var(--fw-reg)}
+/* 심볼은 이제 <svg> 자체다(예전에는 배지 <span> 안에 svg 를 넣었다). radius 도
+   배경도 없으므로 크기와 flex 만 정한다. .brand-m svg 규칙은 그 중첩이 사라져 지웠다. */
+.brand-m{width:var(--hd-logo);height:var(--hd-logo);flex:none}
+.brand:hover .brand-m{opacity:.85}
 .brand:hover,.gnav-i:hover{color:var(--ink)}
 
-.gnav{display:flex;align-items:center;gap:2px;margin-left:8px;min-width:0;overflow-x:auto;
-  scrollbar-width:none;align-self:stretch}
+/* 페이지 이동 칸 — 브랜드 칸 경계(--brand-w) 바로 다음에서 시작한다.
+   margin-left 를 8px 두던 것을 padding-left 로 바꿨다. margin 은 첫 메뉴 버튼의
+   hover 배경까지 밀어내 경계선과 버튼 사이가 비어 보이는데, padding 이면 칸 안쪽
+   여백이라 버튼이 경계선에 가까워도 배경이 잘리지 않는다. */
+.gnav{display:flex;align-items:center;gap:2px;margin-left:0;padding-left:var(--w-s-2);
+  flex:1;min-width:0;overflow-x:auto;scrollbar-width:none;align-self:stretch}
+/* .top 의 gap 을 0 으로 두었으므로 우측 컨트롤 간격은 여기서 준다 (DS TopNav end gap 8).
+   #btnHelp 는 margin-left:auto 로 오른쪽으로 밀려 있고, 그 뒤 두 개만 해당한다. */
+.top .iconbtn+.iconbtn{margin-left:var(--w-s-2)}
 .gnav::-webkit-scrollbar{display:none}
+/* 좌우 패딩 14 → 16. 글자가 15px 로 커진 만큼 옆 여백도 함께 늘려야 메뉴 사이
+   간격이 글자에 눌리지 않는다. */
 .gnav-i{position:relative;border:0;background:none;height:100%;
-  padding:0 14px;font-size:var(--hd-nav);font-weight:var(--fw-med);
+  padding:0 var(--w-s-4);font-size:var(--hd-nav);font-weight:var(--fw-med);
   color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;flex:none}
-.gnav-i.on{color:var(--pri);font-weight:var(--fw-bold)}
+.gnav-i.on{color:var(--pri);font-weight:var(--fw-semi)}
 /* 활성 밑줄 — 메뉴에만 붙는다.
-   브랜드(Data Mates)는 제품 이름이지 메뉴 항목이 아니다. 홈에서 밑줄이 그어지면
-   메뉴 하나가 더 있는 것처럼 읽힌다. 홈으로 가는 버튼 역할은 그대로 둔다. */
+   브랜드(DATA MATES)는 제품 이름이지 메뉴 항목이 아니다. 홈에서 밑줄이 그어지면
+   메뉴 하나가 더 있는 것처럼 읽힌다. 홈으로 가는 버튼 역할은 그대로 둔다.
+   좌우 12 는 패딩 16 보다 4 안쪽 — 밑줄이 글자 폭에 붙어 보이게 한다. */
 .gnav-i.on::after{content:'';position:absolute;bottom:0;height:2px;
-  left:10px;right:10px;border-radius:2px 2px 0 0;background:var(--pri)}
+  left:12px;right:12px;border-radius:2px 2px 0 0;background:var(--pri)}
 .gnav-i .nav-b{margin-left:0}
 /* 좁은 화면 — **글자 크기는 건드리지 않는다.** 여백과 배치로만 줄인다.
    폭마다 글자를 줄이면 같은 헤더가 화면마다 다른 크기로 보이고, 본문 글자와의
    관계도 달라진다. 여백을 다 줄이고도 넘치면 이 줄이 가로로 스크롤된다 —
    전역 이동을 드롭다운이나 사이드바로 되접지 않는다. */
-#app.nar .top{gap:10px;padding:0 12px}
-#app.nar .gnav{margin-left:4px}
+/* 좁아져도 **브랜드 칸의 폭은 건드리지 않는다** — 좌측 패널이 여기서도 264 이므로
+   폭을 줄이면 두 경계선이 갈라진다. 줄일 것은 메뉴 버튼의 좌우 여백과 헤더 오른쪽
+   패딩뿐이다. 왼쪽 패딩은 브랜드 칸이 자기 안에서 만든다. */
+#app.nar .top{padding:0 12px 0 0}
 #app.nar .gnav-i{padding:0 10px}
-#app.xnar .top{gap:8px;padding:0 10px}
-#app.xnar button.brand{padding:0 2px}
-#app.xnar .gnav{margin-left:2px}
+#app.xnar .top{padding:0 10px 0 0}
 #app.xnar .gnav-i{padding:0 8px}
-/* 가장 좁을 때 — 브랜드 글자는 감추고 배지만 남긴다. 글자를 줄이는 대신
-   보조 정보를 빼는 쪽이다. 홈으로 가는 버튼 역할은 배지로 그대로 남는다. */
-#app.xnar .brand-l{display:none}
-#app.xnar button.brand{gap:0}
+/* 브랜드 칸 폭은 어느 tier 에서도 --brand-w 그대로다.
+   한때 xnar 에서 접힌 레일 폭(44)으로 줄여 «경계선을 레일과 맞추는» 방식을 넣었는데
+   그건 틀렸다 — 좌측 패널은 1340 아래에서 기본으로 접히므로(b01.js
+   applyTierDefaults), 패널 상태를 따라가면 브랜드 칸이 화면 폭에 따라 264 ↔ 44 로
+   움직인다. 이 칸은 **좌측 패널의 기본 폭을 나타내는 고정 기준선**이고, 패널이 지금
+   접혀 있는지와는 무관하다. 폭이 화면마다 달라지면 기준선이 아니게 된다. */
+#app.xnar .gnav{padding-left:4px}
+/* 가장 좁을 때도 워드마크를 남긴다. 예전에는 글자를 감추고 배지만 남겼는데, 그건
+   브랜드가 남는 공간을 다투던 때의 처리다. 이제 브랜드 칸이 264 를 고정으로 갖고
+   있어서 글자를 감춰도 그 폭이 줄지 않는다 — 감추면 264 짜리 빈 칸에 26px 배지만
+   덜렁 남는다. 1024 에서 브랜드 264 + 메뉴 5개 + 컨트롤 3개가 들어가는 것은 확인했다. */
 
 /* ════════ 파이프라인 실행 설정 (v6.1 재구성) ════════
    설정 페이지다. 카드를 겹치지 않는다 — 섹션 제목 + 구분선 + 설정 행이 전부이고,
@@ -1415,7 +1921,7 @@ button.brand{display:flex;align-items:center;flex:none;height:100%;position:rela
 .pcfg-s{display:flex;flex-direction:column;padding:14px 0 4px;border-top:1px solid var(--line-2)}
 .pcfg-s:first-of-type{border-top:0;padding-top:0}
 .pcfg-sh{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}
-.pcfg-st{font-size:var(--fs-strong);font-weight:var(--fw-bold);color:var(--ink)}
+.pcfg-st{font-size:var(--fs-strong);font-weight:var(--fw-semi);color:var(--ink)}
 .pcfg-sn{font-size:var(--fs-sm);color:var(--muted);font-weight:var(--fw-med)}
 .pcfg-sd{font-size:var(--fs-cap);color:var(--faint);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pcfg-sh .lnk{margin-left:auto;flex:none}
@@ -1446,7 +1952,7 @@ button.brand{display:flex;align-items:center;flex:none;height:100%;position:rela
 .pcfg-more{align-self:flex-start;margin-top:8px}
 /* 조회 전용 — 실행 대상이 아니라 읽기만 하는 입력이다 */
 .pcfg-ro b::after{content:'조회 전용';margin-left:6px;padding:0 5px;border-radius:4px;
-  background:var(--warn-soft);color:var(--warn);font-size:var(--fs-micro);font-weight:var(--fw-bold)}
+  background:var(--warn-soft);color:var(--warn);font-size:var(--fs-micro);font-weight:var(--fw-semi)}
 .pcfg-ro b{color:var(--muted)}
 
 /* 좁은 화면 — 설명이 들어갈 셋째 칸부터 포기한다. 이름·컨트롤 두 칸은 끝까지
@@ -1475,3 +1981,909 @@ button.brand{display:flex;align-items:center;flex:none;height:100%;position:rela
 .pd-sql{min-height:0}
 .pd-sqlbox{flex:1;min-height:110px;margin:0}
 #app.xnar .pd-sqlbox{flex:none;max-height:180px}
+
+/* ── 데이터 분석 — 개편 디자인 ─────────────────────────────────
+   구조·간격·컴포넌트 배치는 받은 디자인(데이터 분석.dc.html)을 그대로 따르고,
+   색·서체·글자 크기는 플랫폼 토큰을 쓴다. 이 화면만 다른 색 체계를 들이면
+   같은 제품 안에서 화면 하나가 남의 것처럼 보인다. */
+
+/* 섹션 머리 — 제목·건수 왼쪽, 도구 오른쪽 */
+.dc-sec-h{display:flex;align-items:center;justify-content:space-between;gap:16px;
+  margin:0 0 12px}
+.dc-sec-h .t{font-size:var(--fs-title);font-weight:var(--fw-semi);color:var(--ink)}
+.dc-sec-h .n{font-size:var(--fs-strong);font-weight:var(--fw-semi);color:var(--pri);
+  font-variant-numeric:tabular-nums}
+
+/* 검색 */
+.dc-srch{display:flex;align-items:center;gap:6px;height:32px;padding:0 10px;width:260px;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-s)}
+.dc-srch input{flex:1;min-width:0;border:0;background:transparent;outline:none;
+  font:inherit;font-size:var(--fs-body);color:var(--text)}
+.dc-srch input::placeholder{color:var(--faint)}
+
+/* 대시보드 카드 — 머리 / 몸통 / 발 */
+.dc-card{display:flex;flex-direction:column;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--r-m);cursor:pointer;min-width:0}
+.dc-card:hover{border-color:var(--line-str)}
+.dc-card-h{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;
+  padding:14px 14px 0}
+.dc-ct{font-size:var(--fs-title);font-weight:var(--fw-semi);color:var(--ink);
+  letter-spacing:-0.3px}
+.dc-cs{font-size:var(--fs-sm);color:var(--faint)}
+.dc-card-b{padding:12px 14px 14px;display:flex;flex-direction:column;gap:12px}
+/* 시각 두 줄 — 라벨과 값이 세로로 맞아야 비교된다 */
+.dc-kv{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;
+  font-size:var(--fs-sm);color:var(--faint)}
+.dc-kv span:nth-child(even){color:var(--muted);font-variant-numeric:tabular-nums}
+.dc-card-f{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:10px 14px;border-top:1px solid var(--line-2)}
+.dc-state{display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-sm)}
+.dc-state.ok{color:var(--ok)} .dc-state.warn{color:var(--warn)}
+.dc-dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+
+/* 새 대시보드 만들기 — 그리드 마지막 칸 */
+.dc-new{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:6px;min-height:186px;border:1px dashed var(--line-str);border-radius:var(--r-m);
+  background:transparent;color:var(--muted);cursor:pointer;font:inherit;padding:16px}
+.dc-new:hover{background:var(--hover-o);color:var(--ink)}
+.dc-new .t1{font-size:var(--fs-strong);font-weight:var(--fw-med)}
+.dc-new .t2{font-size:var(--fs-sm);color:var(--faint)}
+
+/* 분석 대상 데이터 — 표 */
+.dc-table{background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r-m);overflow:hidden}
+.dc-table table{width:100%;border-collapse:collapse;font-size:var(--fs-body)}
+.dc-table th{text-align:left;font-weight:var(--fw-med);font-size:var(--fs-sm);
+  color:var(--muted);background:var(--bg);border-bottom:1px solid var(--line);
+  padding:0 12px;height:40px;white-space:nowrap}
+.dc-table td{border-bottom:1px solid var(--line-2);padding:12px;color:var(--text)}
+.dc-table tbody tr:last-child td{border-bottom:0}
+.dc-table tbody tr:hover td{background:var(--hover-o)}
+.dc-table .num{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+.dc-table .ctr{text-align:center;color:var(--muted)}
+/* .top 은 앱의 기존 유틸리티(display:flex)라 표 안에서 쓰면 셀이 무너진다. */
+.dc-table .vt{vertical-align:top}
+.dc-table .desc{color:var(--muted);line-height:1.6;max-width:560px;text-wrap:pretty}
+.dc-mname{display:flex;align-items:center;gap:6px;font-weight:var(--fw-med);
+  color:var(--ink)}
+.dc-mname .ic{color:var(--pri);flex:none}
+.dc-mphys{display:block;margin-top:2px;font-family:var(--mono);
+  font-size:var(--fs-sm);color:var(--faint)}
+
+/* ── 분석 만들기 (개편) ───────────────────────────────────────── */
+.dcb-bar{flex:none;display:flex;align-items:center;justify-content:space-between;gap:24px;
+  height:72px;padding:0 24px;background:var(--surface);border-bottom:1px solid var(--line)}
+.dcb-name{border:0;background:transparent;padding:0;font:inherit;outline:none;
+  font-size:var(--fs-page);font-weight:var(--fw-semi);color:var(--ink);
+  letter-spacing:-0.5px;width:420px;max-width:100%}
+.dcb-name::placeholder{color:var(--faint);font-weight:var(--fw-med)}
+.dcb-src{font-family:var(--mono);font-size:var(--fs-sm);color:var(--pri);min-width:0}
+
+/* 좌 설정 / 우 결과. 좌측은 고정 폭이어야 담긴 것이 한눈에 들어온다. */
+.dcb-grid{display:grid;grid-template-columns:360px minmax(0,1fr);gap:20px;
+  padding:20px 24px 24px;align-items:start;max-width:1680px;margin:0 auto}
+.dcb-panel{display:flex;flex-direction:column;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--r-m);overflow:hidden}
+
+.dcb-viz{padding:14px 16px 12px;border-bottom:1px solid var(--line);
+  display:flex;flex-direction:column;gap:10px}
+.dcb-viz .lb{font-size:var(--fs-cap);font-weight:var(--fw-semi);letter-spacing:.04em;
+  color:var(--faint)}
+.dcb-viz .tiles{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.dcb-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:4px;height:56px;border:1px solid var(--line);border-radius:var(--r-s);
+  background:var(--surface);color:var(--muted);cursor:pointer;font:inherit;
+  font-size:var(--fs-sm)}
+.dcb-tile:hover{background:var(--hover-o)}
+.dcb-tile.on{border-color:var(--pri-line);background:var(--sel-o);color:var(--pri)}
+
+/* 담는 자리 */
+.dcb-zone{padding:14px 16px;border-bottom:1px solid var(--line);
+  display:flex;flex-direction:column;gap:10px}
+.dcb-zh{display:flex;align-items:center;justify-content:between;gap:8px;
+  justify-content:space-between}
+.dcb-zh .t{font-size:var(--fs-body);font-weight:var(--fw-semi);color:var(--ink)}
+.dcb-zh .n{font-size:var(--fs-sm);color:var(--faint);font-variant-numeric:tabular-nums}
+.dcb-add{color:var(--pri)}
+.dcb-items{display:flex;flex-direction:column;gap:6px}
+/* 비어 있을 때는 무엇을 담는 자리인지 그 자리가 직접 말한다. */
+.dcb-empty{display:flex;align-items:center;justify-content:center;width:100%;
+  min-height:44px;padding:8px;border:1px dashed var(--line-str);border-radius:var(--r-s);
+  background:transparent;font:inherit;font-size:var(--fs-sm);color:var(--faint);
+  cursor:pointer;text-align:center;line-height:1.5}
+.dcb-empty:hover{background:var(--hover-o)}
+.dcb-chip{display:flex;align-items:center;gap:8px;height:32px;padding:0 6px 0 10px;
+  border-radius:var(--r-s);background:var(--sel-o);border:1px solid var(--pri-line)}
+.dcb-chip .nm{flex:1;min-width:0;font-size:var(--fs-body);font-weight:var(--fw-med);
+  color:var(--ink)}
+.dcb-chip .rl{font-size:var(--fs-cap);color:var(--muted);white-space:nowrap}
+.dcb-chip .iconbtn.xs{width:22px;height:22px;flex:none}
+.dcb-pfoot{margin-top:auto;padding:12px 16px;display:flex;align-items:center;
+  justify-content:space-between;gap:8px;border-top:1px solid var(--line)}
+
+/* 결과 */
+.dcb-res{display:flex;flex-direction:column;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--r-m);min-height:560px;overflow:hidden}
+.dcb-rh{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:12px 16px;border-bottom:1px solid var(--line)}
+.dcb-rh .t{font-size:var(--fs-title);font-weight:var(--fw-semi);color:var(--ink)}
+.dcb-rh .n{font-size:var(--fs-sm);color:var(--faint);font-variant-numeric:tabular-nums}
+.dcb-rbody{overflow:auto;padding:0}
+.dcb-empty-wrap{flex:1;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:20px;padding:56px 24px}
+.dcb-empty-wrap .t1{font-size:var(--fs-title);font-weight:var(--fw-semi);color:var(--muted)}
+.dcb-empty-wrap .t2{font-size:var(--fs-body);color:var(--faint)}
+.dcb-chks{display:flex;flex-direction:column;gap:8px;width:520px;max-width:100%}
+.dcb-chk{display:flex;align-items:center;gap:10px;height:40px;padding:0 12px;
+  border:1px solid var(--line);border-radius:var(--r-s);background:var(--bg)}
+.dcb-chk .lb{flex:none;font-size:var(--fs-body);font-weight:var(--fw-med);color:var(--muted)}
+.dcb-chk .vl{flex:1;min-width:0;text-align:right;font-size:var(--fs-sm);color:var(--faint)}
+.dcb-chk .ic.ok{color:var(--ok)}
+
+/* 필드 선택 모달 */
+.dcb-pmodal{max-height:76vh}
+.dcb-psrch{display:flex;align-items:center;gap:6px;margin:12px 16px;height:32px;
+  padding:0 10px;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-s)}
+.dcb-psrch input{flex:1;min-width:0;border:0;background:transparent;outline:none;
+  font:inherit;font-size:var(--fs-body);color:var(--text)}
+.dcb-plist{padding:0 8px 8px;overflow:auto}
+.dcb-pgrp{display:flex;align-items:center;gap:6px;padding:10px 8px 4px;
+  font-size:var(--fs-cap);font-weight:var(--fw-semi);letter-spacing:.04em;color:var(--faint)}
+.dcb-pitem{display:flex;align-items:center;gap:10px;width:100%;height:36px;padding:0 10px;
+  border:0;border-radius:var(--r-s);background:transparent;font:inherit;
+  font-size:var(--fs-body);color:var(--text);cursor:pointer;text-align:left}
+.dcb-pitem:hover{background:var(--hover-o)}
+.dcb-pitem.on{background:var(--sel-o)}
+.dcb-pitem .nm{flex:1;min-width:0}
+.dcb-pitem .st{font-size:var(--fs-cap);color:var(--faint)}
+
+/* ════════ 데이터 품질 — DS 셸을 본문 안에 앉히기 ════════
+   ══════════════════════════════════════════════════════════════
+   데이터 품질 화면(b14.js)만 DS 컴포넌트 층(.wc-*, ds/components.css)을 그대로
+   쓴다. 원본 디자인은 .wc-shell 이 뷰포트 전체를 차지하는 독립 화면이지만, 이
+   앱에는 이미 헤더 GNB 가 있고 화면은 .main 안에 그려진다. **DS 파일을 고치지
+   않고** 여기서 그 차이만 흡수한다 — 그래야 DS 가 갱신될 때 ds/*.css 만 갈아
+   끼울 수 있다.
+
+   흡수하는 것은 셋이다.
+     ① .wc-shell 을 쓰지 않는다. .page.flush 가 이미 flex 열이라 그 안에
+        .wc-shell__row 만 두면 «사이드바 + 스크롤 본문» 골격이 그대로 선다.
+     ② 사이드바 — DS 의 .wc-sidebar 는 폭이 고정(240)이고 접히는 변형만 있다.
+        이 앱의 화면 안 좌측 패널은 접기·펼치기와 드래그 폭 조절을 함께 가지므로
+        (.mod-l), 같은 상태(S.leftOpen · S.leftW)를 쓰도록 여기서 맞춘다. 폭을 따로
+        두면 메뉴를 오갈 때 왼쪽 경계가 어긋난다 — «좌측 패널 폭 통일» 절과 같은 이유.
+     ③ 카드 안쪽 배치 — 원본은 인라인 style 로 grid/flex 를 적어 두었다.
+        마크업에 그대로 남기면 문자열마다 값이 갈리므로 클래스로 모은다.
+     ④ 타입 스케일 — DS 의 본문 기준은 14, 이 앱은 13 이다. app.css 는 앱 클래스를
+        만들 때 DS 크기를 한 단 내려 왔다(.btn = DS 14 → --fs-body 13, .card-t =
+        DS 15 → --fs-strong 14). .wc-* 를 그대로 쓰면 그 매핑을 건너뛰어 이 화면만
+        한 단 크게 나온다 — 같은 제품으로 안 보인다. 여기서 되돌린다.
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── ① 골격 ── */
+.q-shell{flex:1;min-height:0;display:flex}
+.q-shell .wc-shell__main{background:var(--bg)}
+
+/* ── 사이드바 (접기·펼치기 · 폭 조절) ──────────────────────────
+   폭은 인라인으로 S.leftW 가 들어온다. 여기서는 그 폭이 움직일 수 있게 만드는
+   것만 한다 — 그립을 담을 좌표계(position)와, 그립이 잘리지 않게 스크롤을
+   본문으로 내리는 것. DS 원본은 .wc-sidebar 자체가 overflow:auto 라 오른쪽
+   경계에 걸친 그립(right:-3px)이 잘려 잡히지 않는다. */
+.q-side{position:relative;overflow:visible;transition:width .12s ease;background:var(--surface)}
+.q-side .wc-sidebar__body{overflow:auto}
+/* 접힌 폭은 앱의 레일 폭에 맞춘다(DS 기본 56 대신) — 데이터 모델·파이프라인에서
+   접었을 때와 같은 자리에 경계가 서야 메뉴를 오갈 때 선이 튀지 않는다. */
+.q-side.wc-sidebar--collapsed{width:var(--rail-w)}
+.q-side.wc-sidebar--collapsed .wc-sidebar__body{padding:8px 4px}
+/* 머리 — 오른쪽 첫 줄과 같은 46px (사이드바 공통 규격 절) */
+.q-sidehead{flex:none;display:flex;align-items:center;gap:6px;height:46px;padding:0 12px;
+  border-bottom:1px solid var(--line-2)}
+.q-sidehead .iconbtn{width:28px;height:28px;flex:none}
+.q-side.wc-sidebar--collapsed .q-sidehead{flex-direction:column;height:auto;
+  padding:8px 4px;border-bottom:0}
+.q-side.wc-sidebar--collapsed .q-sidehead .b6{display:none}
+/* 본문 최대 폭은 DS 값(--w-content-max)을 따르되, 규칙 목록처럼 열이 많은 표는
+   자기 안에서 가로 스크롤한다(.wc-table__scroll). 표를 위해 상한을 풀면
+   카드가 늘어져 홈·품질이 «퍼져 보인다» — .page 절의 판단과 같다. */
+.q-content{display:flex;flex-direction:column;gap:16px}
+
+/* ── 본문 폭 — 창을 따라간다 ──────────────────────────────────
+   DS 의 .wc-shell__content 는 max-width:1200 이다. 처음에는 그 상한을 그대로
+   두었는데(«문서형 화면은 1200 에서 자른다» — .page 절), 이 화면에는 맞지 않는다.
+
+     · 이 화면은 문서형이 아니라 **사이드바가 있는 두 칸 화면**이다. 같은 골격의
+       데이터 모델·파이프라인(.page.flush)은 전폭을 쓴다. 1200 에서 자르면
+       메뉴를 오갈 때 본문 오른쪽 경계만 튄다.
+     · 검증 규칙은 열이 열하나, 검증 결과는 여덟이다. 1200 에서는 규칙 이름 칸이
+       200px 로 눌려 이름과 조건이 둘 다 잘린다 — 상한이 표를 해치고 있었다.
+     · 사이드바 폭이 44~360 으로 움직이므로 «남는 폭» 이 매번 다르다. 고정 상한은
+       그 움직임을 흡수하지 못한다.
+
+   그래서 상한을 훨씬 위로 올려 창을 따라가게 한다. 완전히 풀지 않는 이유는
+   초광폭 화면에서 KPI 카드 네 장이 각각 600px 로 벌어지고 표 한 줄이 눈으로 훑기
+   어려운 길이가 되기 때문이다(.page 절이 걱정한 «퍼져 보인다»). 1800 이면 사이드바
+   까지 더해 2000 대 창까지는 전부 창을 따라가고, 그 위에서만 여백이 생긴다.
+
+   제목줄과 본문이 **같은 토큰**을 읽는다. 두 값을 각자 적어 두면 한쪽만 고쳤을 때
+   오른쪽 경계가 다시 갈라진다(CSV 내려받기 버튼이 튀어나온 것이 그 증상이었다). */
+.q-shell{--q-max:1800px}
+.q-shell .wc-shell__content{width:100%;max-width:var(--q-max)}
+
+/* DS 의 .wc-shell__head 에는 .wc-shell__content 와 달리 max-width 가 아예 없다.
+   그래서 본문 칸보다 넓은 화면에서는 제목줄만 전폭으로 늘어나고, 오른쪽 끝에 붙은
+   버튼(CSV 내려받기·규칙 등록)이 아래 카드의 오른쪽 경계 밖으로 튀어나왔다.
+   원본 디자인에서 드러나지 않은 이유: 사이드바 240 고정 + 창 1440 이라 main 이
+   정확히 1200 — 상한과 실제 폭이 우연히 같았다. 이 앱은 사이드바 폭이 44~360 으로
+   움직이므로 두 칸이 늘 어긋난다. */
+.q-shell .wc-shell__head{width:100%;max-width:var(--q-max)}
+.q-titleline{display:flex;align-items:center;gap:10px}
+.q-acts{display:flex;gap:8px;flex:none;align-items:center;flex-wrap:wrap}
+
+/* ── ② 카드 배치 ── */
+.q-grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.q-grid21{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:16px}
+.q-grid12{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:16px}
+.q-grid11{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+@media (max-width:1240px){
+  .q-grid4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .q-grid21,.q-grid12,.q-grid11{grid-template-columns:minmax(0,1fr)}
+}
+.q-kpi{display:flex;flex-direction:column;gap:6px}
+.q-stack10{display:flex;flex-direction:column;gap:10px}
+.q-stack12{display:flex;flex-direction:column;gap:12px}
+.q-stack14{display:flex;flex-direction:column;gap:14px}
+.q-stack20{display:flex;flex-direction:column;gap:20px}
+/* 카드 본문을 표로 꽉 채울 때(.wc-card__body--flush) 표의 테두리는 카드와 겹친다 */
+.q-flushtable{border:0;border-radius:0}
+/* 열이 많은 표 — 지정한 폭이 지켜지고 남은 폭이 폭 없는 열로 간다. qTable 참고. */
+.q-fixed table{table-layout:fixed}
+
+/* ── 표머리 정렬 — DS 컴포넌트 층의 빠진 조각 ──────────────────
+   .wc-table th 는 text-align:left 를 요소 선택자로 걸어서(특정도 0,1,1)
+   .wc-table__num(0,1,0) · .wc-table__check(0,1,0) 를 이긴다. 그 결과 **값은
+   오른쪽, 머리글은 왼쪽**에 붙어 열이 넓을수록 벌어진다(모델×지표 매트릭스의
+   176px 열에서 그만큼 어긋났다).
+
+   원본 디자인 파일도 같은 문제를 알고 페이지 <style> 에 이 두 줄을 갖고 있었다.
+   컴포넌트 CSS 만 가져오면서 빠뜨린 조각이라 여기서 채운다 — DS 파일은 계약이라
+   고치지 않는다(components.css 헤더 참고). */
+.q-shell .wc-table th.wc-table__num{text-align:right}
+.q-shell .wc-table th.wc-table__check{text-align:center}
+
+/* ── 검증 통과율 추이 (꺾은선) ─────────────────────────────────
+   막대에서 선으로 바꾼 근거는 b14.js 의 qTrendCard 주석에 있다.
+   마크 규격: 선 2px 둥근 이음, 점 지름 8px + 표면색 2px 링, 면은 계열색 10%,
+   눈금선은 표면에서 한 단 옆 회색 **1px 실선**(점선은 격자를 소음으로 만든다).
+
+   SVG 는 viewBox 100×100 을 preserveAspectRatio:none 으로 늘려 폭에 맞춘다 —
+   그래야 카드 폭이 바뀌어도 다시 그리지 않는다. 선 굵기는
+   vector-effect:non-scaling-stroke 가 지켜 주고, 점은 SVG 가 아니라 %로 얹은
+   div 라 늘어나지 않는다(SVG 안에 두면 타원이 된다). */
+.q-trend{display:grid;grid-template-columns:auto minmax(0,1fr);
+  grid-template-rows:190px auto;column-gap:8px}
+/* 눈금 글자와 격자선이 **같은 퍼센트**를 읽는다. flex space-between 으로 나누면
+   글자 상자 높이만큼 어긋난다(실측 10~19px). 둘 다 절대 위치로 못박는다. */
+.q-trend-y{grid-row:1;position:relative;min-width:30px;font-size:var(--fs-micro);
+  color:var(--w-text-3);font-variant-numeric:tabular-nums;line-height:1}
+.q-trend-y span{position:absolute;right:0;transform:translateY(-50%);white-space:nowrap}
+.q-trend-plot{grid-row:1;position:relative;min-width:0}
+.q-trend-grid{position:absolute;inset:0;pointer-events:none}
+.q-trend-grid i{position:absolute;left:0;right:0;height:1px;margin-top:-0.5px;
+  background:var(--w-border)}
+.q-trend-svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.q-trend-dots{position:absolute;inset:0;pointer-events:none}
+.q-trend-dot{position:absolute;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;
+  background:var(--w-chart-1);box-shadow:0 0 0 2px var(--w-surface)}
+.q-trend-dot.bad{background:var(--w-danger)}
+/* 마지막 값만 직접 적는다 — 점마다 붙이면 축이 하는 일을 빼앗는다 */
+.q-trend-last{position:absolute;transform:translate(-50%,-160%);white-space:nowrap;
+  font-size:var(--fs-cap);font-weight:var(--fw-semi);color:var(--w-text);
+  font-variant-numeric:tabular-nums}
+/* 마지막 점이 오른쪽 끝에 있으면 라벨이 플롯 밖으로 나간다(실측 18px) — 점 왼쪽으로 */
+.q-trend-last.end{transform:translate(calc(-100% - 6px),-160%)}
+.q-trend-cross{position:absolute;top:0;bottom:0;width:1px;background:var(--w-border-strong);
+  pointer-events:none}
+.q-trend-cross[hidden]{display:none}
+/* 겨누는 판 — 점(8px)보다 훨씬 넓어야 한다. 판 전체가 하나의 겨냥면이고
+   십자선이 가장 가까운 날짜를 찾아 준다. */
+.q-trend-hit{position:absolute;inset:0;cursor:crosshair}
+.q-trend-hit:focus-visible{outline:none;box-shadow:var(--w-focus-ring)}
+.q-trend .chart-tip{transform:translate(8px,-140%)}
+.q-trend .chart-tip.flip{transform:translate(calc(-100% - 8px),-140%)}
+.q-trend-x{grid-column:2;grid-row:2;display:flex;justify-content:space-between;
+  margin-top:6px;font-size:var(--fs-micro);color:var(--w-text-3);
+  font-variant-numeric:tabular-nums}
+
+/* ── 막대 목록 (지표별 점수 · 모델별 통과율) ── */
+.q-meterrow{display:flex;flex-direction:column;gap:6px}
+.q-meterhead{display:flex;justify-content:space-between;gap:8px}
+.q-modelrow{display:flex;align-items:center;gap:10px}
+.q-modelname{width:132px;flex:none;color:var(--w-text);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.q-modelscore{width:46px;flex:none;text-align:right}
+.q-footrow{display:flex;justify-content:space-between;align-items:center;gap:8px;
+  border-top:1px solid var(--w-border);padding-top:12px}
+
+/* ── 유형별 구성 ── */
+.q-mixbar{display:flex;height:12px;border-radius:var(--w-r-pill);overflow:hidden}
+.q-mixrow{display:flex;align-items:center;gap:8px}
+.q-dot{width:8px;height:8px;border-radius:2px;flex:none}
+.q-mixpct{width:52px;text-align:right;flex:none}
+
+/* ── 목록 화면 ── */
+.q-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 16px}
+@media (max-width:1100px){.q-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.q-chiprow{display:flex;justify-content:space-between;align-items:center;gap:12px;
+  border-top:1px solid var(--w-border);padding-top:12px}
+.q-chips{display:flex;gap:8px;align-items:center;flex-wrap:wrap;min-height:24px;min-width:0}
+.q-listbar{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.q-listcount{display:flex;align-items:center;gap:8px}
+.q-listcount b{color:var(--w-accent);font-weight:var(--fw-semi)}
+.q-pagerow{display:flex;justify-content:space-between;align-items:center;gap:12px}
+/* 규칙 이름 두 줄 — DS 표의 td 는 한 줄 말줄임이라 높이를 comfortable(56)로 쓴다 */
+.q-rulename{overflow:hidden;text-overflow:ellipsis;font-size:var(--fs-body);line-height:20px}
+.q-rulename a{color:var(--w-accent);cursor:pointer}
+.q-rulename a:hover{text-decoration:underline}
+.q-ruledesc{overflow:hidden;text-overflow:ellipsis;font-size:var(--fs-cap);
+  line-height:16px;color:var(--w-text-2)}
+.q-tgtmodel{color:var(--w-accent);cursor:pointer}
+.q-tgtmodel:hover{text-decoration:underline}
+
+/* ── 등록 폼 ──
+   .q-content 는 flex 열이고 이 화면만 2단 격자다. 같은 요소에 두 클래스가 함께
+   붙으므로 선택자를 겹쳐 우선순위를 올린다 — 파일 순서에 기대면 위 절을 옮길 때
+   조용히 깨진다. */
+.q-content.q-formgrid{display:grid;grid-template-columns:minmax(0,1fr) 320px;
+  gap:16px;align-items:start}
+@media (max-width:1100px){.q-content.q-formgrid{grid-template-columns:minmax(0,1fr)}}
+.q-formcol{display:flex;flex-direction:column;gap:16px;min-width:0}
+.q-form2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.q-form3{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:1100px){.q-form2,.q-form3{grid-template-columns:minmax(0,1fr)}}
+.q-kinds{display:flex;flex-wrap:wrap;gap:8px}
+.q-togglebox{height:var(--w-h-md);display:flex;align-items:center}
+.q-sticky{position:sticky;top:0}
+
+/* ── ④ 타입 스케일 — DS 크기를 앱 스케일로 되돌린다 ────────────
+   DS 본문 기준은 14, 이 앱은 13 이다(--fs-body). app.css 는 앱 클래스를 만들 때
+   줄곧 한 단 내려 왔다 — .btn = DS 14 → 13, .card-t = DS 15 → 14, .th = 12.
+   .wc-* 를 원본 그대로 쓰면 그 매핑만 건너뛰어 이 화면 하나가 한 단 크게 나오고,
+   메뉴를 오가면 같은 제품으로 보이지 않는다.
+
+   **DS 파일(ds/*.css)은 고치지 않는다.** 여기서 .q-shell 안쪽만 되돌리므로 DS 는
+   계약 그대로 남고, 갱신되면 ds/*.css 만 갈아 끼우면 된다. 대응은 한 단 아래로
+   일정하다 — 32→26 · 24→18 · 17→16 · 15→14 · 14→13 · 13→12 · 12→11 · 11→10. */
+.q-shell .w-display{font-size:var(--fs-display);line-height:var(--lh-tight)}
+.q-shell .w-h1{font-size:var(--fs-page);line-height:var(--lh-tight);letter-spacing:-0.2px}
+.q-shell .w-h2{font-size:var(--fs-title);line-height:var(--lh-tight)}
+.q-shell .w-h3,.q-shell .w-h4{font-size:var(--fs-strong);line-height:var(--lh-snug)}
+.q-shell .w-body{font-size:var(--fs-body)}
+.q-shell .w-sm{font-size:var(--fs-sm)}
+.q-shell .w-caption{font-size:var(--fs-cap)}
+.q-shell .w-micro{font-size:var(--fs-micro)}
+/* 컨트롤 */
+.q-shell .wc-btn--lg{font-size:var(--fs-strong)}
+.q-shell .wc-btn--md,.q-shell .wc-input--md{font-size:var(--fs-body)}
+.q-shell .wc-btn--sm,.q-shell .wc-input--sm{font-size:var(--fs-sm)}
+.q-shell .wc-btn--xs,.q-shell .wc-input--xs{font-size:var(--fs-cap)}
+.q-shell .wc-field__label{font-size:var(--fs-sm)}
+.q-shell .wc-field__msg{font-size:var(--fs-cap)}
+.q-shell .wc-check,.q-shell .wc-radio,.q-shell .wc-toggle{font-size:var(--fs-body)}
+/* 표 — 앱의 .tbl/.th 와 같은 단으로 */
+.q-shell .wc-table table,.q-shell .wc-table td{font-size:var(--fs-body)}
+.q-shell .wc-table th{font-size:var(--fs-sm)}
+.q-shell .wc-table__empty{font-size:var(--fs-body)}
+/* 카드 · 배지 · 태그 */
+.q-shell .wc-card__title{font-size:var(--fs-strong)}
+.q-shell .wc-card__sub{font-size:var(--fs-cap)}
+.q-shell .wc-badge,.q-shell .wc-tag{font-size:var(--fs-cap)}
+/* 내비 */
+.q-shell .wc-tab{font-size:var(--fs-body)}
+.q-shell .wc-tabs--segment .wc-tab,.q-shell .wc-tabs--pill .wc-tab{font-size:var(--fs-sm)}
+.q-shell .wc-tab__badge{font-size:var(--fs-micro)}
+.q-shell .wc-crumbs,.q-shell .wc-page__btn,.q-shell .wc-page__info{font-size:var(--fs-sm)}
+/* ── 사이드바 — 다른 사이드바와 같은 리듬으로 ────────────────────
+   글자 크기만 맞춰서는 이질감이 남았다. 실측해 보니 어긋난 것이 셋이었다.
+
+                     데이터 품질(DS 원본)   데이터 모델(.mod-l)
+       그룹 라벨      11px 590 .25 자간.2    12px 400 .45
+       항목 글자      13px 510               13px 400
+       항목 높이      36px                   28px
+
+   DS 의 사이드바는 «앱 전역 내비» 를 전제해 행이 36 이고 그룹 라벨이 작고 굵은
+   대문자풍이다. 이 앱에서 이 자리는 **화면 안의 하위 내비**(카탈로그 트리·
+   파이프라인 목록과 같은 층)라 그쪽 리듬을 따라야 한다 — 행이 8px 더 크면
+   글자를 맞춰도 목록이 덩어리째 커 보인다.
+
+   활성 표시는 굵기가 아니라 색과 배경이 맡는다(.is-active) — 그래야 굵기를
+   목록 전체에서 하나로 둘 수 있다. */
+.q-shell .wc-sidebar__body{padding:6px 8px 10px}
+.q-shell .wc-sidebar__item{height:28px;font-size:var(--fs-body);font-weight:var(--fw-reg);
+  padding:0 8px;gap:8px}
+/* line-height 를 못박아야 높이가 맞는다 — DS 는 이 요소에 행간을 주지 않아
+   상속값(1.5)으로 늘어나 32px 이 됐다(다른 사이드바의 구분 라벨은 24px). */
+.q-shell .wc-sidebar__group{font-size:var(--fs-sm);font-weight:var(--fw-reg);
+  letter-spacing:normal;color:var(--muted);padding:8px 8px 2px;line-height:14px}
+.q-shell .wc-sidebar__count{font-size:var(--fs-sm);color:var(--faint)}
+/* 접힌 레일에서는 아이콘만 남으므로 행을 정사각에 가깝게 */
+.q-side.wc-sidebar--collapsed .wc-sidebar__item{height:32px}
+
+/* ── 준비 중 자리 ──────────────────────────────────────────────
+   원본 디자인에 있지만 서버에 아직 근거가 없는 자리다. **숫자를 지어내지
+   않는다** — 무엇이 없어서 비었는지 문장으로 적는다. 화면이 조용히 거짓말하는
+   것보다, 아직 없다고 말하는 편이 낫다(routers/quality.violation_rows 가
+   store_failures 가 꺼진 규칙에 빈 배열 대신 문장을 돌려주는 것과 같은 이유). */
+.q-soon{display:flex;align-items:flex-start;gap:8px;padding:12px 14px;
+  border:1px dashed var(--w-border-strong);border-radius:var(--w-r-sm);
+  background:var(--w-surface-sunken);font-size:var(--fs-sm);line-height:1.6;
+  color:var(--w-text-2)}
+.q-soon .ic{flex:none;margin-top:3px;color:var(--w-text-3)}
+
+/* ══════════════════════════════════════════════════════════════
+   데이터 파이프라인 — 개편 디자인 (v2)
+   ──────────────────────────────────────────────────────────────
+   claude.ai/design «데이터 파이프라인 페이지 리디자인» v2 를 옮긴 층이다.
+   마크업은 js/b56.js 가 만들고, 여기서는 그 모양만 정한다.
+
+   품질 화면(.q-*)과 같은 규칙을 따른다 —
+     · 색·반경·그림자·간격은 DS 토큰(--w-*)만 쓴다. 새 색을 만들지 않는다.
+     · 글자 크기는 앱 스케일(--fs-*)이다. DS 기준 14 를 앱 기준 13 으로 한 단
+       내리는 매핑을 이 화면에서도 지킨다(맨 아래 ④ 절).
+     · 골격(.mod · .mod-l · .dock · .erd-wrap)은 데이터 모델 화면과 공유한다.
+       여기서 다시 만들지 않는다 — 두 벌이 되면 메뉴를 오갈 때 경계가 튄다.
+
+   원본이 색으로 말하는 것 —
+     띠·사각형 = 단계(수집 초록 · 가공 남색), 점·글자 = 상태(성공·실행 중·실패),
+     선 = 고른 카드와의 관계(선행 초록 · 후속 주황). 세 축이 겹치지 않아야 카드
+     하나를 보고 세 가지를 동시에 읽을 수 있다. v1 은 띠와 배지가 둘 다 상태였다.
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── ① 좌측 목록 ── */
+.pl-side .pl-srch{padding:8px 12px 4px;flex:none}
+.pl-g{display:flex;align-items:center;gap:8px;height:30px;padding:0 4px;margin-top:8px;
+  cursor:pointer;user-select:none;position:sticky;top:0;background:var(--surface);z-index:1}
+.pl-g:first-child{margin-top:2px}
+.pl-g .ic{transition:transform .12s var(--w-ease)}
+.pl-g.off .ic{transform:rotate(-90deg)}
+.pl-g-l{font-size:var(--fs-cap);font-weight:var(--fw-bold);letter-spacing:.4px;color:var(--w-text-2)}
+.pl-g-n{font-size:var(--fs-cap);color:var(--w-text-3);font-variant-numeric:tabular-nums}
+/* 한 줄에 이름 하나. 예약 스위치·요약 문장을 뺀 자리가 이 높이다(34 → 32). */
+.pl-r{display:flex;align-items:center;gap:9px;height:32px;padding:0 8px;min-width:0;
+  border-radius:var(--r-s);cursor:pointer}
+.pl-r:hover{background:var(--w-hover)}
+.pl-r.on{background:var(--w-selected)}
+.pl-r.on .pl-r-n{color:var(--w-accent);font-weight:var(--fw-med)}
+.pl-r-i{flex:none;display:flex;align-items:center;color:var(--w-text-3)}
+.pl-r-n{flex:1;min-width:0;font-size:var(--fs-body)}
+
+/* 상태 점 · 단계 사각형 — 화면 곳곳에서 같은 크기여야 같은 뜻으로 읽힌다 */
+.pl-dot{width:7px;height:7px;border-radius:50%;flex:none;display:inline-block}
+.pl-sq{width:8px;height:8px;border-radius:2px;flex:none;display:inline-block}
+
+/* ── ② 요약 줄 ── */
+.pl-bar{gap:10px;padding:0 16px;display:flex;align-items:center}
+.pl-sum{display:flex;align-items:center;gap:10px;flex:1 1 auto;min-width:0;
+  overflow:hidden;font-size:var(--fs-sm);color:var(--w-text-2)}
+.pl-sum .num{font-variant-numeric:tabular-nums}
+.pl-sum .b6{font-weight:var(--fw-semi);color:var(--w-text)}
+.pl-sum .is-err{color:var(--w-danger);font-weight:var(--fw-semi)}
+.pl-sum .is-run{color:var(--w-info);font-weight:var(--fw-semi)}
+
+/* ── ③ 흐름도 ── */
+.pl-stage{flex:1 1 0;min-height:0;display:flex;position:relative}
+.pl-lane{position:absolute;top:16px;display:flex;align-items:center;gap:8px}
+.pl-lane-l{font-size:var(--fs-cap);font-weight:var(--fw-bold);letter-spacing:.4px;color:var(--w-text-2)}
+.pl-lane-n{font-size:var(--fs-cap);color:var(--w-text-3);font-variant-numeric:tabular-nums}
+
+.pl-n{position:absolute;border-radius:var(--w-r-md);background:var(--w-surface);
+  border:1px solid var(--w-border);box-shadow:var(--w-shadow-1);overflow:visible;
+  cursor:pointer;user-select:none;transition:box-shadow var(--w-dur) var(--w-ease)}
+.pl-n:hover{box-shadow:var(--w-shadow-2)}
+/* 고른 카드 — 테두리 색을 바꾸지 않고 바깥에 고리를 두른다. 테두리를 쓰면
+   «예약 꺼짐»(점선 테두리)과 «고름» 이 같은 자리를 다퉈 둘 중 하나가 사라진다. */
+.pl-n.sel{outline:2px solid var(--w-warning);outline-offset:2px}
+.pl-n.drop{outline:2px solid var(--w-accent);outline-offset:2px}
+.pl-n.off{border:1px dashed var(--w-border-strong);box-shadow:none}
+.pl-n.off .pl-n-t{color:var(--w-text-2)}
+/* 실패는 테두리까지 붉게 — 흐름도를 멀리서 훑을 때 먼저 걸려야 한다 */
+.pl-n.bad{border-color:rgba(255,56,60,.4)}
+.pl-n-band{height:4px;border-radius:var(--w-r-md) var(--w-r-md) 0 0}
+.pl-n-b{padding:9px 13px 11px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.pl-n-t{display:flex;align-items:center;gap:8px;min-width:0;
+  font-size:var(--fs-strong);font-weight:var(--fw-bold);color:var(--w-text)}
+.pl-n-m{display:flex;align-items:center;gap:8px;min-width:0;font-size:var(--fs-cap)}
+.pl-n-m .mono{font-family:var(--mono);font-size:var(--fs-sm);color:var(--w-text-3);
+  min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pl-n-w{margin-left:auto;flex:none;white-space:nowrap;font-variant-numeric:tabular-nums}
+/* 연결점 — 「연결 편집」을 켠 동안만 나온다(들어오는 쪽은 표시만) */
+.pl-port{position:absolute;top:50%;width:10px;height:10px;border-radius:50%;
+  background:var(--w-surface);border:2px solid var(--w-border);transform:translateY(-50%);z-index:2}
+.pl-port.i{left:-5px}
+.pl-port.o{right:-5px;cursor:crosshair;border-color:var(--w-accent)}
+.pl-port.o:hover{background:var(--w-selected);transform:translateY(-50%) scale(1.25)}
+
+/* 범례 — 캔버스 위에 뜨고, 오른쪽 배율 알약(.zoomlbl)과 같은 높이·모양이다 */
+.pl-leg{position:absolute;left:12px;bottom:12px;z-index:20;display:flex;align-items:center;gap:12px;
+  height:30px;padding:0 12px;border-radius:var(--w-r-pill);background:var(--w-surface);
+  border:1px solid var(--w-border);box-shadow:var(--w-shadow-1);
+  font-size:var(--fs-cap);color:var(--w-text-2)}
+.pl-leg > span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.pl-leg em{width:12px;height:2px;display:inline-block;border-radius:1px}
+.pl-leg > i{width:1px;height:14px;background:var(--w-border);flex:none}
+
+/* ── ④ 하단 상세 ──
+   .dk-head 는 그릇(제목줄 + 설명)이고, 제목줄은 그 안의 .pl-dock-h 다.
+   두 클래스를 한 요소에 겹치면 방향(column vs row)이 부딪혀 제목이 세로로 쌓인다. */
+.pl-head-w{display:flex;flex-direction:column;gap:8px;padding:14px 20px 10px}
+.pl-dock-h{display:flex;align-items:center;gap:10px;min-width:0;flex-wrap:wrap}
+.pl-act{margin-left:auto;display:flex;gap:8px;align-items:center;flex:none}
+.pl-dock-t{font-size:var(--fs-page);font-weight:var(--fw-bold);color:var(--w-text);
+  min-width:0;max-width:44%}
+.pl-dock-k{font-size:var(--fs-micro);font-weight:var(--fw-bold);letter-spacing:.4px;
+  color:var(--w-text-2);flex:none}
+.pl-desc{margin:0;font-size:var(--fs-sm);line-height:1.65;color:var(--w-text-2);
+  max-width:760px;text-wrap:pretty}
+.pl-chip-h{display:flex;min-width:0}
+.pl-chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 9px;min-width:0;
+  max-width:280px;border:1px solid var(--w-border);border-radius:var(--w-r-sm);
+  background:var(--w-surface);font-size:var(--fs-cap);color:var(--w-text-2);cursor:pointer}
+.pl-chip:hover:not([disabled]){border-color:var(--w-border-strong);color:var(--w-text)}
+.pl-chip[disabled]{cursor:default}
+.pl-chip .mono{font-family:var(--mono);min-width:0}
+
+/* 탭 줄 — 접었을 때 남는 줄이라 .dock-h 를 쓴다(골격 규칙) */
+.pl-tabrow{padding:0 20px 0 20px!important;gap:0!important}
+.pl-tabs{display:flex;align-items:center;gap:18px;min-width:0;overflow:hidden}
+.pl-tab{display:flex;align-items:center;gap:6px;height:39px;background:none;border:0;padding:0;
+  font-size:var(--fs-body);color:var(--w-text-2);cursor:pointer;white-space:nowrap}
+.pl-tab:hover{color:var(--w-text)}
+.pl-tab.on{color:var(--w-accent);font-weight:var(--fw-semi);box-shadow:inset 0 -2px 0 var(--w-accent)}
+.pl-tab-b{font-size:var(--fs-cap);font-weight:var(--fw-semi);font-variant-numeric:tabular-nums}
+
+.pl-dock-b{padding:14px 20px 20px}
+.pl-pane{display:flex;flex-direction:column;gap:12px;min-width:0}
+/* 왼쪽 «속성», 오른쪽 «추이». 좁아지면 한 줄로 접는다. */
+.pl-dock-g{display:grid;grid-template-columns:340px minmax(0,1fr);gap:24px;align-items:start}
+.pl-dock-g.one{grid-template-columns:minmax(0,1fr)}
+@media (max-width:1180px){.pl-dock-g{grid-template-columns:minmax(0,1fr)}}
+
+/* 속성 표 */
+.pl-kv{border:1px solid var(--w-border);border-radius:var(--w-r-md);overflow:hidden}
+.pl-kv-h{display:flex;align-items:center;gap:8px;padding:8px 12px;
+  background:var(--w-surface-sunken);border-bottom:1px solid var(--w-border);
+  font-size:var(--fs-cap);font-weight:var(--fw-semi);color:var(--w-text-2)}
+.pl-kv-r{display:flex;font-size:var(--fs-sm);border-bottom:1px solid var(--w-border)}
+.pl-kv-r:last-child{border-bottom:0}
+.pl-kv-k{width:104px;flex:none;padding:9px 12px;background:var(--w-surface-sunken);color:var(--w-text-2)}
+.pl-kv-v{flex:1;min-width:0;padding:9px 12px;color:var(--w-text);word-break:break-word}
+.pl-kv-v .num{font-variant-numeric:tabular-nums}
+.pl-kv-v .mono{font-family:var(--mono)}
+
+/* 최근 실행 막대 — 높이는 소요 시간, 색은 결과.
+   막대에 클래스를 두지 않는다(요약 줄의 .pl-bar 와 이름이 부딪혔다). */
+.pl-bars{display:flex;align-items:flex-end;gap:5px;height:44px}
+/* 상한을 두는 이유: 실행이 열 번보다 적으면 막대가 100px 넘게 벌어져 «추이» 가
+   아니라 색 블록으로 보인다. 열 칸 기준 폭에서 멈춘다. */
+.pl-bars > span{flex:1 1 0;max-width:44px;border-radius:3px;min-width:3px}
+
+/* 알림 · 정상 안내 */
+.pl-alert{display:flex;gap:12px;padding:12px 14px;border-radius:var(--w-r-md);
+  background:rgba(255,56,60,.05);border:1px solid rgba(255,56,60,.3);align-items:flex-start}
+.pl-alert.big{padding:14px 16px}
+.pl-alert > .ic{flex:none;margin-top:2px;color:var(--w-danger)}
+.pl-alert .wc-btn{flex:none;align-self:center}
+.pl-ok{display:flex;align-items:center;gap:8px;padding:11px 14px;border-radius:var(--w-r-md);
+  background:var(--w-surface-sunken);font-size:var(--fs-sm);color:var(--w-text-2)}
+.pl-ok .ic{flex:none;color:var(--w-success)}
+.pl-ok.full{align-items:flex-start}
+.pl-links{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px}
+.pl-linkrow{display:flex;align-items:center;gap:8px;min-width:0;height:28px;
+  padding:0 10px;border:1px solid var(--w-border);border-radius:var(--w-r-sm)}
+
+/* ── ⑤ 가공 탭 — 모델 카드 · 빌드 추이 ── */
+.pl-pn{cursor:pointer}
+/* 고른 카드는 흐름도와 같은 고리로 표시한다 — 두 화면에서 «고름» 이 다른 모양이면
+   같은 조작으로 읽히지 않는다(예전 파란 테두리는 링크 색과도 겹쳤다). */
+.pn.pl-pn.sel{border-color:var(--w-border);box-shadow:var(--w-shadow-1);
+  outline:2px solid var(--w-warning);outline-offset:2px}
+.pl-pn-b{padding:9px 12px 10px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.pl-pn-h{display:flex;align-items:center;gap:8px;min-width:0}
+.pl-pn-n{flex:1;min-width:0;font-family:var(--mono);font-size:var(--fs-body);
+  font-weight:var(--fw-bold);color:var(--w-text)}
+.pl-pn-m{display:flex;align-items:center;gap:8px;min-width:0;font-size:var(--fs-cap)}
+.pl-pn-m .mono{font-family:var(--mono);color:var(--w-text-3);min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pl-pn-d{margin-left:auto;flex:none;color:var(--w-text-3);font-variant-numeric:tabular-nums}
+
+/* ── 빌드 추이 ────────────────────────────────────────────────
+   지표 하나에 판 하나다. 원본은 행 수(막대)와 빌드 시간(선)을 한 상자에 겹쳐
+   그렸는데, 두 축의 눈금을 맞출 근거가 없어 «없는 상관관계» 를 만든다.
+   지표가 둘이면 칸을 둘로 나눈다(.pl-tile 두 장).
+
+   계열이 하나라 범례가 없다 — 제목이 곧 계열 이름이다. 색은 상태만 말한다:
+   지난 회차 중립 회색 · 마지막 회차 강조 · 실패 회차 실패색. */
+.pl-tile{display:flex;flex-direction:column;gap:6px;min-width:0}
+.pl-tile-h{display:flex;align-items:baseline;gap:10px;min-width:0}
+.pl-tile-v{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;min-width:0}
+/* 큰 값은 비례 숫자 — tabular 는 세로로 줄 맞출 상대가 있을 때만 쓴다 */
+.pl-tile-n{font-size:var(--fs-title);font-weight:var(--fw-semi);color:var(--w-text);
+  font-variant-numeric:normal;line-height:1.2}
+.pl-tile-v .num{font-variant-numeric:tabular-nums}
+/* 막대 칸 — 바닥선 하나만 두고 격자는 두지 않는다(값은 tooltip 과 위 요약이 답한다) */
+.pl-plot{display:flex;align-items:flex-end;justify-content:space-between;gap:2px;
+  border-bottom:1px solid var(--w-border);min-width:0}
+.pl-col{flex:1 1 0;max-width:24px;height:100%;display:flex;align-items:flex-end;cursor:default}
+.pl-col > i{display:block;width:100%;border-radius:4px 4px 0 0;transition:opacity var(--w-dur) var(--w-ease)}
+.pl-col:hover > i{opacity:.72}
+.pl-axis{display:flex;justify-content:space-between;font-size:var(--fs-micro);
+  color:var(--w-text-3);font-variant-numeric:tabular-nums}
+
+/* ── ⑥ 수집 탭 ── */
+.pl-ing .pl-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:16px 20px 12px;min-width:0}
+.pl-head-t{font-size:var(--fs-page);font-weight:var(--fw-bold);color:var(--w-text);
+  min-width:0;max-width:44%}
+.pl-ing .pl-alert{margin:0 20px}
+.pl-ing .pl-tabs{padding:6px 20px 0;border-bottom:1px solid var(--w-border)}
+.pl-ing .pl-pane{padding:16px 20px 24px}
+
+/* ── ⑦ DS 타입 스케일 — 품질 화면과 같은 한 단 내림 ────────────
+   .wc-* 를 원본 크기로 쓰면 이 화면만 한 단 크게 나온다. 품질 화면은 .q-shell
+   안쪽에서 되돌리는데, 파이프라인은 셸 클래스가 없어 render() 가 붙이는
+   페이지 표식(#app.pipe-view)을 쓴다. 대응은 품질 절과 같다. */
+#app.pipe-view .wc-btn--lg{font-size:var(--fs-strong)}
+#app.pipe-view .wc-btn--md{font-size:var(--fs-body)}
+#app.pipe-view .wc-btn--sm{font-size:var(--fs-sm)}
+#app.pipe-view .wc-btn--xs{font-size:var(--fs-cap)}
+#app.pipe-view .wc-badge,#app.pipe-view .wc-tag{font-size:var(--fs-cap)}
+#app.pipe-view .wc-table table,#app.pipe-view .wc-table td{font-size:var(--fs-body)}
+#app.pipe-view .wc-table th{font-size:var(--fs-sm)}
+#app.pipe-view .wc-table__empty{font-size:var(--fs-body)}
+
+/* ══════════════════════════════════════════════════════════════
+   데이터 수집 — 개편 디자인 (커넥터)
+   ──────────────────────────────────────────────────────────────
+   claude.ai/design «데이터 수집 커넥터» 를 옮긴 층이다.
+   마크업은 js/b57.js 가 만들고, 여기서는 그 모양만 정한다.
+
+   파이프라인(.pl-*)·품질(.q-*)과 같은 규칙을 따른다 —
+     · 색·반경·그림자·간격은 DS 토큰(--w-*)만 쓴다. 새 색을 만들지 않는다.
+     · 글자 크기는 앱 스케일(--fs-*)이다. DS 부품의 한 단 내림은 위 ⑦ 절의
+       #app.pipe-view 가 이미 맡는다 — render() 가 수집 화면에도 그 표식을
+       붙이므로(b01) 여기서 다시 정의하지 않는다.
+     · 골격(.mod · .mod-l · .page · .ptabs)은 다른 화면과 공유한다.
+
+   이 화면이 색으로 말하는 것은 하나다 — **연결 상태**.
+   점·배지 = 지금 붙는가(정상·실행 중·실패·확인 필요·예약 꺼짐).
+   유형(REST API · 파일 업로드)은 색이 아니라 아이콘과 구획 제목이 말한다.
+   유형까지 색을 주면 «주황 카드» 가 유형인지 상태인지 알 수 없게 된다.
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── ① 상태 점 ────────────────────────────────────────────────
+   탭 줄 앞에 붙어 «이 커넥터가 지금 붙는가» 를 말한다. 파이프라인 화면의
+   .pl-dot 과 같은 크기다 — 메뉴를 오가도 같은 점이 같은 뜻으로 읽혀야 한다. */
+.cn-dot{width:7px;height:7px;border-radius:50%;flex:none;display:inline-block}
+
+/* ── ② 화면 틀 — 머리 + 본문 ────────────────────────────────
+   크기는 위 ④ 절(품질)의 «DS 한 단 내림» 을 그대로 따른다. 원본의 제목은
+   목록이 .w-h1(DS 24), 상세·위저드가 .w-h2(DS 17) 이므로 여기서는 각각
+   --fs-page(18) · --fs-title(16) 이다. 처음에 --fs-display(26) 로 뒀더니
+   이 화면의 제목만 다른 메뉴보다 두 단 크게 나왔다 — 26 은 DS 32 자리다.
+
+   폭은 **데이터 분석(.ana-inner)과 같은 규칙**이다 — 1680 까지 열고 그 이상은
+   가운데로 모은다. 두 화면은 같은 모양이라서다: 캔버스가 아니라 카드 격자와
+   목록이고, 폭이 늘면 카드가 늘어나는 게 아니라 한 줄이 길어진다. 분석 쪽 주석이
+   적어 둔 이유가 그대로 여기에도 해당한다 — 1440 은 1920 화면에서 오른쪽 480 이
+   통째로 비고, 제한을 아예 풀면 한 줄이 너무 길어져 카드 사이를 눈으로 잇기 어렵다.
+
+   (품질·파이프라인·모델이 창을 채우는 것과 어긋나지 않는다. 그쪽은 흐름도·계보
+   캔버스와 넓을수록 이득인 표가 본문이라 폭이 곧 정보량이다.)
+
+   머리와 본문에 **같은 상한**을 준다. 분석은 머리(.ana-top)만 전폭이라 제목이
+   본문보다 120px 왼쪽에 서는데, 제목이 자기가 가리키는 내용과 어긋나 보인다. */
+.cn-scroll{--cn-max:1680px;min-height:0;overflow:auto;background:var(--panel-bg)}
+/* 폼은 더 좁게 — 1680 짜리 입력칸은 글자를 어디서 이어 읽을지 알 수 없다 */
+.wz-scroll{--cn-max:1180px}
+.cn-page{display:flex;flex-direction:column;min-height:100%}
+.cn-head{flex:none;padding:16px 20px 13px;background:var(--surface);
+  border-bottom:1px solid var(--line-2)}
+.cn-head-t{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;
+  flex-wrap:wrap;max-width:var(--cn-max);width:100%;margin:0 auto}
+/* 목록 제목은 앱의 페이지 제목 클래스(.page-t/.page-d)를 그대로 쓴다 — 위 «본문
+   흐름의 페이지 제목» 자리다. 여기서 크기를 다시 정하지 않는 이유는, 한 번
+   베껴 두면 그쪽이 바뀌었을 때 이 화면만 남기 때문이다.
+   상세·위저드 제목은 그보다 한 단 아래(DS H3 자리 = --fs-title)로, 바 안의
+   제목(.mod-bar)과 같은 규격이다. */
+.cn-h2{margin:0;font-size:var(--fs-title);line-height:var(--lh-tight);
+  font-weight:var(--fw-semi);letter-spacing:-0.1px;color:var(--ink);
+  min-width:0;max-width:52vw}
+.cn-head .page-d.mono{font-family:var(--mono);color:var(--w-text-3)}
+.cn-kb{background:var(--w-selected);color:var(--w-accent)}
+.cn-body{flex:1;min-height:0;display:flex;flex-direction:column;gap:16px;
+  padding:16px 20px 28px;max-width:var(--cn-max);width:100%;margin:0 auto}
+
+/* 안내 줄 — 이 화면과 파이프라인의 경계를 한 문장으로 */
+.cn-note{display:flex;align-items:center;gap:10px;flex:none;padding:11px 14px;
+  border:1px solid rgba(0,192,232,.3);background:rgba(0,192,232,.07);
+  border-radius:var(--r-m);font-size:var(--fs-body);color:var(--w-text);line-height:1.6}
+.cn-note > .ic{flex:none;color:var(--w-info)}
+.cn-note .iconbtn{flex:none}
+
+/* ── ③ 거르기 ── */
+.cn-filter{display:flex;align-items:center;gap:8px;flex:none;flex-wrap:wrap}
+.cn-fsrch{flex:1 1 280px;min-width:180px;max-width:340px}
+.cn-mwrap{position:relative;flex:none}
+.cn-mbtn{min-width:136px;justify-content:space-between;font-weight:var(--fw-reg)}
+.cn-mbtn .ic{color:var(--w-text-3)}
+.cn-menu{position:absolute;top:calc(100% + 4px);left:0;min-width:190px;z-index:20;
+  padding:5px;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r-m);box-shadow:var(--w-shadow-2);
+  display:flex;flex-direction:column;gap:1px}
+.cn-menu-i{display:flex;align-items:center;gap:8px;height:32px;padding:0 8px;
+  border:0;border-radius:var(--r-s);background:transparent;cursor:pointer;
+  font:inherit;font-size:var(--fs-body);color:var(--w-text);text-align:left}
+.cn-menu-i:hover{background:var(--w-hover)}
+.cn-menu-i.on{background:var(--w-selected)}
+.cn-menu-c{width:14px;flex:none;display:flex;align-items:center;color:var(--w-accent)}
+.cn-menu-n{flex:none;font-size:var(--fs-cap);color:var(--w-text-3);font-variant-numeric:tabular-nums}
+
+/* ── ④ 유형별 구획 + 카드 격자 ── */
+.cn-sec{display:flex;align-items:center;gap:8px;flex:none;margin-bottom:-4px}
+.cn-sec .ic{color:var(--w-text-2)}
+.cn-sec-t{margin:0;font-size:var(--fs-strong);font-weight:var(--fw-semi);color:var(--w-text)}
+.cn-sec-n{font-size:var(--fs-cap);color:var(--w-text-3);font-variant-numeric:tabular-nums}
+.cn-sec-l{flex:1;height:1px;background:var(--line)}
+.cn-grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));flex:none}
+
+.cn-lc{cursor:pointer;transition:border-color var(--w-dur) var(--w-ease),
+  box-shadow var(--w-dur) var(--w-ease)}
+.cn-lc:hover{border-color:var(--line-str);box-shadow:var(--w-shadow-1)}
+.cn-lc .wc-card__head{min-height:52px;padding:10px 15px;gap:10px}
+.cn-lc .wc-card__title{max-width:100%}
+/* 라벨 열은 글자 길이가 아니라 눈으로 맞춘 고정폭이다 — 카드가 여럿 나란히 설 때
+   값의 왼쪽 모서리가 카드마다 다르면 훑기가 되지 않는다. */
+.cn-lc-b{display:grid;grid-template-columns:66px minmax(0,1fr);gap:7px 12px;
+  align-items:baseline;padding:13px 15px}
+.cn-lc-k{font-size:var(--fs-sm);color:var(--w-text-3)}
+.cn-lc-v{font-size:var(--fs-sm);color:var(--w-text);min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cn-lc-f{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:9px 15px;font-size:var(--fs-cap)}
+
+/* ── ⑤ 빈 화면 ── */
+.cn-empty{align-items:center;gap:12px;padding:44px 20px;text-align:center}
+.cn-empty-i{color:var(--faint)}
+.cn-empty-d{line-height:1.7;color:var(--w-text-2)}
+.cn-none{display:flex;flex-direction:column;align-items:center;gap:6px;
+  padding:48px 20px;color:var(--w-text-3);text-align:center}
+.cn-none .ic{color:var(--faint);margin-bottom:4px}
+
+/* ── ⑥ 상세 2단 ──────────────────────────────────────────────
+   왼쪽은 «이 커넥터가 무엇인가», 오른쪽은 «그래서 어디에 쓰이는가».
+   좁아지면 오른쪽이 아래로 내려간다 — 쓰임보다 정의가 먼저 읽혀야 한다. */
+.cn-2col{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start}
+.cn-main,.cn-rail{display:flex;flex-direction:column;gap:16px;min-width:0}
+@media (max-width:1180px){.cn-2col{grid-template-columns:minmax(0,1fr)}}
+
+.cn-card{background:var(--surface)}
+.cn-card .wc-card__head{gap:10px}
+.cn-cf{display:flex;align-items:center;justify-content:space-between;gap:10px}
+
+/* 속성 표 — 파이프라인의 .pl-kv 와 같은 규칙(라벨 칸이 가라앉는다) */
+.cn-kv{border:1px solid var(--line);border-radius:var(--r-m);overflow:hidden}
+.cn-kv-r{display:flex;font-size:var(--fs-sm);border-bottom:1px solid var(--line)}
+.cn-kv-r:last-child{border-bottom:0}
+.cn-kv-k{width:112px;flex:none;padding:9px 12px;background:var(--surface-2);color:var(--w-text-2)}
+.cn-kv-v{flex:1;min-width:0;padding:9px 12px;color:var(--w-text);line-height:1.6}
+.cn-kv-v .mono{font-family:var(--mono)}
+.cn-break{word-break:break-word;overflow-wrap:anywhere}
+.cn-mute{color:var(--w-text-3)}
+.cn-tag{background:var(--surface-2);border-color:var(--line);color:var(--w-text)}
+.cn-p{display:inline-flex;align-items:center;gap:6px;margin:0 10px 4px 0}
+.cn-cols{display:flex;flex-wrap:wrap;gap:6px}
+.cn-hint{margin:11px 0 0;font-size:var(--fs-cap);color:var(--w-text-3);line-height:1.7}
+.cn-src{display:flex;align-items:center;gap:9px;min-width:0}
+.cn-li{min-height:46px;padding:8px 15px}
+.cn-list-empty{padding:14px 16px;font-size:var(--fs-sm);color:var(--w-text-3);line-height:1.6}
+.cn-tbl{border:0;border-radius:0}
+.cn-tbl td{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── ⑦ 위저드 ────────────────────────────────────────────────
+   모달이 아니라 탭 화면이다. 단계 줄은 위에 고정하고, 입력(왼쪽)과 연결 테스트
+   결과(오른쪽)를 나란히 둔다 — 모달에서는 둘이 같은 세로줄에 있어서 주소를
+   고치면서 결과를 볼 수 없었다. */
+.wz-steps{display:flex;align-items:center;gap:12px;flex:none;padding:13px 16px;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-m)}
+.wz-steps-l{flex:1;height:1px;background:var(--line)}
+.wz-step{display:flex;align-items:center;gap:8px;border:0;background:transparent;
+  padding:0;font:inherit;color:var(--w-text-3);cursor:default}
+.wz-step.done{cursor:pointer}
+.wz-step.done:hover .wz-step-l{color:var(--w-text)}
+.wz-step-n{display:inline-flex;align-items:center;justify-content:center;
+  width:22px;height:22px;flex:none;border-radius:50%;background:var(--surface-2);
+  font-size:var(--fs-sm);font-family:var(--mono)}
+.wz-step.done .wz-step-n{background:var(--pri);color:#fff}
+.wz-step.on .wz-step-n{background:var(--w-selected);color:var(--w-accent)}
+.wz-step-l{font-size:var(--fs-body)}
+.wz-step.on{color:var(--w-text)}
+.wz-step.on .wz-step-l{font-weight:var(--fw-semi)}
+
+.wz-cols{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;align-items:start}
+.wz-cols.one{grid-template-columns:minmax(0,1fr);max-width:720px}
+@media (max-width:1180px){.wz-cols{grid-template-columns:minmax(0,1fr)}}
+.wz-main,.wz-rail{display:flex;flex-direction:column;gap:16px;min-width:0}
+/* 폼의 상한은 .wz-scroll 의 --cn-max 가 정한다(위 ② 절) */
+.wz-rail-note{display:flex;align-items:flex-start;gap:8px;padding:11px 13px;
+  border:1px dashed var(--line-str);border-radius:var(--r-s);background:var(--surface-2);
+  font-size:var(--fs-sm);color:var(--w-text-2);line-height:1.6}
+.wz-rail-note .ic{flex:none;margin-top:2px}
+.wz-err{padding:10px 12px;border:1px solid var(--err-line);background:var(--err-soft);
+  border-radius:var(--r-s);font-size:var(--fs-sm);color:var(--w-text);line-height:1.6;
+  word-break:break-word;overflow-wrap:anywhere}
+
+/* 폼 — 상자를 겹겹이 쌓지 않고 카드 한 장 안에서 세로로만 나눈다 */
+.wz-form{display:flex;flex-direction:column;gap:16px}
+.wz-f{display:flex;flex-direction:column;gap:6px;min-width:0}
+.wz-f-l{font-size:var(--fs-sm);font-weight:var(--fw-med);color:var(--w-text-2)}
+.wz-f-m{margin:0;font-size:var(--fs-cap);color:var(--w-text-3);line-height:1.7}
+.wz-f-m .mono{font-family:var(--mono)}
+.wz-req{color:var(--err);margin-left:2px}
+.wz-row{display:grid;gap:12px;align-items:start;min-width:0}
+@media (max-width:720px){.wz-row{grid-template-columns:minmax(0,1fr) !important}}
+.wz-auth{padding-left:12px;border-left:2px solid var(--line)}
+.wz-inc{display:flex;flex-direction:column;gap:14px;padding-left:12px;
+  border-left:2px solid var(--line)}
+
+/* 요청 파라미터 — 줄마다 이름·값·비밀·삭제 */
+.wz-params{display:flex;flex-direction:column;gap:8px}
+.wz-params-h{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.wz-prows{display:flex;flex-direction:column;gap:8px}
+.wz-prow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 32px 32px;
+  gap:8px;align-items:center}
+.wz-ps{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;
+  border:1px solid var(--line);border-radius:var(--r-s);background:var(--surface);
+  color:var(--w-text-3);cursor:pointer}
+.wz-ps:hover{border-color:var(--line-str);color:var(--w-text)}
+.wz-ps.on{background:var(--pri-soft);border-color:var(--pri-line);color:var(--pri-ink)}
+
+/* 두 갈래 고르기 — 앱의 .seg 와 같은 모양이되 위저드 안에서만 쓴다 */
+.wz-seg{display:inline-flex;padding:2px;gap:2px;background:var(--surface-3);
+  border-radius:var(--r-s);align-self:flex-start}
+.wz-seg button{border:0;background:transparent;border-radius:calc(var(--r-s) - 1px);
+  padding:0 14px;height:28px;font:inherit;font-size:var(--fs-sm);color:var(--w-text-2);cursor:pointer}
+.wz-seg button.on{background:var(--surface);color:var(--w-text);font-weight:var(--fw-med);
+  box-shadow:var(--w-shadow-1)}
+
+/* 유형 선택 — 두 장 중 하나 */
+.wz-kinds{display:flex;flex-direction:column;gap:10px}
+.wz-kind{display:flex;align-items:center;gap:14px;padding:15px 16px;min-width:0;
+  border:1px solid var(--line);border-radius:var(--r-m);background:var(--surface);
+  cursor:pointer;text-align:left;font:inherit;color:var(--w-text)}
+.wz-kind:hover{border-color:var(--line-str)}
+.wz-kind.on{border-color:var(--pri-line);background:var(--pri-soft)}
+.wz-kind-i{flex:none;display:flex;align-items:center;justify-content:center;
+  width:40px;height:40px;border-radius:var(--r-s);background:var(--surface-2);color:var(--pri)}
+.wz-kind.on .wz-kind-i{background:var(--surface)}
+.wz-kind-c{flex:none;margin-left:auto;color:var(--pri)}
+
+.wz-file{display:flex;align-items:center;gap:10px;min-width:0}
+.wz-file-n{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* 바닥 — 이전 / (취소 · 다음) */
+.wz-foot{display:flex;align-items:center;gap:8px;flex:none;padding-top:4px}
+
+/* ── ⑧ 버전 이력 · 더보기 · 중복 기준 칩 ────────────────────── */
+/* 판 번호는 목록에서 세로로 줄을 맞춰야 훑힌다 — 고정폭 + tabular */
+.cn-ver{width:26px;flex:none;font-family:var(--mono);font-size:var(--fs-sm);
+  font-weight:var(--fw-semi);color:var(--w-accent);font-variant-numeric:tabular-nums;
+  padding-top:1px}
+.cn-more{right:0;left:auto;min-width:200px}
+.cn-more .cn-menu-c{color:var(--w-text-3)}
+.cn-menu-i.dngr{color:var(--err)}
+.cn-menu-i.dngr .cn-menu-c{color:var(--err)}
+/* 중복 기준 칩 — 고른 것만 강조. 자유 입력이 아니라 감지된 컬럼에서만 고른다
+   (오타 하나로 테이블이 1행이 되는 것을 막는다 — ingest.apply_dedupe 주석 참고) */
+.wz-dd{cursor:pointer;user-select:none;font-family:var(--mono)}
+.wz-dd:hover{border-color:var(--line-str)}
+.wz-dd.on{background:var(--pri-soft);border-color:var(--pri-line);color:var(--pri-ink);
+  font-weight:var(--fw-med)}

@@ -8,10 +8,10 @@
 
 ![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)
-![Apache Spark](https://img.shields.io/badge/Apache_Spark-E25A1C?style=flat-square&logo=apachespark&logoColor=white)
+![DuckDB](https://img.shields.io/badge/DuckDB-FFF000?style=flat-square&logo=duckdb&logoColor=111)
 ![dbt](https://img.shields.io/badge/dbt-FF694B?style=flat-square&logo=dbt&logoColor=white)
 ![Apache Airflow](https://img.shields.io/badge/Apache_Airflow-017CEE?style=flat-square&logo=apacheairflow&logoColor=white)
-![Apache Iceberg](https://img.shields.io/badge/Apache_Iceberg-4E8DC4?style=flat-square&logo=apacheiceberg&logoColor=white)
+![DuckLake](https://img.shields.io/badge/DuckLake-4E8DC4?style=flat-square&logo=duckdb&logoColor=white)
 
 </div>
 
@@ -68,9 +68,9 @@ flowchart LR
 
     APP["Data Mates<br/>FastAPI · Web UI"]
     AIR["Airflow<br/>Orchestration"]
-    TRANS["dbt · Spark<br/>Transformation"]
-    ICE["Iceberg REST<br/>Catalog"]
-    MINIO[("MinIO<br/>Object Storage")]
+    TRANS["dbt · DuckDB<br/>Transformation"]
+    LAKE["DuckLake<br/>Catalog · PostgreSQL"]
+    MINIO[("MinIO<br/>Parquet on S3")]
     DUCK["DuckDB<br/>Query Engine"]
     SUPER["Superset<br/>Analytics"]
 
@@ -79,10 +79,10 @@ flowchart LR
     DBTP <-->|Models · Metadata| APP
     APP -->|Create DAG · Run| AIR
     AIR -->|dbt build| TRANS
-    APP -->|PyIceberg ingest| ICE
-    TRANS -->|Write tables| ICE
-    ICE --> MINIO
-    ICE --> DUCK
+    APP -->|DuckDB ingest| LAKE
+    TRANS -->|Write tables| LAKE
+    LAKE --> MINIO
+    LAKE --> DUCK
     DUCK --> APP
     DUCK --> SUPER
     SUPER -->|Embedded analytics| APP
@@ -93,13 +93,15 @@ flowchart LR
     classDef analytics fill:#ecfdf5,color:#065f46,stroke:#34d399;
     class APP core;
     class AIR,TRANS compute;
-    class ICE,MINIO storage;
+    class LAKE,MINIO storage;
     class DUCK,SUPER analytics;
 ```
 
 - **Control plane** — FastAPI와 웹 UI가 dbt 프로젝트, 메타데이터, 계보와 실행 이력을 연결합니다.
-- **Execution plane** — Airflow가 실행을 오케스트레이션하고 dbt와 Spark가 모델을 변환합니다.
-- **Data plane** — Iceberg REST와 MinIO가 테이블과 원본 데이터를 저장하며, DuckDB와 Superset이 조회와 분석을 담당합니다.
+- **Execution plane** — Airflow가 실행을 오케스트레이션하고 dbt와 DuckDB가 모델을 변환합니다.
+- **Data plane** — DuckLake가 PostgreSQL 카탈로그와 MinIO의 Parquet으로 테이블을 저장하며, DuckDB와 Superset이 조회와 분석을 담당합니다.
+
+변환·조회·적재가 모두 같은 DuckDB 엔진을 씁니다. Iceberg + Spark에서 옮겨 온 배경과 검증 결과는 [DuckLake 이관 기록](docs/2026-08-14-ducklake-migration.md)에 정리했습니다.
 
 ## 🔄 Data Flow
 
@@ -130,9 +132,9 @@ flowchart LR
 | Area | Technologies |
 | --- | --- |
 | Application | ![Python](https://img.shields.io/badge/Python_3.11-3776AB?style=flat-square&logo=python&logoColor=white) ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white) ![JavaScript](https://img.shields.io/badge/Vanilla_JS-F7DF1E?style=flat-square&logo=javascript&logoColor=111) |
-| Modeling & Compute | ![dbt](https://img.shields.io/badge/dbt_Core-FF694B?style=flat-square&logo=dbt&logoColor=white) ![Apache Spark](https://img.shields.io/badge/Apache_Spark-E25A1C?style=flat-square&logo=apachespark&logoColor=white) |
+| Modeling & Compute | ![dbt](https://img.shields.io/badge/dbt_Core-FF694B?style=flat-square&logo=dbt&logoColor=white) ![DuckDB](https://img.shields.io/badge/dbt--duckdb-FFF000?style=flat-square&logo=duckdb&logoColor=111) |
 | Orchestration | ![Apache Airflow](https://img.shields.io/badge/Apache_Airflow-017CEE?style=flat-square&logo=apacheairflow&logoColor=white) |
-| Lakehouse | ![Apache Iceberg](https://img.shields.io/badge/Apache_Iceberg-4E8DC4?style=flat-square&logo=apacheiceberg&logoColor=white) ![MinIO](https://img.shields.io/badge/MinIO-C72E49?style=flat-square&logo=minio&logoColor=white) ![DuckDB](https://img.shields.io/badge/DuckDB-FFF000?style=flat-square&logo=duckdb&logoColor=111) |
+| Lakehouse | ![DuckLake](https://img.shields.io/badge/DuckLake-4E8DC4?style=flat-square&logo=duckdb&logoColor=white) ![MinIO](https://img.shields.io/badge/MinIO-C72E49?style=flat-square&logo=minio&logoColor=white) ![DuckDB](https://img.shields.io/badge/DuckDB-FFF000?style=flat-square&logo=duckdb&logoColor=111) |
 | Analytics | ![Apache Superset](https://img.shields.io/badge/Apache_Superset-20A6C9?style=flat-square&logo=apachesuperset&logoColor=white) |
 | Infrastructure | ![Docker](https://img.shields.io/badge/Docker_Compose-2496ED?style=flat-square&logo=docker&logoColor=white) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white) ![Redis](https://img.shields.io/badge/Redis-FF4438?style=flat-square&logo=redis&logoColor=white) |
 
@@ -140,9 +142,10 @@ flowchart LR
 
 ### Prerequisites
 
-- Python 3.11과 Java 17
+- Python 3.11
 - Docker 환경(Docker Desktop 또는 Colima)
 - 연결할 dbt 프로젝트
+- Java 17은 Spark 롤백 타깃(`DBT_TARGET=spark_local`)을 쓸 때만 필요합니다
 
 ### Run
 
@@ -160,23 +163,20 @@ docker-compose -f docker-compose.yml -f docker-compose.superset.yml up -d
 ./scripts/bootstrap_catalog.sh
 ```
 
-스택이 준비되면 로컬 환경에서 Data Mates를 확인할 수 있습니다. Python 환경 구성, dbt 초기화와 문제 해결 방법은 [SETUP.md](docs/SETUP.md), 브랜치 운영과 변경 검증 기준은 [BRANCHING.md](docs/BRANCHING.md)를 참고하세요.
-
 ### 🐳 Container Image
 
 [![Docker Image Version](https://img.shields.io/docker/v/zisu17/datamates?style=flat-square&logo=docker&logoColor=white&label=zisu17%2Fdatamates&color=2496ED)](https://hub.docker.com/r/zisu17/datamates)
-[![Docker Image Size](https://img.shields.io/docker/image-size/zisu17/datamates?style=flat-square&logo=docker&logoColor=white&label=size&color=2496ED)](https://hub.docker.com/r/zisu17/datamates)
 
 Data Mates는 애플리케이션, Airflow, Superset을 하나의 이미지로 배포합니다. 각 컨테이너는 같은 이미지를 서로 다른 명령으로 실행하며, Docker Compose가 이미지를 자동으로 내려받습니다.
 
 | 계층 | 구성 |
 | --- | --- |
-| Application | FastAPI · 웹 UI · PyIceberg · DuckDB · sqlglot |
+| Application | FastAPI · 웹 UI · DuckDB · psycopg · sqlglot |
 | Orchestration | Apache Airflow 3.2.2 |
-| Transformation | dbt Core 1.12.0 · dbt-spark 1.11.0 · PySpark 4.0.4 · Elementary · Java 17 |
+| Transformation | dbt Core 1.12.0 · dbt-duckdb 1.11.0 · DuckDB 1.5.5 · Elementary |
 | Analytics | Apache Superset 5.0.0 · duckdb-engine |
 
-MinIO, Iceberg REST, PostgreSQL, Redis는 공식 이미지를 사용합니다. 현재 Data Mates 이미지는 **linux/arm64**만 지원하며, 직접 빌드하는 방법은 [SETUP.md](docs/SETUP.md)를 참고하세요.
+MinIO, PostgreSQL, Redis는 공식 이미지를 사용하고, Iceberg REST 카탈로그만 PostgreSQL JDBC 드라이버를 더해 로컬에서 빌드합니다(`docker/iceberg-rest`). 현재 Data Mates 이미지는 **linux/arm64**만 지원하며, 직접 빌드하는 방법은 [SETUP.md](docs/SETUP.md)를 참고하세요.
 
 ## 🎯 Current Scope
 

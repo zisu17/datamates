@@ -139,7 +139,7 @@
     /* 화면별 파생 캐시는 부팅마다 비운다 — 서버 데이터가 바뀌면 전부 다시 계산해야 한다 */
     S.pSel = [];                              // 관계도 다중 선택
     PF.data = null;                           // 파이프라인 흐름 DAG 캐시
-    LIN.data = null; S.__linFit = false;      // 데이터 계보 캐시·첫 맞춤
+    LIN.data = null;                          // 데이터 계보 캐시
 
     const b = await api('/bootstrap');
 
@@ -179,9 +179,9 @@
        맞추지 않으면 ENVS[pp.env] 가 undefined 가 되어 파이프라인 실행 정보 패널이
        통째로 예외로 죽는다(빈 창으로 보인다). */
     if (b.envs && b.envs.length) {
-      const COLOR = { local: '#6366F1', local_heavy: '#D97706', remote: '#0E9F6E' };
+      const COLOR = { local: 'var(--accents-indigo)', local_heavy: 'var(--accents-orange)', remote: 'var(--accents-green)' };
       Object.keys(ENVS).forEach(k => delete ENVS[k]);
-      b.envs.forEach(e => { ENVS[e.env] = { label: e.label, c: COLOR[e.env] || '#6366F1' }; });
+      b.envs.forEach(e => { ENVS[e.env] = { label: e.label, c: COLOR[e.env] || 'var(--accents-indigo)' }; });
       if (!ENVS[S.env]) S.env = b.defaultEnv || b.envs[0].env;
     }
 
@@ -197,7 +197,9 @@
     await loadIngest();
     // 홈의 흐름 레일이 수집기 수를 쓰므로 홈에서도 다시 그린다 —
     // 목록이 늦게 와서 0 개로 남는 자리를 없앤다.
-    if (S.page === 'ingest' || S.page === 'home') render();
+    // 파이프라인도 마찬가지다: 좌측 목록의 INGEST 영역과 흐름도가 이 목록을 쓰는데,
+    // 그리기가 먼저 끝나 「등록된 수집 작업이 없습니다」 인 채로 남아 있었다.
+    if (S.page === 'ingest' || S.page === 'home' || S.page === 'pipeline') render();
     return b;
   }
 
@@ -871,13 +873,28 @@
 
     /* ---------------------------------------------------------- 시작 */
 
+  /* 부팅·오류 화면. 로고 규정의 **세로 조합**을 쓴다 — 가운데 정렬된 한 덩어리라
+     심볼이 워드마크 위에 오는 쪽이 맞고, 규정도 «폭이 좁은 영역, 정방형 배치» 를
+     세로 조합의 용도로 든다. 치수는 규정값(심볼 52 · 워드마크 22/26 · 간격 10).
+
+     아래 여백 28px 은 규정의 «사방 여백은 심볼 높이의 0.5배 이상»(52 × 0.5 = 26)에서
+     왔다 — 안내문이 그 안으로 들어오면 로고의 보호 영역을 침범한다.
+
+     #dm-mark 는 index.html 의 #app **밖**에 있는 스프라이트라, 여기서 app.innerHTML 을
+     통째로 갈아치워도 참조가 살아 있다. */
   function splash(msg, kind) {
     const app = document.getElementById('app');
     if (!app) return;
     app.innerHTML = `<div style="height:100vh;display:grid;place-items:center;text-align:center;padding:24px">
       <div style="max-width:520px">
-        <div style="font-size:var(--fs-page);font-weight:800;letter-spacing:-.5px;color:#11151F;margin-bottom:10px">Data Mates</div>
-        <div style="font-size:var(--fs-body);color:${kind === 'err' ? '#DC2A32' : '#5F6A7D'};line-height:1.7;white-space:pre-line">${msg}</div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:10px;
+             color:var(--w-text);margin-bottom:28px">
+          <svg width="52" height="52" viewBox="0 0 64 64" style="display:block" aria-hidden="true"><use href="#dm-mark"/></svg>
+          <div style="font-size:22px;line-height:26px">
+            <span style="font-weight:860;letter-spacing:-0.3px">DATA</span><span style="font-weight:400"> MATES</span>
+          </div>
+        </div>
+        <div style="font-size:var(--fs-body);color:${kind === 'err' ? 'var(--w-danger)' : 'var(--w-text-2)'};line-height:1.7;white-space:pre-line">${msg}</div>
       </div></div>`;
   }
 
@@ -916,41 +933,61 @@
 
   const mmdd = (d) => String(d || '').slice(5).replace('-', '/');
 
-  function bars(items, opts) {
-    /* 세로 막대. 값이 없는 날은 아예 항목이 없다(서버가 0으로 채우지 않는다) —
-       그날 전부 실패 로 읽히지 않게 하려는 것이고, 화면도 그대로 따른다. */
-    if (!items || !items.length) return '<div class="empty" style="padding:24px">아직 실행 이력이 없습니다.</div>';
-    const max = Math.max(...items.map(opts.total), 1);
-    return `<div class="row g10" style="align-items:flex-end;height:132px">
-      ${items.map(d => {
-        const tot = opts.total(d), bad = opts.bad(d);
-        const hh = Math.max(6, Math.round(112 * tot / max));
-        const eh = tot ? Math.round(hh * bad / tot) : 0;
-        return `<div class="col f1" style="gap:6px;align-items:center;min-width:0">
-          <div style="width:100%;max-width:34px;height:${hh}px;display:flex;flex-direction:column;
-               justify-content:flex-end;border-radius:5px;overflow:hidden;background:var(--surface-3)"
-               title="${esc(opts.tip(d))}">
-            ${eh ? `<div style="height:${eh}px;background:var(--err)"></div>` : ''}
-            <div style="flex:1;background:var(--ok)"></div></div>
-          <span class="t11 fnt">${mmdd(d.date)}</span></div>`;
-      }).join('')}</div>`;
-  }
-
-  /* 카드 제목으로 찾아 본문만 갈아끼운다. 홈 전체를 다시 구현하지 않기 위해서다. */
-  function swapCard(root, title, html) {
-    const t = $$('.card-t', root).find(x => x.textContent.trim() === title);
-    if (!t) return null;
-    const card = t.closest('.card');
-    const body = $('.card-b', card);
-    if (body) body.innerHTML = html;
-    return card;
-  }
+  /* (bars · swapCard — 홈이 예제 카드를 그려 두면 여기서 제목으로 찾아 본문만
+     갈아끼우던 자리다. 홈을 실데이터로 다시 쓰면서(b11 의 pageHome) 부르는 곳이
+     없어져 걷어냈다. 품질 화면은 자기 .trend 를 직접 그리므로 영향이 없다.) */
 
   const loadingHtml = `<div class="empty" style="padding:24px">${ic('clock')}<span>이력을 불러오는 중…</span></div>`;
 
-  
+  /* ---------------------------------------------------------- 홈 (v5.5)
+
+     홈은 claude.ai/design 의 «DW Studio 홈» 구성을 따른다 —
+     KPI 4장 · 모델별 빌드 시간 · 적재 현황 · 최근 실행. 그림만 가져오고
+     숫자는 전부 서버에서 받는다(b11 의 pageHome 이 이 값으로 그린다).
+
+     **한 번에 받아 한 번에 그린다.** 카드마다 따로 부르면 카드가 하나씩 늦게
+     채워져 화면이 덜컹거린다. 「24시간 / 7일」 전환도 두 벌을 미리 받아 두고
+     바꿔 끼우므로 탭을 눌러도 요청이 나가지 않는다.
+
+     slowest 를 limit=100 으로 받는 이유. 화면은 상위 5개만 그리지만 도넛의
+     «기타 N개 모델» 조각이 **몇 개인지** 를 말하려면 나머지도 세어야 한다.
+     limit=5 로 받으면 그 N 을 알 수 없어 지어내야 한다. */
+
+  const HOME = { data: null, loading: false, error: null };
+
+  async function loadHome(force) {
+    if (HOME.loading || (HOME.data && !force)) return HOME.data;
+    /* 한 박자 늦춰 «아직도 홈인가» 를 확인하고 쏜다.
+       부팅은 홈을 한 번 그린 뒤 주소의 화면(#/modeling 등)으로 넘어간다. 그 한
+       프레임 사이에 여기서 8개를 동시에 던지면 브라우저의 출처당 동시 연결
+       한도(HTTP/1.1 6개)가 꽉 차서, 정작 사용자가 보려는 화면의 요청이 큐에서
+       기다린다. 실측: 데이터 모델로 바로 들어갔을 때 /lineage 자체는 49ms 인데
+       홈 요청 8개 뒤에 밀려 712ms 에야 시작했다.
+       홈으로 갈 때는 pageHome 이 렌더마다 다시 부르므로 이 지연으로 잃는 것이 없다. */
+    await new Promise(r => setTimeout(r, 0));
+    if (!force && S.page !== 'home') return HOME.data;
+    if (HOME.loading || (HOME.data && !force)) return HOME.data;
+    HOME.loading = true;
+    try {
+      /* 왕복 한 번. 서버가 여덟 곳을 동시에 훑어 이 모양 그대로 돌려준다
+         (routers/home.py). 예전에는 여기서 여덟 개를 던졌는데, 브라우저의
+         출처당 동시 연결이 여섯이라 나머지가 큐에서 기다리고 **다른 화면의
+         요청까지 그 줄에 밀렸다** — 데이터 모델로 바로 들어가도 부팅이 홈을
+         한 번 그리며, 49ms 짜리 /lineage 가 712ms 에야 시작했다.
+         저장소 실패를 따로 삼키는 처리도 서버가 맡는다(storageError). */
+      HOME.data = await api('/home/summary');
+      HOME.error = null;
+    } catch (e) {
+      HOME.error = e.message;
+    } finally {
+      HOME.loading = false;
+    }
+    render();
+    return HOME.data;
+  }
+
   /* 품질 대시보드의 최근 7일 품질 점수 */
-  
+
   /* ---------------------------------------------------------- 파이프라인 이력 탭 */
 
   const HTABS = ['실행', '모델', '문제'];
@@ -1048,7 +1085,11 @@
   // 인자를 그대로 넘긴다. quiet 를 떨어뜨리면 배경 갱신이 매번 화면을 다시 그린다.
   refreshRun = async function (pp, quiet) {
     const st = await _refreshRunV44(pp, quiet);
-    if (st === 'success' || st === 'failed') { HIST.data = null; HIST.pipe = null; }
+    if (st === 'success' || st === 'failed') {
+      HIST.data = null; HIST.pipe = null;
+      // 홈의 적재 행 수·빌드 시간·최근 실행이 전부 방금 실행으로 바뀐다.
+      HOME.data = null;
+    }
     return st;
   };
 
@@ -1070,7 +1111,10 @@
 
   /* 전역 네비게이션의 배지 — 사이드바 시절부터 쓰던 계산 그대로다. */
   function navBadge(id) {
-    if (id === 'quality') return TESTS.filter(t => t.status !== 'ok').length;
+    /* 품질 배지는 걷어냈다. «통과가 아닌 규칙 수» 한 덩어리라 실패와 경고를 하나로
+       뭉갰고, .nav-b 는 빨강(--err)이라 실패 2 · 경고 3 인 상태가 «실패 5» 로
+       읽혔다. 심각도가 갈리는 지금은 한 숫자로 말할 수 없고, 품질 화면이 이미
+       실패·경고를 나눠 보여준다. */
     if (id === 'pipeline') return PIPES.filter(p => p.status === 'err').length;
     return 0;
   }
@@ -1208,6 +1252,46 @@
   /* ── 선택에 따른 강조 집합 ──
      모델 모드: 선택 모델의 상·하류 모델과 그 사이 간선.
      컬럼 모드: 선택 컬럼이 지나가는 전체 경로(끝까지 양방향). */
+  /* ── 데이터 맵에서 제외 ──────────────────────────────────────────
+     맵은 카탈로그에 있는 모델을 전부 그린다. 모델이 늘어나면 정작 보려는 흐름이
+     Elementary 내부 테이블·시험용 모델에 묻히는데, 그것들을 카탈로그에서 지울
+     수는 없다(실제로 존재하는 데이터다). 그래서 **맵에서만 빼는** 스위치를 둔다.
+
+     지우는 것이 아니라 가리는 것이므로 상태는 화면에만 있다(S.linHide).
+     서버에 저장하지 않는 이유 — 「무엇을 보고 있을지」는 보는 사람의 사정이고,
+     한 사람이 가린 모델이 다른 사람 화면에서도 사라지면 «없는 데이터» 로 오해한다. */
+  S.linHide = S.linHide || {};
+  const linHidden = (id) => !!S.linHide[id];
+  const linHideCount = () => Object.keys(S.linHide).filter(k => S.linHide[k]).length;
+
+  function linToggleHide(id) {
+    if (S.linHide[id]) delete S.linHide[id]; else S.linHide[id] = true;
+    /* 가린 모델을 고른 상태로 두면 상세가 «없는 것» 을 가리킨다 */
+    if (S.linHide[id] && S.sel === id) S.sel = null;
+    if (S.linHide[id] && S.linSel && S.linSel.id === id) S.linSel = null;
+    render();
+  }
+
+  /* 숨긴 노드와 그 노드에 걸린 간선을 뺀 사본. 간선은 양쪽이 다 남아야 그린다 —
+     한쪽이 사라진 선은 허공으로 뻗는다. */
+  function linVisible(src) {
+    if (!src) return src;
+    if (!linHideCount()) return src;
+    const keep = new Set(src.nodes.filter(n => !linHidden(n.id)).map(n => n.id));
+    const out = {
+      nodes: src.nodes.filter(n => keep.has(n.id)),
+      modelEdges: (src.modelEdges || []).filter(e => keep.has(e.from) && keep.has(e.to)),
+      /* 컬럼 간선은 fromId/toId 다 — modelEdges 의 from/to 와 필드 이름이 다르다.
+         여기서 from/to 를 보면 전부 undefined 라 컬럼 모드의 선이 통째로 사라진다. */
+      columnEdges: (src.columnEdges || []).filter(e => keep.has(e.fromId) && keep.has(e.toId)),
+      transforms: src.transforms,
+    };
+    /* 숨김 조합이 바뀌면 레이아웃도 달라진다. 사본마다 캐시 자리를 새로 두어
+       linLayout 이 다시 계산하게 한다(원본 캐시는 건드리지 않는다). */
+    out.__posM = out.__posC = out.__idx = null;
+    return out;
+  }
+
   function linMarks(d) {
     const sel = S.linSel;
     if (!sel) return null;
@@ -1273,9 +1357,9 @@
   function erdView() {
     if (!LIN.data) {
       if (!LIN.loading && !LIN.err) linLoad();
-      const box = el(`<div class="f1" style="min-height:0;display:flex;align-items:center;justify-content:center;background:#F7F8FA">
+      const box = el(`<div class="f1" style="min-height:0;display:flex;align-items:center;justify-content:center;background:var(--canvas-bg)">
         <div class="empty">${ic(LIN.err ? 'alert' : 'clock')}
-          <span class="empty-t">${LIN.err ? '계보를 불러오지 못했습니다.' : '데이터 계보를 불러오는 중입니다…'}</span>
+          <span class="empty-t">${LIN.err ? '데이터 맵을 불러오지 못했습니다.' : '데이터 맵을 불러오는 중입니다…'}</span>
           ${LIN.err ? `<span>${esc(LIN.err)}</span><button class="btn sm" id="linRetry" style="margin-top:8px">다시 시도</button>` : ''}
         </div></div>`);
       const rb = $('#linRetry', box);
@@ -1283,7 +1367,12 @@
       return box;
     }
 
-    const d = LIN.data;
+    /* 데이터 맵에서 제외한 모델은 여기서 걸러 낸다.
+       LIN.data 를 직접 자르지 않고 **걸러 낸 사본**을 만드는 이유는, 원본이 서버
+       응답 캐시라서 한 번 지우면 숨김을 되돌릴 때 다시 받아야 하기 때문이다.
+       레이아웃 캐시(__posM/__posC)도 사본에 따로 붙으므로, 숨김이 바뀌면 자연히
+       다시 계산된다 — 캐시를 손으로 비울 필요가 없다. */
+    const d = linVisible(LIN.data);
     const colMode = S.linMode === 'column';
     const pos = linLayout(d, colMode);
     const marks = linMarks(d);
@@ -1298,11 +1387,15 @@
             <svg id="linSvg" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible"></svg>
           </div></div></div>
       <div class="erd-lg">
-        ${/* 상·하위 색은 노드를 고른 뒤에만 칠해진다. 그 전에는 캔버스에 초록·주황이
-             한 점도 없는데 범례만 떠 있어, 무엇을 가리키는 색인지 알 수 없었다.
-             범례는 그 색이 화면에 있을 때만 보여준다. */ ''}
-        ${S.linSel ? `<span class="row g5"><span style="width:9px;height:9px;border-radius:2px;background:var(--ok)"></span>상위 모델</span>
-        <span class="row g5"><span style="width:9px;height:9px;border-radius:2px;background:var(--warn)"></span>하위 모델</span>` : ''}
+        ${/* 세 항목을 **항상** 보여준다.
+             예전에는 상·하위 색이 노드를 고른 뒤에만 칠해지므로, 색이 화면에 없을 때
+             범례를 숨겼다(가리킬 대상이 없는 범례는 읽을 수 없다는 이유였다).
+             그런데 그러면 범례가 선택할 때마다 나타났다 사라져 캔버스 아래쪽이
+             흔들리고, 무엇보다 **고르기 전에는 이 캔버스가 계보를 보여준다는 것
+             자체를 알 수 없다.** 범례는 지금 칠해진 색의 설명이기도 하지만 «고르면
+             무엇을 보여줄지» 의 안내이기도 하다. 후자가 더 쓸모 있다. */ ''}
+        <span class="row g5"><span style="width:9px;height:9px;border-radius:2px;background:var(--ok)"></span>상위 모델</span>
+        <span class="row g5"><span style="width:9px;height:9px;border-radius:2px;background:var(--warn)"></span>하위 모델</span>
         <span class="row g5"><span class="lin-fx" style="cursor:default">fx</span>변환 컬럼</span></div>
       <div class="zoomlbl">
         <button class="lnk" id="linZFit" title="전체가 보이도록 배율을 맞춥니다.">화면에 맞추기</button>
@@ -1355,7 +1448,7 @@
     d.nodes.forEach(n => {
       const p = pos[n.id];
       const dd = byId(n.id) || {};
-      const color = (LAYER[dd.layer] || {}).color || '#94A3B8';
+      const color = (LAYER[dd.layer] || {}).color || 'var(--grays-gray)';
       let ncls = '';
       if (marks) {
         if (n.id === marks.id && !marks.selKey) ncls = 'sel';
@@ -1372,7 +1465,7 @@
         <div class="lin-h" title="누르면 선택 · 두 번 누르면 정의 열기">
           <span class="lin-n">${inPsel ? `<span class="psel-chk ${pselRO ? 'psel-ro' : ''}"
             title="${pselRO ? `${pselRO.name} 이(가) 적재합니다 — 새 파이프라인에서는 조회 전용 입력` : '새 파이프라인이 적재할 모델'}">${ic14(pselRO ? 'eye' : 'check')}</span>` : ''}<span>${esc(n.name)}</span>
-            ${n.lineageStatus === 'unknown' ? `<span class="lin-badge" title="${esc(n.reason || '')}">계보 확인 불가</span>` : ''}
+            ${n.lineageStatus === 'unknown' ? `<span class="lin-badge" title="${esc(n.reason || '')}">연결 확인 불가</span>` : ''}
             <span class="tag mono t11" style="margin-left:auto;flex:none">${esc(n.group)}</span></span>
           <span class="lin-p">${esc(n.phys)}</span></div>
         ${!colMode ? '' : n.cols.map((cc) => {
@@ -1386,7 +1479,7 @@
           return `<div class="lin-r ${rcls}" data-lcol="${esc(cc.col)}">
             ${hasIn ? '<span class="lin-port l"></span>' : ''}
             <span class="lin-c" title="${esc(cc.label !== cc.col ? cc.label + ' · ' + cc.col : cc.col)}">${esc(cc.col)}</span>
-            ${cc.status === 'unknown' ? '<span class="lin-q" title="이 컬럼은 계보를 확인할 수 없습니다.">?</span>' : ''}
+            ${cc.status === 'unknown' ? '<span class="lin-q" title="이 컬럼은 연결을 확인할 수 없습니다.">?</span>' : ''}
             ${cc.tx ? `<span class="lin-fx" data-fx="${esc(cc.col)}" title="변환식 보기">fx</span>` : ''}
             <span class="lin-y">${esc(cc.type || '')}</span>
             ${hasOut ? '<span class="lin-port r"></span>' : ''}
@@ -1420,18 +1513,45 @@
     /* 확대·이동 (보기 전환 seg 는 페이지 헤더로 옮겨 갔다 — v5.7) */
     wireLin(holder, w, h);
     $('#linZ1', holder).onclick = () => { S.erdZoom = 1; render(); };
-    $('#linZFit', holder).onclick = () => linFit(holder, w, h);
-    if (!S.__linFit) { S.__linFit = true; setTimeout(() => linFit(holder, w, h, true), 0); }
+    $('#linZFit', holder).onclick = () => linFit();
+    /* 첫 진입에 자동으로 맞추지 않는다 — 계보가 깊어질수록(열 하나당 414px) 자동
+       맞춤 배율이 끝없이 내려가, 모델이 늘어날수록 처음 보는 화면이 작아졌다.
+       파이프라인 흐름·파이프라인 상세도 자동 맞춤 없이 100% 로 들어오므로,
+       세 캔버스가 이제 같은 배율로 시작한다. 전체를 보려면 「화면에 맞추기」다. */
     return holder;
   }
 
-  function linFit(holder, w, h, silent) {
-    const wrap = $('#erdWrap', holder) || $('#erdWrap');
-    if (!wrap) return;
+  /* 첫 진입에서 배율이 늘 30% 로 고정돼 있던 이유가 여기 있었다.
+     예전에는 setTimeout(…, 0) 으로 불렀는데, 그 시점에는 .canvas-wrap 이 아직
+     배치되지 않아 clientHeight 가 0 이다. 그러면 (0 - 48)/h 가 **음수**가 되고
+     아래 Math.max 의 하한 0.3 이 그 음수를 붙잡아, 계산이 실패했다는 사실이
+     «가장 작은 배율» 로 둔갑했다. 버튼으로 누르면 배치가 끝난 뒤라 제대로 0.56 이
+     나왔고, 그래서 진입 배율과 「화면에 맞추기」 결과가 서로 달랐다.
+
+     이제 잴 수 있을 때까지 프레임을 넘기며 기다린다. 10프레임(≒160ms) 안에
+     자리가 잡히지 않으면 포기하고 기본 배율로 둔다 — 여기서 억지로 값을 넣으면
+     같은 종류의 «틀린 숫자» 가 다시 생긴다.
+
+     minZ 는 하한이다. 사용자가 「화면에 맞추기」를 직접 누른 것은 «작아져도 좋으니
+     전부 보여 달라» 는 뜻이므로 0.3 까지 내려가고, 진입은 읽을 수 있어야 하므로
+     0.6 아래로 내리지 않는다(264px 노드가 158px 로 그려진다). */
+  /* 「화면에 맞추기」 버튼에서만 부른다. 자동 진입 맞춤은 없앴다(erdView 참고).
+
+     치수를 **살아 있는 DOM 에서 직접** 읽는다. 예전에는 erdView 가 계산한 w·h 와
+     holder 를 인자로 받아 클로저에 담아 뒀는데, 그 사이 다시 그려지면 인자는 옛
+     그래프의 크기이고 holder 는 문서에서 떨어져 나간 껍데기가 된다. */
+  function linFit() {
+    const wrap = document.getElementById('erdWrap');
+    const c = document.getElementById('erdC');
+    /* 못 재는 상태에서는 아무 것도 하지 않는다. 예전에는 크기가 0 일 때도 그대로
+       계산해서 (0 - 48)/h 라는 **음수**를 만들었고, 아래 Math.max 의 하한이 그
+       음수를 붙잡아 «계산 실패» 가 «가장 작은 배율» 로 둔갑했다. */
+    if (!wrap || !c || wrap.clientWidth < 80 || wrap.clientHeight < 80) return;
+    const w = parseFloat(c.style.width) || c.offsetWidth;
+    const h = parseFloat(c.style.height) || c.offsetHeight;
+    if (!w || !h) return;
     const z = Math.max(0.3, Math.min(1, (wrap.clientWidth - 48) / w, (wrap.clientHeight - 48) / h));
-    const nz = Math.round(z * 100) / 100;
-    if (silent && Math.abs(nz - (S.erdZoom || 1)) < 0.02) return;
-    S.erdZoom = nz;
+    S.erdZoom = Math.round(z * 100) / 100;
     S.__linScroll = { l: 0, t: 0 };   // 맞추기는 의도된 이동 — 원점 기준으로 다시 본다
     render();
     const w2 = $('#erdWrap');
@@ -1506,7 +1626,11 @@
   const dockDefH = () => Math.min(560, Math.round(window.innerHeight * 0.52));
 
   
-  const DOCK_TABS_51 = [['info', '모델 정보'], ['sql', 'SQL'], ['quality', '품질 규칙'],
+  /* 독 탭 — SQL 을 별도 탭에서 빼고 「모델 정보」 안의 카드로 옮겼다(디자인 «모델 상세»).
+     SQL 은 모델 정의 그 자체라 정의를 보러 들어온 자리에서 탭을 한 번 더 옮겨야
+     보이는 것이 이상했고, 왼쪽 속성 카드와 나란히 두면 «무엇을 어떻게 만드는가» 가
+     한 화면에서 읽힌다. 옛 주소·호출부가 'sql' 을 넣을 수 있으므로 info 로 받는다. */
+  const DOCK_TABS_51 = [['info', '모델 정보'], ['quality', '품질 규칙'],
                         ['preview', '데이터 미리보기'], ['hist', '변경 이력']];
 
     /* ============================================================
@@ -1967,13 +2091,12 @@
     const w = Math.max(760, ...d.nodes.map(n => pos[n.id].x + NW + 60));
     const h = Math.max(320, ...d.nodes.map(n => pos[n.id].y + NH + 40));
 
-    // 데이터 모델 화면과 같은 문법의 통합 헤더 — 제목 · 개수 · (오른쪽) 안내
+    /* 상단 막대는 조작 안내만 남긴다.
+       제목(「실행 의존성」)은 탭 이름(「파이프라인 흐름」)이 이미 말하고 있었고,
+       개수(수집 N · 가공 N · 연결 N)는 흐름도에 그려진 것을 세어 옮겨 적은 값이라
+       화면을 보면 알 수 있는 것을 한 번 더 말하는 자리였다. */
     box.appendChild(el(`<div class="mod-bar">
-      <span class="row g8" style="padding-left:14px;min-width:0;flex:1 1 auto;overflow:hidden">
-        <span class="b6 t13" style="flex:none">실행 의존성</span>
-        <span class="t11 fnt trunc">수집 ${d.nodes.filter(n => n.kind === 'ingest').length}개 ·
-          가공 ${d.nodes.filter(n => n.kind !== 'ingest').length}개 · 연결 ${d.edges.length}개</span></span>
-      <span class="t11 fnt trunc" style="flex:0 1 auto;min-width:0;padding-right:14px;text-align:right">
+      <span class="t11 fnt trunc" style="flex:1 1 auto;min-width:0;padding:0 14px">
         ${R().canPipeEdit
           ? '파이프라인을 누르면 탭으로 열림 · 연결점을 끌어 성공 시 실행 연결 · 연결 라벨을 눌러 해제'
           : '파이프라인을 누르면 탭으로 열립니다'}</span></div>`));
@@ -2005,7 +2128,7 @@
         ${d.nodes.map(n => `
           <div class="lin-node compact pf-n ${n.id === S.pipe ? 'sel' : ''}" data-pf="${esc(n.id)}"
                style="left:${pos[n.id].x}px;top:${pos[n.id].y}px;width:${NW}px;cursor:pointer">
-            <div class="lin-t" style="background:${n.status === 'err' ? 'var(--err)' : n.status === 'run' ? 'var(--pri)' : n.status === 'ok' ? 'var(--ok)' : '#94A3B8'}"></div>
+            <div class="lin-t" style="background:${n.status === 'err' ? 'var(--err)' : n.status === 'run' ? 'var(--pri)' : n.status === 'ok' ? 'var(--ok)' : 'var(--grays-gray)'}"></div>
             <div class="lin-h" style="cursor:pointer">
               <span class="lin-n"><span>${esc(n.name)}</span>
                 <span style="margin-left:auto;flex:none">${pipeBadge(n.status)}</span></span>
@@ -2439,75 +2562,15 @@
 
   /* ── 모델 정보 탭의 두 섹션 ───────────────────────────────────── */
 
-  /* 「이 데이터가 어디에서 왔고 어디로 가는가」.
-     한 화면 안에서 앞뒤 단계를 눌러 이동할 수 있어야 페이지들이 따로 노는
-     관리도구가 아니라 하나의 흐름으로 읽힌다. */
-  function flowSection(d) {
-    const chip = (label, kind, arg, icon, sub) =>
-      `<button class="lnk row g4" data-fl="${esc(kind)}" data-fa="${esc(arg)}"
-         style="font-size:var(--fs-sm);align-items:center;padding:3px 8px;border:1px solid var(--line);
-         border-radius:999px;background:var(--surface);cursor:pointer">
-         ${ic14(icon, 'fnt')}<span class="trunc">${esc(label)}</span>
-         ${sub ? `<span class="t11 fnt">${esc(sub)}</span>` : ''}</button>`;
-
-    const prev = [], next = [];
-
-    if (d.kind === 'source') {
-      // SOURCE 의 이전 단계는 그 데이터를 적재한 수집기다.
-      const job = ING.find(j => j.phys === d.phys);
-      if (job) prev.push(chip(job.name, 'ing', job.id, job.kind === 'file' ? 'doc' : 'link', '수집기'));
-      else prev.push(`<span class="t12 fnt">연결된 수집기를 찾지 못했습니다.</span>`);
-    } else {
-      (d.up || []).forEach(id => {
-        const u = byId(id);
-        if (u) prev.push(chip(u.name, 'model', id, u.kind === 'source' ? 'tbl' : 'cube', grpOf(u)));
-      });
-      if (!(d.up || []).length) prev.push('<span class="t12 fnt">입력이 없습니다.</span>');
-    }
-
-    (d.down || []).forEach(id => {
-      const n = byId(id);
-      if (n) next.push(chip(n.name, 'model', id, 'cube', grpOf(n)));
-    });
-    const pipes = PIPES.filter(pp => pp.__flow && (pp.__flow.order || []).includes(d.id));
-    pipes.forEach(pp => next.push(chip(pp.name, 'pipe', pp.id, 'pipe', '실행')));
-    /* 분석은 마트일 때만 다음 단계다. 지정을 뗀 모델에도 옛 분석이 남아 있을 수
-       있지만(엔진 쪽 객체는 지우지 않는다), 그걸 흐름으로 그리면 «분석에서 쓸 수
-       없다» 는 바로 아래 줄과 화면에서 맞부딪힌다. */
-    const mt = martOf(d.id);
-    if (d.isMart) (mt && mt.analyses || [])
-      .forEach(a => next.push(chip(a.name, 'ana', String(a.id), 'chart', '분석')));
-    if (!next.length) {
-      next.push(d.kind === 'source'
-        ? '<span class="t12 fnt">아직 이 원천을 쓰는 데이터 모델이 없습니다.</span>'
-        : '<span class="t12 fnt">이어지는 단계가 없습니다 — 최종 모델입니다.</span>');
-    }
-
-    const sec = el(`<div class="col g8" style="padding-top:12px;border-top:1px solid var(--line-2)">
-      <span class="t12 b6">데이터 흐름</span>
-      <div class="row g8" style="align-items:flex-start">
-        <span class="t11 fnt" style="width:64px;flex:none;padding-top:5px">이전 단계</span>
-        <span class="row g6 f1" style="flex-wrap:wrap;min-width:0">${prev.join('')}</span></div>
-      <div class="row g8" style="align-items:flex-start">
-        <span class="t11 fnt" style="width:64px;flex:none;padding-top:5px">다음 단계</span>
-        <span class="row g6 f1" style="flex-wrap:wrap;min-width:0">${next.join('')}</span></div>
-    </div>`);
-
-    $$('[data-fl]', sec).forEach(x => x.onclick = () => {
-      const kind = x.dataset.fl, arg = x.dataset.fa;
-      // go() 가 관계도 시드·중복 방지·선택까지 한 번에 맡는다
-      if (kind === 'model') go('modeling', arg);
-      else if (kind === 'pipe') { openPipeTab(arg); go('pipeline'); }
-      else if (kind === 'ing') { go('ingest'); openIngTab(arg); }
-      else if (kind === 'ana') go('analytics');
-    });
-    return sec;
-  }
+  /* (flowSection — 「데이터 흐름」 이전/다음 단계 칩. 독에서 뺀 뒤 부르는 곳이
+     없어져 제거. 앞뒤 단계 이동은 위 계보 캔버스가 한다.) */
 
   /* DATA MART 지정 — 이 모델이 분석으로 넘어가는 유일한 문이다.
      화면이 반드시 답해야 하는 두 가지: 지금 일반 모델인가 마트인가,
      그리고 분석에서 쓰이고 있는가. */
-  function martSection(d) {
+  /* hideBtn — 독 헤더가 같은 버튼을 이미 크게 들고 있을 때 여기서는 뺀다.
+     같은 동작을 하는 버튼이 한 화면에 둘이면 어느 쪽이 «진짜» 인지 묻게 된다. */
+  function martSection(d, hideBtn) {
     if (d.kind !== 'model') return null;
     const mt = martOf(d.id);
     const on = !!d.isMart;
@@ -2517,7 +2580,7 @@
         <span class="t12 b6">DATA MART</span>
         ${grpTag(on ? 'DATA MART' : 'DATA MODEL', 'flex:none')}
         <span class="sp"></span>
-        <span id="mkBtn"></span>
+        ${hideBtn ? '' : '<span id="mkBtn"></span>'}
       </div>
       <span class="t12 fnt" style="line-height:1.7">${esc(GRP_DESC[on ? 'DATA MART' : 'DATA MODEL'])}</span>
       <div class="col g4" id="mkUse"></div>
@@ -2570,7 +2633,7 @@
         martUnmark(d);
       };
       if (!can) btn.classList.add('gho');
-      btnBox.appendChild(btn);
+      if (btnBox) btnBox.appendChild(btn);
     } else {
       const why = mt.markBlockedReason || '';
       const btn = el(`<button class="btn pri sm"
@@ -2589,63 +2652,118 @@
           ok: 'DATA MART 로 지정',
         }).then(ok => { if (ok) martMark(d); });
       };
-      btnBox.appendChild(btn);
+      if (btnBox) btnBox.appendChild(btn);
     }
     return sec;
   }
 
-  /* 다음 단계로 넘어가는 줄. 「무엇을 확인했으니 이제 무엇을 하면 되는가」를
-     화면이 먼저 말해 준다 — 모델을 만든 뒤 다음에 갈 곳이 파이프라인인지
-     마트 지정인지 사용자가 메뉴를 뒤져 알아내게 두지 않는다. */
-  function nextStepBar(d) {
-    const pipes = PIPES.filter(pp => pp.__flow && (pp.__flow.order || []).includes(d.id));
-    const bar = el(`<div class="row g6" style="flex-wrap:wrap;padding-top:12px;
-      border-top:1px solid var(--line-2)">
-      <span class="t11 fnt" style="width:64px;flex:none;padding-top:6px">다음 단계</span>
-      <span class="row g6 f1" style="flex-wrap:wrap;min-width:0" id="nsWrap"></span></div>`);
-    const wrap = $('#nsWrap', bar);
-    const add = (label, icon, pri, run) => {
-      const b = el(`<button class="btn sm ${pri ? 'pri' : ''}">${ic14(icon)}${esc(label)}</button>`);
-      b.onclick = run;
-      wrap.appendChild(b);
-    };
-
-    if (!pipes.length && R().canPipeEdit) {
-      add('파이프라인 만들기', 'plus', !d.isMart, () => newPipelineModal(null, [d.id], []));
-    } else if (pipes.length) {
-      add(`파이프라인 열기 (${pipes.length})`, 'pipe', false,
-          () => { openPipeTab(pipes[0].id); go('pipeline'); });
-    }
-    if (d.isMart) {
-      add('이 마트로 분석 만들기', 'chart', true, () => {
-        buildReset(d.id);
-        buildLoadColumns(d.id);
-        S.anaView = 'pick';
-        go('analytics');
-      });
-    }
-    return bar;
-  }
+  /* (nextStepBar — 「다음 단계」 버튼 줄. 같은 이유로 제거. 파이프라인 만들기·
+     열기는 파이프라인 화면이, 분석 만들기는 데이터 분석 화면이 갖고 있다.) */
 
   /* 모델 정보 탭 — 기본 정의만 남긴 단순 화면으로 통째로 다시 그린다.
      연결 관계는 위 계보 화면, 컬럼은 + 상세 보기, SQL·품질 규칙·미리보기·
      이력은 각자의 탭이 맡는다. 여기는 요약판이 아니라 «이 모델이 무엇인지»
      확인하고 설명을 고치는 자리다. */
+  /* 독 머리 — 제목줄 · 설명 · 메타 스트립. 탭 위에 고정으로 얹힌다.
+     탭을 옮겨도 «지금 무엇을 보고 있는지» 는 늘 같은 자리에 있어야 한다.
+     예전에는 이름·저장 위치·설명이 「모델 정보」 탭 안에만 있어서, 품질 규칙이나
+     미리보기로 옮기면 어느 모델의 것인지가 화면에서 사라졌다. */
+  function dkHeader(d) {
+    const isModel = d.kind === 'model';
+    const dirty = (S.__dirty || {})[d.id];
+    /* 요약 스트립(가공 단계·생성 방식·형식·품질 검사·다음 단계·DATA MART)은 뺐다.
+       여섯 칸이 전부 화면 어딘가에 이미 있었다 — 앞의 셋은 「모델 정보」 의 속성
+       카드가 같은 값을 그대로 갖고 있고, 품질 검사는 탭 라벨의 개수 배지가,
+       다음 단계는 탭 안의 흐름 줄이, DATA MART 는 제목 옆 태그와 버튼이 말한다.
+       같은 값을 두 번 그리면 둘이 어긋났을 때 어느 쪽이 맞는지 알 수 없다. */
+    const box = el(`<div class="dk-head-in">
+      <div class="dk-title">
+        <span class="swatch" style="background:${grpColor(d)};width:9px;height:9px"></span>
+        <h2 class="dk-name">${esc(d.name)}</h2>
+        ${grpTag(d, 'flex:none')}
+        <button class="dk-phys" id="dkCopy" title="저장 위치를 복사합니다.">
+          <span class="mono">${esc(d.phys)}</span>${ic14('doc', 'fnt')}</button>
+        <span class="dk-title-act" id="dkAct"></span>
+      </div>
+      <div class="dk-desc" id="dkDescBox"></div></div>`);
+
+    /* 설명 — 모델은 여기서 바로 고친다(저장 안 된 변경은 점으로 표시).
+       원천은 우리가 쓰는 값이 아니라 읽어 온 값이라 읽기 전용이다. */
+    const db = $('#dkDescBox', box);
+    if (isModel) {
+      /* 디자인의 설명은 입력 상자가 아니라 그냥 문단이다. 그런데 이 앱에서는
+         고칠 수 있어야 하므로, **평소에는 문단으로 보이고 누르면 고쳐지는** 칸으로
+         만든다 — 테두리·바탕 없이 문단과 같은 서체·색으로 두고, 마우스를 올리면
+         옅은 바탕으로 «여기 고칠 수 있다» 를 알리고, 초점이 오면 그때 입력칸이 된다.
+         textarea 를 쓰는 이유는 contenteditable 이 붙여넣기에 서식을 끌고 들어와서다.
+         높이는 내용에 맞춰 늘린다 — 고정 높이면 결국 상자로 보인다. */
+      const ta = el(`<textarea class="dk-desc-in" id="dkDesc" rows="1"
+        placeholder="이 모델이 무엇인지 한 줄로 적어 두면 다음 사람이 찾습니다."
+        >${esc((dirty || {}).desc ?? (d.desc || ''))}</textarea>`);
+      const fit = () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; };
+      ta.oninput = (ev) => {
+        const v = ev.target.value;
+        if (v === (d.desc || '')) { if (S.__dirty) delete S.__dirty[d.id]; }
+        else { S.__dirty = S.__dirty || {}; S.__dirty[d.id] = { desc: v }; }
+        linMarkDirtyUI(d.id);
+        const dot = $('#dkDirty', box);
+        if (dot) dot.style.display = (S.__dirty || {})[d.id] ? '' : 'none';
+        fit();
+      };
+      db.appendChild(ta);
+      db.appendChild(el(`<span class="dk-dirty" id="dkDirty"
+        style="${dirty ? '' : 'display:none'}">● 저장 안 됨</span>`));
+      /* 붙은 뒤라야 scrollHeight 를 잰다 — 떨어져 있으면 0 이다. */
+      setTimeout(fit, 0);
+    } else {
+      db.appendChild(el(`<p class="dk-desc-ro">${esc(d.desc || '설명이 없습니다.')}</p>`));
+    }
+
+    /* 저장 위치 복사 — 쿼리 창에 붙여 넣으려고 매번 손으로 옮겨 적던 값이다. */
+    $('#dkCopy', box).onclick = () => {
+      navigator.clipboard.writeText(d.phys)
+        .then(() => toast('저장 위치를 복사했습니다.'))
+        .catch(() => toast('복사하지 못했습니다.', 'err'));
+    };
+
+    /* DATA MART 지정·해제는 martSection 이 이미 규칙(막힘 사유·확인 대화)을 들고
+       있다. 버튼만 따로 만들면 그 규칙이 두 곳으로 갈라지므로, 섹션을 만들어
+       버튼만 꺼내 온다. */
+    const act = $('#dkAct', box);
+    if (isModel) {
+      const sec = martSection(d);
+      const btn = sec && $('#mkBtn', sec) && $('#mkBtn', sec).firstElementChild;
+      if (btn) { btn.classList.remove('sm'); act.appendChild(btn); }
+    }
+    return box;
+  }
+
   function dockView() {
     /* 하단 독 — 모델 정보 · SQL · 품질 규칙 · 데이터 미리보기 · 변경 이력 (v5.1 단일 층).
        정의의 이중 탭은 없앴다: 기본 정보·컬럼은 모델 정보에 병합됐고, 입력 데이터는
        모델 정보와 중복, 변환은 dbt 이전의 잔재라 뺐다. SQL·품질 본문은 mpBody 가 그린다. */
+    if (S.dockTab === 'sql') S.dockTab = 'info';          // SQL 탭 → 모델 정보 안의 카드
     if (!DOCK_TABS_51.some(([k]) => k === S.dockTab)) S.dockTab = 'info';
     const dt = S.dockTab;
     const d = S.sel && byId(S.sel);
 
-    const w = el(`<div class="dock ${S.dockMin ? 'min' : ''}" style="${S.dockMin ? '' : `height:${S.dockH}px`}">
+    /* 저장된 높이가 지금 화면보다 크면 위쪽 계보 캔버스가 0 이 된다 */
+    const dh = Math.min(S.dockH, dockMaxH());
+    /* 머리(제목·설명·메타)는 탭 위에 있고, 접으면 탭 줄만 남는다 —
+       접힌 독에서도 어느 탭을 보고 있었는지는 남아야 다시 펼칠 때 헤매지 않는다. */
+    const w = el(`<div class="dock ${S.dockMin ? 'min' : ''}" style="${S.dockMin ? '' : `height:${dh}px`}">
       ${S.dockMin ? '' : '<div class="grip-h" id="gripH" title="높이 조절"></div>'}
-      <div class="dock-h">${DOCK_TABS_51.map(([k, l]) =>
-        `<button class="tab ${dt === k ? 'on' : ''}" data-dt="${k}" style="height:36px">${l}</button>`).join('')}
-        <button class="iconbtn sp" id="dockTgl" title="${S.dockMin ? '펼치기' : '접기'}">${ic14(S.dockMin ? 'chev' : 'chevd')}</button></div>
-      <div class="dock-b" id="dockB"></div></div>`);
+      <div class="dock-scroll">
+        <div class="dk-head" id="dkHead"></div>
+        <div class="dock-h">${DOCK_TABS_51.map(([k, l]) =>
+          `<button class="tab ${dt === k ? 'on' : ''}" data-dt="${k}" style="height:40px">${l}${
+            k === 'quality' && d ? `<span class="tab-c">${rulesOf(d.id).length}</span>` : ''}</button>`).join('')}
+          <button class="iconbtn sp" id="dockTgl" title="${S.dockMin ? '펼치기' : '접기'}">${ic14(S.dockMin ? 'chev' : 'chevd')}</button></div>
+        <div class="dock-b" id="dockB"></div>
+      </div></div>`);
     const b = $('#dockB', w);
+    const head = $('#dkHead', w);
+    if (d) head.appendChild(dkHeader(d)); else head.remove();
 
     if (!d) {
       b.appendChild(el(`<div class="empty">${ic('model')}<span>관계도에서 모델을 선택해 주세요.</span></div>`));
@@ -2660,65 +2778,114 @@
       const isModel = d.kind === 'model';
       const dirty = (S.__dirty || {})[d.id];
 
-      b.style.cssText = 'overflow:auto';
-      const box = el(`<div class="col" style="max-width:820px;gap:14px;padding:18px 22px">
-        <div class="row g8">
-          <span class="swatch" style="background:${grpColor(d)}"></span>
-          <span class="b6 t15">${esc(d.name)}</span>
-          ${grpTag(d, 'flex:none')}
+      /* 왼쪽은 «무엇인가»(속성·파이프라인), 오른쪽은 «어떻게 만드는가»(SQL).
+         SQL 이 별도 탭이던 것을 여기로 들여, 정의를 한 화면에서 읽게 한다.
+         (여기서 overflow 를 다시 잡지 않는다 — 스크롤은 .dock-scroll 한 겹이다.) */
+      const a = d.sql ? sqlAudit(d.sql) : null;
+      const box = el(`<div class="dk-info">
+        <div class="dk-col">
+          <section class="dk-card">
+            <div class="dk-card-h">속성</div>
+            <div class="dk-kv">
+              <div><span>저장 위치</span><b class="mono">${esc(d.phys)}</b></div>
+              <div><span>가공 단계</span><b>${esc(d.layer)}</b></div>
+              <div><span>생성 방식</span><b>${mat}</b></div>
+              <div><span>형식</span><b>${esc(d.mat === '—' ? 'Table' : d.mat)}</b></div>
+            </div>
+          </section>
+          <section class="dk-card">
+            <div class="dk-card-h">사용 파이프라인</div>
+            ${pipes.length ? pipes.map(pp => `
+              <div class="dk-pipe">
+                ${ic14('pipe', 'fnt')}
+                <span class="col f1" style="min-width:0;gap:1px">
+                  <span class="t13 trunc">${esc(pp.name)}</span>
+                  <span class="t11 fnt">${(pp.__flow.order || []).includes(d.id) ? '적재 단계에서 사용' : '조회 전용으로 사용'}</span>
+                </span>
+                <button class="lnk" data-dkp="${esc(pp.id)}" style="flex:none">열기</button>
+              </div>`).join('')
+              : '<div class="dk-pipe"><span class="t12 fnt">이 모델을 만드는 파이프라인이 아직 없습니다.</span></div>'}
+          </section>
         </div>
-        <div class="row" style="gap:22px;flex-wrap:wrap;color:var(--muted);font-size:var(--fs-sm)">
-          <span class="row g6"><span class="fnt">저장 위치</span><span class="mono" style="color:var(--text)">${esc(d.phys)}</span></span>
-          <span class="row g6"><span class="fnt">가공 단계</span><span style="color:var(--text)">${esc(d.layer)}</span></span>
-          <span class="row g6"><span class="fnt">생성 방식</span><span style="color:var(--text)">${mat}</span><span class="t11 fnt mono">· ${esc(d.mat)}</span></span>
-        </div>
-        <div class="col g6">
-          <span class="t12 b6">설명 ${isModel && dirty ? '<span class="t11" style="color:var(--warn);font-weight:400">● 저장 안 됨</span>' : ''}</span>
-          ${isModel
-            ? `<textarea class="inp" id="dkDesc" style="min-height:64px;line-height:1.6;resize:vertical">${esc((dirty || {}).desc ?? (d.desc || ''))}</textarea>`
-            : `<span class="t12" style="line-height:1.6">${esc(d.desc || '설명이 없습니다.')}</span>`}
-        </div>
-        ${pipes.length ? `<div class="col g6">
-          <span class="t12 b6">사용 파이프라인</span>
-          ${pipes.map(pp => `
-            <span class="row g6" style="font-size:var(--fs-sm)">
-              <span class="trunc">${esc(pp.name)}</span>
-              <span class="t11 fnt" style="flex:none">${(pp.__flow.order || []).includes(d.id) ? '적재' : '조회 전용'}</span>
-              <button class="lnk" data-dkp="${esc(pp.id)}" style="flex:none;font-size:var(--fs-sm)">열기 →</button>
-            </span>`).join('')}
-        </div>` : ''}
+        <section class="dk-card dk-sql">
+          <div class="dk-card-h">
+            <span>SQL</span>
+            <span class="t11 fnt">${a ? `문장 ${a.stmts}개 · CTE ${a.cte}개 · 출력 테이블 1개`
+                                     : '수집 적재 · SQL 정의 없음'}</span>
+            ${d.sql ? `<span class="sp row g4">
+              <button class="btn sm gho" id="dkSqlCopy">복사</button>
+              <button class="btn sm" id="dkSqlChk">검사</button>
+              <button class="btn sm" id="dkSqlEdit">편집</button></span>` : ''}
+          </div>
+          ${d.sql ? `<pre class="dk-sql-b">${esc(d.sql)}</pre>`
+                  : `<div class="empty" style="padding:32px">${ic('db')}
+                       <span class="empty-t">원천 데이터는 SQL 정의가 없습니다.</span>
+                       <span>수집이 적재한 테이블을 그대로 읽습니다.</span></div>`}
+        </section>
       </div>`);
 
-      /* 정의 아래에 두 줄을 더 붙인다 —
-         이 데이터가 흐름의 어디에 있는지, 그리고 분석으로 나가는 문(DATA MART)이
-         열려 있는지. 둘 다 다른 화면으로 이어지는 통로다. */
-      box.appendChild(flowSection(d));
-      const ms = martSection(d);
-      if (ms) box.appendChild(ms);
-      if (isModel) box.appendChild(nextStepBar(d));
-
-      const ta = $('#dkDesc', box);
-      if (ta) ta.oninput = (ev) => {
-        const v = ev.target.value;
-        if (v === (d.desc || '')) {
-          if (S.__dirty) delete S.__dirty[d.id];
-        } else {
-          S.__dirty = S.__dirty || {};
-          S.__dirty[d.id] = { desc: v };
-        }
-        linMarkDirtyUI(d.id);
-      };
+      if (d.sql) {
+        $('#dkSqlCopy', box).onclick = () => navigator.clipboard.writeText(d.sql)
+          .then(() => toast('SQL 을 복사했습니다.')).catch(() => toast('복사하지 못했습니다.', 'err'));
+        $('#dkSqlEdit', box).onclick = () => sqlModal({ id: d.id, ref: d });
+        $('#dkSqlChk', box).onclick = () => checkSql({ id: d.id, ref: d });
+      }
       $$('[data-dkp]', box).forEach(x => x.onclick = () => {
         openPipeTab(x.dataset.dkp); go('pipeline');
       });
       b.appendChild(box);
 
-    } else if (dt === 'sql' || dt === 'quality') {
-      S.mTab = dt === 'sql' ? 'SQL' : '품질 규칙';
-      b.style.cssText = 'padding:0;display:flex;flex-direction:column;min-height:0';
-      const box = el('<div class="def f1" style="min-height:0"><div class="def-in"><div class="def-b"></div></div></div>');
-      mpBody($('.def-b', box), { id: d.id, ref: d }, d);
-      if (dt === 'quality') wireToggles(box);   // 프로토타입 토글을 실서버로
+      /* 「데이터 흐름」·「DATA MART」·「다음 단계」 세 블록은 여기 두지 않는다.
+         한 번 걷어냈던 것을 이 화면을 다시 만들면서 «잃지 않으려고» 되살렸는데,
+         빼기로 한 판단을 되돌린 것이었다. 셋 다 이 독이 답할 질문(«이 모델이
+         무엇이고 어떻게 만들어지나»)이 아니라 다른 화면으로 나가는 통로이고,
+         그 통로는 위 계보 캔버스와 상단 메뉴가 이미 갖고 있다. */
+
+    } else if (dt === 'quality') {
+      /* 규칙을 표로 세운다 — 규칙 · 대상 컬럼 · 수준 · 최근 결과 · 사용.
+         카드를 세로로 쌓던 방식은 규칙이 열 개만 넘어도 무엇이 무엇인지 대조가
+         안 됐다. 같은 항목을 세로로 훑을 수 있어야 «어느 컬럼에 무슨 규칙이
+         걸려 있나» 를 한눈에 본다. */
+      const rs = rulesOf(d.id);
+      const box = el(`<div class="dk-rules">
+        <div class="dk-rules-h">
+          <span class="t15 b6">검사 규칙 ${rs.length}개</span>
+          <span class="t12 fnt">여기서 만든 규칙은 데이터 품질 메뉴에도 함께 나타납니다.</span>
+          <button class="btn sm sp" id="dkAddQ">${ic14('plus')}규칙 추가</button>
+        </div>
+        <div class="tbl dk-rules-t" style="--cols:minmax(0,1.3fr) minmax(0,1fr) 76px 108px 52px">
+          <div class="th"><span>규칙</span><span>대상 컬럼</span><span>수준</span>
+            <span>최근 결과</span><span class="rt">사용</span></div>
+        </div></div>`);
+      const t = $('.dk-rules-t', box);
+
+      if (!rs.length) {
+        t.appendChild(el(`<div class="empty" style="padding:36px">${ic('shield')}
+          <span class="empty-t">아직 규칙이 없습니다.</span>
+          <span>필수값·중복처럼 이 데이터가 지켜야 할 조건을 걸어 둘 수 있습니다.</span></div>`));
+      }
+      rs.forEach(q => {
+        const sev = q.sev === 'error';
+        /* 꺼 둔 규칙은 «통과» 가 아니라 «검사하지 않음» 이다. 지난 결과를 그대로
+           두면 지금도 지켜지고 있다는 뜻으로 읽힌다. */
+        const res = !q.active ? { t: '미검사', c: 'var(--faint)', i: 'minus' }
+          : q.status === 'ok' ? { t: '통과', c: 'var(--ok)', i: 'checkc' }
+          : q.status === 'warn' ? { t: '주의', c: 'var(--warn)', i: 'alert' }
+          : { t: '실패', c: 'var(--err)', i: 'xc' };
+        const row = el(`<div class="tr">
+          <span class="c2">
+            <span class="t13 b6 trunc">${esc(q.name)}</span>
+            <span class="t11 fnt mono trunc">${esc((QTYPES[q.type] || {}).dbt || q.type)}</span></span>
+          <span class="mono t12 trunc" title="${esc(q.cond || '')}">${esc(q.col || '—')}</span>
+          <span><span class="bdg ${sev ? 'err' : 'warn'}">${sev ? '오류' : '주의'}</span></span>
+          <span class="row g4 t12" style="color:${res.c}">${ic14(res.i)}${res.t}</span>
+          <span class="rt"><span class="tgl ${q.active ? 'on' : ''}" data-tg="${esc(q.id)}"><i></i></span></span>
+        </div>`);
+        row.onclick = (ev) => { if (ev.target.closest('[data-tg]')) return; go('quality', q.id); };
+        t.appendChild(row);
+      });
+      $('#dkAddQ', box).onclick = () => ruleModal(null, d.id);
+      wireToggles(box);          // 토글을 실서버 호출로 연결한다
       b.appendChild(box);
 
     } else if (dt === 'preview') {
@@ -2732,11 +2899,23 @@
       } else if (!d.prev.length) {
         b.appendChild(el(`<div class="empty">${ic('db')}<span class="empty-t">표시할 행이 없습니다.</span></div>`));
       } else {
-        const t = el(`<div class="tbl" style="--cols:${d.cols.map(() => 'minmax(110px,1fr)').join(' ')};border:1px solid var(--line);border-radius:6px;overflow:hidden"></div>`);
+        /* 표 위에 «무엇을 몇 줄 보고 있는지» 를 먼저 말한다. 표만 있으면 이것이
+           전체인지 상위 몇 줄인지 알 수 없어, 없는 값을 없다고 오해한다. */
+        const box = el(`<div class="dk-prev">
+          <div class="dk-prev-h">
+            <span class="t15 b6">상위 ${d.prev.length}행</span>
+            <span class="t12 fnt">컬럼 ${d.cols.length}개 · 웨어하우스에서 직접 읽은 값입니다.</span>
+            <button class="btn sm gho sp" id="dkPrevRe">${ic14('rot')}새로 조회</button>
+          </div></div>`);
+        const t = el(`<div class="tbl" style="--cols:${d.cols.map(() => 'minmax(110px,1fr)').join(' ')};border:1px solid var(--line);border-radius:var(--r-m);overflow:hidden"></div>`);
         t.appendChild(el(`<div class="th">${d.cols.map(c => `<span>${esc(c[1])}</span>`).join('')}</div>`));
-        d.prev.forEach(row => t.appendChild(el(`<div class="tr static" style="min-height:34px">${
+        d.prev.forEach(row => t.appendChild(el(`<div class="tr static" style="min-height:36px">${
           row.map(v => `<span class="mono t12 trunc">${esc(v)}</span>`).join('')}</div>`)));
-        b.appendChild(t);
+        box.appendChild(t);
+        $('#dkPrevRe', box).onclick = () => {
+          d.__prevLoaded = false; d.__prevError = null; render();
+        };
+        b.appendChild(box);
       }
 
     } else {   // hist — 변경 이력은 메타스토어가 원천이다 (저장할 때 자동 기록)
@@ -2748,18 +2927,29 @@
           box.appendChild(el(`<span class="t12 fnt">${esc(r.message || '변경 이력이 없습니다.')}</span>`));
           return;
         }
-        r.items.forEach(it => {
-          const card = el(`<div class="col g4" style="border:1px solid var(--line-2);border-radius:8px;padding:9px 12px;background:var(--surface)">
-            <span class="t11 fnt mono">${esc(shortTime(it.when))}</span></div>`);
+        /* 세로 타임라인 — 점과 선으로 «최근이 위» 라는 순서를 형태로 말한다.
+           카드를 늘어놓던 방식은 각 항목이 독립돼 보여, 시간 순서라는 것이
+           날짜를 읽어야만 드러났다. 가장 최근 점만 accent 로 둔다. */
+        r.items.forEach((it, i) => {
+          const row = el(`<div class="dk-hist">
+            <div class="dk-hist-rail">
+              <span class="dk-hist-dot" style="background:${i === 0 ? 'var(--pri)' : 'var(--line-str)'}"></span>
+              <span class="dk-hist-line"></span></div>
+            <div class="dk-hist-b" id="hb"></div></div>`);
+          const hb = $('#hb', row);
           (it.entries || []).forEach(en => {
-            const ba = (en.before !== undefined || en.after !== undefined)
-              ? `<span class="t12" style="min-width:0;word-break:break-all">${en.before !== undefined && en.before !== '' ? `<span class="fnt">${esc(String(en.before))}</span> <span class="fnt">→</span> ` : ''}${esc(String(en.after ?? ''))}</span>`
-              : '';
-            card.appendChild(el(`<div class="row g6" style="align-items:baseline;flex-wrap:wrap">
-              <span class="tag" style="flex:none">${esc(en.item)}${en.change ? ' · ' + esc(en.change) : ''}</span>${ba}</div>`));
-            if (en.diff) card.appendChild(el(`<pre class="code" style="margin:0;white-space:pre-wrap;max-height:240px;overflow:auto">${esc(en.diff)}</pre>`));
+            hb.appendChild(el(`<div class="dk-hist-t">${esc(en.item)}${
+              en.change ? ` · ${esc(en.change)}` : ''}</div>`));
+            if (en.before !== undefined || en.after !== undefined) {
+              hb.appendChild(el(`<div class="dk-hist-d">${
+                en.before !== undefined && en.before !== ''
+                  ? `<span class="fnt">${esc(String(en.before))}</span> <span class="fnt">→</span> ` : ''
+                }${esc(String(en.after ?? ''))}</div>`));
+            }
+            if (en.diff) hb.appendChild(el(`<pre class="code" style="margin:6px 0 0;white-space:pre-wrap;max-height:240px;overflow:auto">${esc(en.diff)}</pre>`));
           });
-          box.appendChild(card);
+          hb.appendChild(el(`<div class="dk-hist-w">${esc(shortTime(it.when))}</div>`));
+          box.appendChild(row);
         });
       }).catch(e => { const box = $('#histBox', w); if (box) box.textContent = e.message; });
     }
@@ -2767,7 +2957,8 @@
     $$('[data-dt]', w).forEach(x => x.onclick = () => {
       S.dockTab = x.dataset.dt; S.dockMin = false;
       // SQL·품질은 본문이 길다 — 접힌 높이로 열면 안 보이는 것과 같다
-      if ((S.dockTab === 'sql' || S.dockTab === 'quality') && (S.dockH || 0) < 340) S.dockH = dockDefH();
+      /* 모델 정보(SQL 카드)·품질 규칙은 본문이 길다 — 접힌 높이로 열면 안 보이는 것과 같다 */
+      if ((S.dockTab === 'info' || S.dockTab === 'quality') && (S.dockH || 0) < 340) S.dockH = dockDefH();
       render();
     });
     $('#dockTgl', w).onclick = () => { S.dockMin = !S.dockMin; render(); };
@@ -3220,7 +3411,7 @@
      이 화면에는 만드는 버튼이 없다(모델을 골라야 만들 수 있으므로 진입점은
      데이터 모델 화면 하나다). 그 사실 자체를 안내해야 길이 막히지 않는다. */
   function pipeEmptyPanel() {
-    const box = el(`<div class="f1 col" style="min-height:0;overflow:auto;background:#FAFBFC">
+    const box = el(`<div class="f1 col" style="min-height:0;overflow:auto;background:var(--panel-bg)">
       <div style="padding:18px 20px"><div class="card">
         <div class="empty" style="padding:40px 24px;gap:12px">${ic('pipe')}
           <span class="empty-t">아직 생성된 데이터 파이프라인이 없습니다.</span>
@@ -3300,9 +3491,15 @@
     center.appendChild(el(`<div class="mod-bar">
       <span class="row g8" id="pdHead" style="padding-left:14px;min-width:0;flex:1 1 auto;overflow:hidden;cursor:context-menu"
         title="${esc(pp.freq)} · 최근 실행 ${esc(pp.last)} (${esc(pp.dur)}) — 우클릭하면 설정 메뉴가 열립니다">
-        <span class="b6 t15 trunc" style="min-width:0">${esc(pp.name)}</span>${pipeBadge(pp.status)}
-        ${barBudget() >= 820 ? `<span class="t12 fnt trunc" style="min-width:0">${esc(pp.freq)} · 최근 ${esc(pp.last)}</span>` : ''}</span>
-      <div class="row g6 sp" style="flex:none">
+        ${/* 파이프라인 이름은 두지 않는다 — 바로 위 탭이 같은 이름을 이미 말한다.
+             남는 것은 «지금 어떤 상태이고 언제 돌았는가» 로, 탭이 말하지 않는 값이다. */ ''}
+        ${pipeBadge(pp.status)}
+        <span class="t12 fnt trunc" style="min-width:0">${esc(pp.freq)} · 최근 ${esc(pp.last)} · Task ${taskCount(pp)}개</span></span>
+      ${/* 상태 범례 — 흐름도의 색이 무엇을 뜻하는지. 캔버스 바로 위에 두어야
+           눈이 다른 줄로 옮겨가지 않는다. 좁아지면 실행 버튼보다 먼저 접힌다. */ ''}
+      <span class="row g6" style="flex:0 1 auto;min-width:0;overflow:hidden">
+        ${['ok', 'run', 'err', 'skip', 'wait'].map(st => stBadge(st)).join('')}</span>
+      <div class="row g6" style="flex:none">
         ${r.canPipeEdit ? `<button class="btn pri sm" id="pdRunAll">${ic14(pp.status === 'err' ? 'rot' : 'play')}${lab ? '전체 실행' : ''}</button>` : ''}
         <button class="iconbtn" id="pdMore" title="파이프라인 메뉴">${ic14('dots')}</button>
       </div></div>`));
@@ -3345,7 +3542,7 @@
   S.ingSideOpen = S.ingSideOpen !== false;
 
   const ING_KIND = { api: 'API 연동', file: '파일 올리기' };
-  const ING_MODE = { append: '덧붙이기', overwrite: '전체 교체' };
+  const ING_MODE = { append: '증분 적재', overwrite: '전체 적재' };
 
 
   async function loadIngest() {
@@ -3416,8 +3613,11 @@
 
   function ingTabStrip() {
     const strip = el('<div class="ptabs"></div>');
+    /* 첫 탭은 이름이 고정이라 폭도 글자에 맞춘다 — 뒤에 열리는 수집 작업 탭들과
+       달리 사용자 데이터가 아니므로, 176px 을 잡아 두면 남는 자리가 그대로 빈다. */
     const l = tabBtn({ label: '수집 현황', icon: 'down',
                        on: S.openIng === 'list' });
+    l.classList.add('tab-fit');
     l.onclick = () => { S.openIng = 'list'; render(); };
     strip.appendChild(l);
     S.openIngs.forEach(jid => {
@@ -3492,7 +3692,7 @@
   /* ---------------------------------------------------------- 목록 화면 */
 
   function ingListView() {
-    const wrap = el(`<div class="f1 col" style="min-height:0;overflow:auto;background:#FAFBFC">
+    const wrap = el(`<div class="f1 col" style="min-height:0;overflow:auto;background:var(--panel-bg)">
       <div class="col g14" style="padding:18px 20px 24px"></div></div>`);
     const body = $('.col', wrap);
 
@@ -3657,7 +3857,7 @@
         <button class="btn sm" id="igEdit">${ic14('pen')}수정</button>
         <button class="btn sm dngr" id="igDel" title="수집 작업을 지웁니다. 이미 적재된 테이블은 남습니다.">${ic14('trash')}삭제</button>
       </div>
-      <div class="f1 col" style="min-height:0;overflow:auto;background:#FAFBFC">
+      <div class="f1 col" style="min-height:0;overflow:auto;background:var(--panel-bg)">
         <div class="col g14" style="padding:16px 18px 24px"></div></div></div>`);
     const body = $('.col.g14', wrap);
     $('#igRun', wrap).onclick = () => ingRunNow(j);
@@ -3794,7 +3994,7 @@
               <div class="fr"><span class="fr-l">인증 방식</span>
                 <select class="inp" id="igAK">
                   ${[['', '없음'], ['bearer', 'Bearer 토큰'], ['header', '헤더 키'],
-                     ['param', '질의 파라미터']].map(([v, l]) =>
+                     ['param', '쿼리 파라미터']].map(([v, l]) =>
                     `<option value="${v}" ${((st.cfg.auth || {}).kind || '') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
             </div>
             <div class="fr" id="igAuth" style="${(st.cfg.auth || {}).kind ? '' : 'display:none'}">
@@ -3928,7 +4128,7 @@
               <input class="inp f1" id="igT" value="${esc(edit ? job.target : '')}" placeholder="raw_orders"></div></div>
           <div class="fr"><span class="fr-l">적재 방식</span>
             <select class="inp" id="igMo">
-              ${[['append', '덧붙이기'], ['overwrite', '전체 교체']].map(([v, l]) =>
+              ${[['append', '증분 적재'], ['overwrite', '전체 적재']].map(([v, l]) =>
                 `<option value="${v}" ${(edit ? job.mode : 'append') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
         </div>
 
@@ -3945,7 +4145,7 @@
           </div></div>
 
         <span class="fr-h">대상 테이블 이름은 소문자·숫자·밑줄만 씁니다.
-          <b>덧붙이기</b>는 가져온 만큼 뒤에 쌓고, <b>전체 교체</b>는 기존 데이터를 지우고 새로 넣습니다.</span>
+          <b>증분 적재</b>는 가져온 만큼 뒤에 쌓고, <b>전체 적재</b>는 기존 데이터를 지우고 새로 넣습니다.</span>
 
         <div class="note info">${ic14('info')}<span>원본 데이터는 변형하지 않고 저장합니다.
           데이터 정제와 타입 변환은 <b>데이터 모델</b>에서 설정할 수 있습니다.</span></div>
@@ -4365,5 +4565,8 @@
     console.error(e);
   });
 
-  /* 콘솔에서 쓸 수 있게 열어 둔다 */
-  window.DM = { api, boot, refreshRun, BASE, ORIGIN, HIST, loadHistory };
+  /* 콘솔에서 쓸 수 있게 열어 둔다.
+     openPipeTab 은 주소(해시) 라우팅이 «그 파이프라인 탭을 열어라» 를 되살릴 때 쓴다 —
+     탭 목록에 넣고 선택까지 하는 규칙이 여기 하나뿐이라 밖에서도 이것을 부른다. */
+  window.DM = { api, boot, refreshRun, BASE, ORIGIN, HIST, loadHistory,
+                HOME, loadHome, openPipeTab };

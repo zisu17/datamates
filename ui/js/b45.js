@@ -7,7 +7,21 @@
    · 하단 패널 접기/펼치기·높이 한계를 모델링 화면과 통일
    ============================================================ */
 S.pdockMin = S.pdockMin || false;
-const DOCK_MIN = 120, DOCK_MAX = 440;
+const DOCK_MIN = 120;
+
+/* 하단 상세를 얼마나 올릴 수 있는가 — 화면 높이를 따라간다.
+   440px 고정이던 시절에는 어떤 화면에서든 페이지 절반쯤에서 멈췄다.
+   데이터 미리보기·품질 규칙·실행 정보처럼 표가 긴 탭은 그 높이로는 늘 잘려,
+   사용자가 그립을 끝까지 끌어도 더 볼 수가 없었다.
+
+   위쪽(관계도·흐름도)은 최소 132px 는 남긴다 — 판이 아주 사라지면 지금
+   무엇을 보고 있었는지 알 수 없어진다. dock 이 아직 붙기 전(렌더 중)에는
+   화면 높이로 어림한다. */
+function dockMaxH(dock) {
+  const host = dock && dock.parentElement;
+  const room = host ? host.getBoundingClientRect().height : window.innerHeight - 106;
+  return Math.max(320, Math.round(room - 132));
+}
 
 /* 1) 하단 상세 — 높이 조절 + 접기 */
 /* (pipeDock — 살아남던 접기 버튼·min 클래스는 b35 의 pipeDockChrome 으로 옮겼다.

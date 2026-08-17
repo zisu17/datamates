@@ -76,9 +76,22 @@ def snapshot(force: bool = False) -> dict[str, Any]:
                 latest = {"runId": run_id, "status": _run_state(runs[0].get("state")),
                           "startedAt": runs[0].get("start_date"),
                           "endedAt": runs[0].get("end_date")}
+                # 읽은 김에 쌓아 둔다. dbt 는 실행 하나의 결과만 파일에 남기므로,
+                # 여기서 누적하지 않으면 다음 실행이 나머지 규칙의 결과를 지운다.
+                keep: list[dict[str, Any]] = []
+                ended = runs[0].get("end_date") or runs[0].get("start_date")
                 for rr in results.values():
-                    if rr.get("resource_type") == "test":
-                        test_results[rr["unique_id"]] = rr
+                    if rr.get("resource_type") != "test":
+                        continue
+                    test_results[rr["unique_id"]] = rr
+                    keep.append({
+                        "ruleUid": rr["unique_id"], "runId": run_id,
+                        "modelId": "", "status": _test_state(rr.get("status")),
+                        "failures": rr.get("failures") or 0,
+                        "at": _epoch(ended),
+                    })
+                if keep:
+                    store.rule_results_add(keep)
                 failed_uids = {uid for uid, r2 in results.items()
                                if r2.get("resource_type") == "test"
                                and r2.get("status") in ("fail", "error")}
@@ -126,9 +139,51 @@ def snapshot(force: bool = False) -> dict[str, Any]:
     return data
 
 
+def _test_state(s: str | None) -> str:
+    """dbt 테스트 결과 → 화면 상태. rules() 와 같은 표를 쓴다."""
+    st = (s or "").lower()
+    return ("ok" if st in ("pass", "success")
+            else "warn" if st == "warn"
+            else "err" if st in ("fail", "error") else "unknown")
+
+
+def _when_label(at: float | None) -> str:
+    """지난 실행 결과의 시각을 사람이 읽는 짧은 말로."""
+    if not at:
+        return "실행 전"
+    from datetime import datetime
+    d = datetime.fromtimestamp(at)
+    today = datetime.now().date()
+    if d.date() == today:
+        return f"오늘 {d.strftime('%H:%M')}"
+    days = (today - d.date()).days
+    return "어제" if days == 1 else f"{days}일 전"
+
+
+def _epoch(ts: str | None) -> float:
+    """ISO 시각 → epoch 초. 못 읽으면 지금으로 둔다 — 날짜별 집계의 기준이라
+    비워 두면 그 실행이 통째로 추이에서 빠진다."""
+    if not ts:
+        return time.time()
+    try:
+        from datetime import datetime
+        return datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return time.time()
+
+
 def _run_state(s: str | None) -> str:
-    return {"success": "ok", "failed": "err", "running": "run",
-            "queued": "wait"}.get(s or "", "wait")
+    """실행(DAG run) 상태 → 화면 상태.
+
+    queued 를 «실행 중» 으로 본다. 태스크 단위(TASK_STATE)와 다른 선택이다.
+    태스크의 queued 는 «아직 이 태스크는 시작 안 함» 이지만, 실행 단위의 queued 는
+    «이 실행은 이미 걸렸고 곧 돈다» 다. 이걸 「대기」로 내려보내면 예약만 걸린
+    파이프라인과 구분이 안 되고, 화면은 실행이 시작된 줄 몰라 상태 추적도 켜지 않는다
+    (b56 pdagTick 은 status === 'run' 일 때만 돈다). 그 사이 사용자는 실행을 눌렀는데
+    아무 일도 안 일어나는 화면을 본다 — 스케줄러가 집어가기까지 수십 초가 걸린다.
+    """
+    return {"success": "ok", "failed": "err",
+            "running": "run", "queued": "run"}.get(s or "", "wait")
 
 
 # Airflow 태스크 상태 → 화면 상태. (실행 상세 API 도 같은 표를 쓴다)
@@ -172,6 +227,9 @@ def rules() -> list[dict[str, Any]]:
     품질 화면이 이 목록 하나를 함께 본다.
     """
     snap = snapshot()
+    # 최근 실행에서 방금 읽은 것 위에, 그전 실행들에서 쌓아 둔 결과를 깐다.
+    # 이렇게 해야 모델 하나만 다시 돌려도 나머지 규칙이 «안 돌았음» 으로 떨어지지 않는다.
+    history = store.rule_results_latest()
     tr = snap["testResults"]
     entries = manifest.all_entries()
     seen: set[str] = set()
@@ -184,11 +242,16 @@ def rules() -> list[dict[str, Any]]:
                 continue
             seen.add(key)
             rr = tr.get(t["unique_id"]) or {}
-            st = "" if not t.get("enabled", True) else (rr.get("status") or "").lower()
-            status = ("ok" if st in ("pass", "success")
-                      else "warn" if st == "warn"
-                      else "err" if st in ("fail", "error") else "unknown")
-            failures = rr.get("failures")
+            hist = history.get(t["unique_id"]) or {}
+            if not t.get("enabled", True):
+                status, failures = "unknown", None
+            elif rr:
+                status = _test_state(rr.get("status"))
+                failures = rr.get("failures")
+            else:
+                # 이번 실행에는 없지만 지난 실행 결과가 있으면 그것이 마지막으로 아는 사실이다.
+                status = hist.get("status") or "unknown"
+                failures = hist.get("failures")
             qt = qtype_of(t["type"])
             kw = t.get("kwargs") or {}
             cond = t["type"] + (" " + _kw_text(kw) if kw else "")
@@ -204,7 +267,11 @@ def rules() -> list[dict[str, Any]]:
                 "cnt": int(failures) if isinstance(failures, (int, float)) else 0,
                 "plain": _plain(status, failures, t, e),
                 "impact": "", "rows": [],
-                "lastRun": "최근 실행" if rr else "실행 전",
+                # 언제 잰 결과인가. «실행 전» 은 정말 한 번도 안 돈 규칙에만 쓴다 —
+                # 지난 실행 결과가 있으면 그때 잰 값이라고 말해야 한다.
+                "lastRun": ("최근 실행" if rr
+                            else _when_label(hist.get("at")) if hist else "실행 전"),
+                "measuredAt": (None if rr else hist.get("at")),
                 "firstSeen": "—",
                 "pipelineId": (snap["nodeRuns"].get(e["id"]) or {}).get("pipelineId"),
                 "singular": t.get("singular", False),

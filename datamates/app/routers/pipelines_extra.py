@@ -277,9 +277,9 @@ def _ingest_run_state(job: dict[str, Any]) -> dict[str, Any]:
     except af.AirflowError:
         runs = []
     last = _run_view(runs[0]) if runs else None
-    state_of = {"success": "ok", "failed": "err", "running": "run"}
+    # queued 도 «실행 중» 이다 — 이유는 state._run_state 주석 참고. 같은 표를 쓴다.
     return {"paused": paused, "nextRun": next_run, "latestRun": last,
-            "status": state_of.get((last or {}).get("state"), "wait")}
+            "status": state._run_state((last or {}).get("state"))}
 
 
 @router.get("/pipelines/flow")

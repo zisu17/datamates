@@ -34,19 +34,33 @@ CONTAINER_RUNS_DIR = "/opt/datamates/runs"
 
 # 한 파이프라인 안에서 동시에 돌릴 태스크 수.
 #
-# 1 이어야 한다. Iceberg 카탈로그가 SQLite(apache/iceberg-rest-fixture)라서
-# dbt 두 개가 동시에 테이블을 커밋하면 반드시 SQLITE_BUSY 로 깨진다.
-# 측정: 순차 3회 연속 = 오류 0건 / 병렬 2개 = 매번 14건.
-# busy_timeout·커넥션 풀 축소로는 완화만 될 뿐 없어지지 않는다.
-# (가끔 병렬이 성공하는데, 타이밍 운이라 근거로 삼으면 안 된다)
+# **1 이어야 한다.** 이유가 두 번 바뀌었으니 이력을 남긴다.
 #
-# 카탈로그를 Postgres 로 바꾸면 이 값을 올릴 수 있다. 그때 자원 기준으로 다시 잡되,
-# colima VM 이 6 CPU / 8GB 이고 태스크마다 Spark JVM 이 하나씩 뜨므로 2~3이 상한이다.
+#   ① Iceberg + SQLite 카탈로그  — 동시 커밋이 SQLITE_BUSY 로 깨졌다
+#      (측정: 순차 3회 = 오류 0건 / 병렬 2개 = 매번 14건)
+#   ② 카탈로그를 Postgres 로 옮긴 뒤 — 잠금 문제가 사라졌다고 보고 2로 올렸다
+#   ③ DuckLake 로 옮긴 뒤 — **다시 1이다.** 이유가 잠금이 아니라 «낙관적 동시성» 이다.
+#
+# DuckLake 는 커밋할 때 다른 트랜잭션이 같은 테이블을 건드렸는지 확인하고, 겹치면
+# 뒤에 온 쪽을 거부한다. 잠금으로 기다리게 하는 방식이 아니라서 busy_timeout 같은
+# 완화책이 없다. dbt 는 elementary 훅이 매 실행마다 같은 관측 테이블에 쓰기 때문에
+# **서로 다른 모델을 빌드해도 커밋 대상이 겹친다.**
+#
+#   실측 증상: 모델 빌드 자체는 PASS=15 로 성공한 뒤 커밋에서만 실패한다
+#   "TransactionContext Error: Failed to commit DuckLake transaction.
+#    Transaction conflict - attempting to insert into table with index 33
+#    - but another transaction has deleted inlined data from it"
+#
+# 재시도로 넘길 수는 있지만(retry_delay 5분) 파이프라인이 몇 배로 늘어진다.
+# 순차로 돌려도 전체 빌드가 23초라 잃는 것이 거의 없다.
 MAX_ACTIVE_TASKS = 1
 
 # 위의 제한은 «한 DAG 안»에서만 통한다. 데이터 수집은 별도 DAG 이라 그것만으로는
 # 파이프라인 빌드와 동시에 커밋할 수 있다. DAG 을 가로질러 막는 수단은 풀뿐이라
 # 빌드 태스크도 수집과 같은 풀에 넣는다. (ingestdag.POOL 과 같은 값)
+#
+# 풀은 남긴다 — 카탈로그가 Postgres 라도 동시 커밋 수를 한곳에서 조일 수 있는
+# 유일한 손잡이라, 슬롯만 넓히고 구조는 그대로 둔다(main.py 의 ensure_pool).
 POOL = "iceberg_write"
 
 # run_id 에는 ':' 와 '+' 가 들어간다(manual__2026-08-07T02:30:00+00:00).
@@ -101,14 +115,53 @@ Data Mates 파이프라인 {name} 에서 생성했습니다.
 from datetime import datetime, timedelta
 
 from airflow import DAG
+from airflow.exceptions import AirflowFailException
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.providers.standard.operators.empty import EmptyOperator
+from airflow.providers.standard.operators.python import PythonOperator
 from airflow.sdk import Asset, AssetAny
 
 DEFAULT_ARGS = {{
     "retries": {retry},
     "retry_delay": timedelta(minutes=5),
 }}
+
+
+def _check_pipeline_result(**context):
+    """실행 결과를 DAG 상태에 반영한다. — teardown 태스크로 등록된다.
+
+    **이게 없으면 실패한 실행이 success 로 보인다.** Airflow 는 DAG 상태를
+    «리프 태스크» 로 판정하는데, 빌드가 실패하면 all_success 인 pipeline_done 이
+    skipped 가 되고 skipped 리프는 성공으로 취급된다. 중간에 failed 가 있어도
+    리프가 아니면 보지 않는다.
+      (실측: 12개 중 1개 failed · 1개 skipped 인데 dag_run.state = success)
+
+    판정 기준은 **pipeline_done 이 성공했는가** 하나다. pipeline_done 은 모든 빌드
+    태스크를 상류로 갖는 all_success 태스크라, 그것이 성공했다는 것은 곧 전부
+    성공했다는 뜻이고, skipped 라면 어딘가 실패·건너뜀이 있었다는 뜻이다.
+
+    세 번 헛짚었으니 왜 이 모양인지 남긴다.
+      · trigger_rule="one_failed" 감시 태스크 → fail_fast DAG 이 거부한다
+        (FailFastDagInvalidTriggerRule: ALL_SUCCESS/ALL_DONE_SETUP_SUCCESS 만 허용)
+      · 평범한 태스크 안에서 검사 → 상류가 실패하면 그 태스크 자체가 skipped 라
+        콜백이 돌지 않는다. 검사할 기회가 없다.
+      · dag_run.get_task_instances() → Airflow 3 태스크 런타임의 dag_run 은 경량
+        객체(pydantic)라 그 메서드가 없다. AttributeError 로 **거짓 실패** 를 냈다.
+
+    그래서 XCom 도 DB 도 아닌 «상류 태스크의 ti 상태» 만 본다. teardown 은 상류
+    성패와 무관하게 돌고, on_failure_fail_dagrun=True 가 그 실패를 DAG 까지 올린다.
+    """
+    ti = context["task_instance"]
+    done = ti.xcom_pull(task_ids="pipeline_done", key="ok", default=None)
+    if done != "ok":
+        raise AirflowFailException(
+            "빌드 태스크가 실패했거나 건너뛰어졌습니다 — 개별 태스크 로그를 확인하세요.")
+
+
+def _mark_done(**context):
+    """pipeline_done 이 실제로 돌았다는 표식. teardown 이 이것만 보고 판정한다."""
+    context["task_instance"].xcom_push(key="ok", value="ok")
+
 
 with DAG(
     dag_id={dag_id!r},
@@ -133,10 +186,26 @@ with DAG(
     # 파이프라인 완료 표식. 모든 태스크가 성공해야 돌고(all_success),
     # 그때 Asset 이벤트를 내보낸다 — 이 파이프라인을 선행으로 지정한
     # 후행 파이프라인들이 그 이벤트로 시작한다. 하나가 여럿을 깨울 수 있다.
-    tasks["_done"] = EmptyOperator(
+    tasks["_done"] = PythonOperator(
         task_id="pipeline_done",
+        python_callable=_mark_done,
         outlets=[Asset({asset_uri!r})],
     )
+
+    # 실행 결과 판정. teardown 이라 상류가 실패해도 반드시 돌고,
+    # on_failure_fail_dagrun 이 그 실패를 DAG 상태까지 올린다.
+    # 이것 없이는 실패한 실행이 success 로 보인다 — _check_pipeline_result 참고.
+    #
+    # trigger_rule 을 명시하지 않는다. as_teardown() 이 알아서 all_done 계열로
+    # 잡아 주고, 여기에 all_done_setup_success 를 손으로 걸면 «setup 이 없는»
+    # teardown 이 되어 Airflow 가 pipeline_done 쪽을 건너뛴다
+    # (실측: 빌드 12개 전부 success 인데 pipeline_done 이 skipped → 거짓 실패).
+    tasks["_verdict"] = PythonOperator(
+        task_id="pipeline_verdict",
+        python_callable=_check_pipeline_result,
+    ).as_teardown()
+    tasks["_done"] >> tasks["_verdict"]
+    tasks["_verdict"].on_failure_fail_dagrun = True
 {dep_lines}
 '''
 
@@ -253,6 +322,7 @@ def render(pipeline: dict[str, Any], flow: dict[str, Any]) -> str:
             f'    )'
         )
         deps.append('    tasks["all"] >> tasks["_done"]')
+
 
     return TEMPLATE.format(
         name=pipeline.get("name") or pid,

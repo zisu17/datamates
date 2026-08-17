@@ -1,8 +1,12 @@
 """경로·접속 설정.
 
 dbt 프로젝트 파일이 단일 진실 원천(SSoT)이므로, 이 모듈이 잡는 경로가 곧
-플랫폼이 다루는 세계의 경계다. 메타스토어(SQLite)는 dbt 가 모르는 것
-— 파이프라인·폴더·소유자 — 만 담는다.
+플랫폼이 다루는 세계의 경계다. 메타스토어(Postgres)는 dbt 가 모르는 것만 담는다
+— 파이프라인·수집 커넥터·폴더·마트 지정·변경 이력.
+
+Postgres 인스턴스 하나가 DB 네 개를 나눠 쓴다:
+  datamates  메타스토어        ducklake  웨어하우스 카탈로그(DuckLake)
+  airflow    Airflow 메타DB    iceberg   이관 전 카탈로그(롤백용)
 
 경로는 두 뿌리로 갈린다.
   PROJECT_DIR  저장소 루트. 플랫폼이 소유하는 것 — 화면·DAG·메타스토어·venv.
@@ -48,10 +52,25 @@ RUN_RESULTS_PATH = TARGET_DIR / "run_results.json"
 # `dbt docs generate` 가 만든다. 컬럼의 실제 물리 타입이 여기 있다 — 없어도 동작한다.
 CATALOG_PATH = TARGET_DIR / "catalog.json"
 
-# 메타스토어. dbt 산출물과 섞이지 않도록 target/ 바깥에 둔다
+# 실행 산출물(수집 로그 등). dbt 산출물과 섞이지 않도록 target/ 바깥에 둔다
 # (dbt clean 이 target/ 을 통째로 지운다).
 DATA_DIR = PROJECT_DIR / ".datamates"
-DB_PATH = DATA_DIR / "datamates.db"
+
+# 메타스토어 접속. 예전에는 이 자리에 SQLite 파일 경로(DB_PATH)가 있었다.
+#
+# Postgres 로 옮긴 이유는 동시 쓰기다 — SQLite 는 writer 가 하나뿐이라 수집·파이프라인이
+# 겹치면 뒤에 온 쪽이 기다린다. Airflow 메타DB·Iceberg 카탈로그와 같은 인스턴스를 쓴다
+# (docker-compose.yml 의 postgres 서비스, DB 이름만 다르다).
+#
+# 서버는 호스트에서 도는데(datamates/run.sh) 컨테이너 안에서 돌릴 때도 있어서
+# 호스트 이름을 환경변수로 뺀다 — 컨테이너에서는 postgres, 호스트에서는 localhost.
+DATABASE_URL = os.environ.get(
+    "DATAMATES_DATABASE_URL",
+    "postgresql://{u}:{p}@{h}:{port}/datamates".format(
+        u=os.environ.get("POSTGRES_USER", "datamates"),
+        p=os.environ.get("POSTGRES_PASSWORD", "datamates"),
+        h=os.environ.get("POSTGRES_HOST", "localhost"),
+        port=os.environ.get("POSTGRES_PORT", "5432")))
 
 # dbt 프로젝트 이름. manifest 의 다른 패키지(elementary 등)와 구분하는 기준이다.
 DBT_PROJECT_NAME = "analytics"
@@ -92,7 +111,7 @@ def superset_password() -> str:
 CONTAINER_DBT_BIN = "/opt/dbt-venv/bin/dbt"
 
 # 컨테이너에서 본 Data Mates API. 수집 DAG 이 이 주소로 적재를 시킨다
-# (적재 엔진 pyiceberg 는 API 쪽에만 있고, Airflow 는 언제 돌릴지와
+# (적재 엔진 DuckDB 는 API 쪽에만 있고, Airflow 는 언제 돌릴지와
 #  끝났다는 사실을 알리는 일만 맡는다).
 CONTAINER_API_BASE = os.environ.get(
     "DATAMATES_CONTAINER_API", "http://host.docker.internal:8000/api/v1")
@@ -151,8 +170,15 @@ def dbt_env() -> dict[str, str]:
     env.setdefault("DBT_PROFILES_DIR", str(PROFILES_DIR))
     env.setdefault("DBT_TARGET", "local")
     env.setdefault("DBT_SCHEMA", "analytics")
-    env.setdefault("ICEBERG_REST_URI", "http://localhost:8181")
     env.setdefault("MINIO_ENDPOINT", "http://localhost:9000")
+    # DuckLake 카탈로그(Postgres) 접속. dbt 프로필의 attach 경로와 warehouse.py ·
+    # ingest.py 가 모두 이 값들을 읽으므로 한 곳에서 기본값을 준다.
+    env.setdefault("POSTGRES_HOST", "localhost")
+    env.setdefault("POSTGRES_PORT", "5432")
+    env.setdefault("POSTGRES_USER", "datamates")
+    env.setdefault("POSTGRES_PASSWORD", "datamates")
+    # 롤백 타깃(spark_local/local_heavy)이 쓰는 Iceberg REST 카탈로그.
+    env.setdefault("ICEBERG_REST_URI", "http://localhost:8181")
     # 익명 통계 수집이 켜져 있으면 profiles 디렉터리에 .user.yml 을 쓰려 든다.
     env["DO_NOT_TRACK"] = "1"
     return env

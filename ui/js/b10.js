@@ -76,9 +76,9 @@ confirmDeleteNode = function (id) {
 drawEdges = function () {
   const svg = $('#edges'); if (!svg) return;
   svg.innerHTML = `<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-    <path d="M 0 0 L 10 5 L 0 10 z" fill="#A8B2C6"/></marker>
+    <path d="M 0 0 L 10 5 L 0 10 z" style="fill:rgba(0,0,0,.22)"/></marker>
     <marker id="ahs" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-    <path d="M 0 0 L 10 5 L 0 10 z" fill="#4356E0"/></marker></defs>`;
+    <path d="M 0 0 L 10 5 L 0 10 z" style="fill:var(--w-accent)"/></marker></defs>`;
   const cv = $('#cv'); if (!cv) return;
   let lay = $('#elabels');
   if (!lay) { lay = el('<div id="elabels" style="position:absolute;inset:0;pointer-events:none"></div>'); cv.appendChild(lay); }
@@ -99,7 +99,8 @@ drawEdges = function () {
     svg.appendChild(hit);
     const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     p.setAttribute('d', d0); p.setAttribute('fill', 'none');
-    p.setAttribute('stroke', sel ? '#4356E0' : hot ? '#7C8AF0' : '#A8B2C6');
+    /* style 로 넣는다 — SVG 의 stroke 는 presentation attribute 라 var() 가 풀리지 않는다 */
+    p.style.stroke = sel ? 'var(--w-accent)' : hot ? 'rgba(0,136,255,.5)' : 'rgba(0,0,0,.22)';
     p.setAttribute('stroke-width', sel ? '2.6' : hot ? '2.2' : '1.6');
     p.setAttribute('marker-end', sel ? 'url(#ahs)' : 'url(#ah)');
     svg.appendChild(p);

@@ -64,6 +64,8 @@ class JobIn(BaseModel):
     trigger_type: Literal["schedule", "manual"] | None = None
     # 수집 범위. 워터마크는 여기 없다 — 실행이 남기는 값이라 화면이 보내지 않는다.
     scope: dict[str, Any] | None = None
+    # 중복 기준 — 이 컬럼(들)이 같으면 한 행만 남긴다. 쉼표로 여러 개.
+    dedupe: str | None = None
 
 
 def _target_conflict(target: str, job_id: str | None) -> None:
@@ -178,11 +180,86 @@ def _run_view(r: dict[str, Any]) -> dict[str, Any]:
             "seconds": _elapsed(start, end)}
 
 
+# 이력에 남길 정의. 실행이 남기는 값(워터마크)과 시각은 뺀다 — 정의가 아니다.
+_SNAP_DROP = ("watermark", "created_at", "updated_at")
+
+
+def _snapshot(job: dict[str, Any]) -> dict[str, Any]:
+    """그 시점의 커넥터 정의. 비밀은 지우고 담는다(_mask)."""
+    return {k: v for k, v in _mask(job).items() if k not in _SNAP_DROP}
+
+
+def _cred_id(job: dict[str, Any]) -> str | None:
+    return ((job.get("config") or {}).get("auth") or {}).get("credential_id")
+
+
+def _change_note(before: dict[str, Any], after: dict[str, Any]) -> str:
+    """무엇이 바뀌었는지 한 줄로. 바뀐 것이 없으면 빈 문자열.
+
+    이력의 쓸모는 «되돌릴 판을 고르는 것» 이다. 그러려면 «2026-08-11 수정» 이
+    아니라 «컬럼 2개 추가» 라고 적혀 있어야 한다. 그래서 자동 생성이지만
+    바뀐 항목의 이름까지 적는다.
+    """
+    bc, ac = before.get("config") or {}, after.get("config") or {}
+    parts: list[str] = []
+
+    if before.get("name") != after.get("name"):
+        parts.append(f"이름 변경 → {after.get('name')}")
+    if before.get("target") != after.get("target"):
+        parts.append(f"적재 대상 변경 → {ingest.RAW_SCHEMA}.{after.get('target')}")
+
+    bn = [c.get("name") for c in (before.get("columns") or [])]
+    an = [c.get("name") for c in (after.get("columns") or [])]
+    added, removed = [c for c in an if c not in bn], [c for c in bn if c not in an]
+    if added:
+        parts.append(f"컬럼 {len(added)}개 추가 ({', '.join(added[:3])}"
+                     f"{' 외' if len(added) > 3 else ''})")
+    if removed:
+        parts.append(f"컬럼 {len(removed)}개 제거 ({', '.join(removed[:3])}"
+                     f"{' 외' if len(removed) > 3 else ''})")
+
+    if (bc.get("url") or "") != (ac.get("url") or ""):
+        parts.append("요청 주소 수정")
+    if (bc.get("record_path") or "") != (ac.get("record_path") or ""):
+        parts.append("레코드 경로 수정")
+    if _cred_id(before) != _cred_id(after):
+        parts.append("자격증명 교체")
+    if (bc.get("params") or {}) != (ac.get("params") or {}):
+        parts.append("요청 파라미터 변경")
+    if (bc.get("page") or {}) != (ac.get("page") or {}):
+        parts.append("페이지 나눔 변경")
+    if before.get("mode") != after.get("mode"):
+        parts.append("적재 방식 변경")
+    if (before.get("dedupe") or "") != (after.get("dedupe") or ""):
+        parts.append("중복 기준 변경")
+    if (before.get("scope") or {}) != (after.get("scope") or {}):
+        parts.append("수집 범위 변경")
+    if (before.get("trigger_type") != after.get("trigger_type")
+            or before.get("freq") != after.get("freq")):
+        parts.append("실행 방식 변경")
+
+    if not parts:
+        return ""
+    # 한 판에 여러 가지를 함께 고치는 일이 흔하다. 셋까지 적고 나머지는 수만 센다.
+    return ", ".join(parts[:3]) + (f" 외 {len(parts) - 3}건" if len(parts) > 3 else "")
+
+
 def _view(job: dict[str, Any]) -> dict[str, Any]:
     """화면이 쓰는 모양. 예약 상태·다음 실행·최근 실행은 Airflow 가 원천이다."""
     out = dict(_mask(job))
     out["phys"] = f"{ingest.RAW_SCHEMA}.{job['target']}"
     out["dagId"] = ingestdag.dag_id_of(job["id"])
+    out["version"] = store.ingest_version_last(job["id"])
+    out["dedupe"] = job.get("dedupe") or ""
+    # 자격증명은 참조만 저장한다. 화면이 이름·만료일을 보여주려면 매번 따로
+    # 물어야 하는데, 목록에 커넥터가 N개면 요청이 N번 나간다. 여기서 얹어 보낸다.
+    out["credential"] = None
+    cid = _cred_id(job)
+    if cid:
+        c = store.credential_get(str(cid))
+        if c:
+            from .credentials import _view as cred_view
+            out["credential"] = cred_view(c)
     out["paused"] = None
     out["nextRun"] = None
     out["lastRun"] = None
@@ -215,13 +292,23 @@ def preview(body: PreviewIn) -> dict[str, Any]:
     정하는 것은 dbt 모델의 판단이다.
     """
     cfg = body.config
+    extra: dict[str, str] = {}
     if body.job_id:
         saved = store.ingest_get(body.job_id)
         if saved:
             cfg = _keep_secrets(cfg, saved.get("config")) or cfg
-    rows = ingest.sample(body.kind, cfg, body.text)
+            # 저장된 커넥터를 확인할 때는 **실제로 나갈 요청과 같은 모양**으로 부른다.
+            # 구간·지역을 빼고 부르면 원천이 조건 없는 조회로 받아 0건을 주고,
+            # 화면은 그걸 「응답했지만 행 없음」으로 적어 멀쩡한 커넥터를 의심하게 만든다.
+            extra = ingest.probe_params(saved.get("scope") or {},
+                                        saved.get("watermark"),
+                                        datetime.now().astimezone())
+    rows = ingest.sample(body.kind, cfg, body.text, extra=extra)
     return {"columns": ingest.infer_columns(rows), "rows": rows[:20],
-            "sampled": len(rows)}
+            "sampled": len(rows),
+            # 무엇을 물어봤는지 화면이 그대로 보여줄 수 있게 돌려준다 —
+            # 0건일 때 «어떤 조건으로 0건인가» 가 곧 다음 단서다.
+            "probe": extra}
 
 
 @router.post("/ingest/preview/file")
@@ -263,8 +350,10 @@ def create_job(body: JobIn) -> dict[str, Any]:
                        "적재할 컬럼이 없습니다. 미리보기로 데이터를 먼저 확인해 주세요.")
 
     jid = f"ing{int(time.time() * 1000)}"
-    return _view(_save({"id": jid, **body.model_dump(exclude_none=True)},
-                       store.ingest_jobs()))
+    saved = _save({"id": jid, **body.model_dump(exclude_none=True)},
+                  store.ingest_jobs())
+    store.ingest_version_add(jid, "커넥터 생성", _snapshot(saved))
+    return _view(saved)
 
 
 @router.patch("/ingest/jobs/{job_id}")
@@ -287,7 +376,23 @@ def update_job(job_id: str, body: JobIn) -> dict[str, Any]:
 
     merged = {**job, **fields, "id": job_id}
     others = [j for j in store.ingest_jobs() if j["id"] != job_id]
-    return _view(_save(merged, others))
+    saved = _save(merged, others)
+
+    # 달라진 것이 있을 때만 판을 남긴다. 저장 버튼을 눌렀다는 사실이 아니라
+    # 정의가 바뀌었다는 사실이 이력이다 — 아니면 v9 까지 갔는데 전부 같은 내용인
+    # 이력이 생기고, 그러면 «언제 무엇이 바뀌었나» 를 이력에서 읽을 수 없다.
+    note = _change_note(job, saved)
+    if note:
+        store.ingest_version_add(job_id, note, _snapshot(saved))
+    return _view(saved)
+
+
+@router.get("/ingest/jobs/{job_id}/versions")
+def list_versions(job_id: str, limit: int = 50) -> dict[str, Any]:
+    """커넥터의 버전 이력. 최신이 먼저다."""
+    if not store.ingest_get(job_id):
+        raise not_found("수집 작업")
+    return {"items": store.ingest_versions(job_id, limit)}
 
 
 @router.delete("/ingest/jobs/{job_id}")
@@ -430,7 +535,7 @@ def run_log(job_id: str, run_id: str, try_number: int = 1) -> dict[str, Any]:
 def execute(job_id: str) -> dict[str, Any]:
     """실제 적재. 수집 DAG 이 부른다 — 화면이 직접 부르지는 않는다.
 
-    적재 엔진(pyiceberg)이 이 프로세스에만 있어서 실행이 여기서 일어난다.
+    적재 엔진(DuckDB)이 이 프로세스에만 있어서 실행이 여기서 일어난다.
     Airflow 는 언제 돌릴지와 겹치지 않게 잡아두는 일, 그리고 끝났다는
     Asset 이벤트를 내는 일을 맡는다.
     """

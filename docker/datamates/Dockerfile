@@ -25,8 +25,8 @@
 # 세 쪽이 서로를 import 하지 않고 프로세스로만 갈라져 있으므로 잃는 것은 없다.
 #
 #   (base)               Airflow 3.2.2
-#   /opt/dbt-venv        dbt-core · dbt-spark · PySpark · Elementary
-#   /opt/datamates-venv  FastAPI · PyIceberg · DuckDB · sqlglot
+#   /opt/dbt-venv        dbt-core · dbt-duckdb · Elementary
+#   /opt/datamates-venv  FastAPI · DuckDB(DuckLake) · psycopg · sqlglot
 #   /opt/superset-venv   Superset · duckdb-engine · psycopg2
 # ---------------------------------------------------------------------------
 
@@ -70,32 +70,27 @@ RUN python -m venv /opt/superset-venv \
 FROM apache/airflow:3.2.2-python3.11
 
 # ---------------------------------------------------------------------------
-# Java 17 — Spark 4.0 이 요구한다.
-# 아키텍처마다 JDK 경로가 달라서(arm64/amd64) 하드코딩하지 않고 심볼릭 링크로 고정한다.
+# DuckLake 이관으로 이 이미지에서 사라진 것들:
+#   · openjdk-17 (Spark 4.0 요구)  · pyspark  · dbt-spark  · elementary[spark]
+#   · /opt/spark-events, ~/.ivy2.5.2 (Spark 이벤트 로그 · Ivy 캐시)
+# dbt 가 DuckDB 로 도니 JVM 이 필요 없다. 이미지가 크게 줄고, 태스크마다 JVM 이
+# 뜨지 않으므로 동시 실행 상한도 메모리가 아니라 CPU 기준으로 잡을 수 있다.
+#
+# 롤백(DBT_TARGET=spark_local)이 필요하면 이 파일을 git 이력에서 되살려야 한다 —
+# 롤백 경로는 프로필에만 남겨 두었고 이미지에는 남기지 않았다(이미지 크기 때문).
+#
 # libpq5 는 Superset 이 Postgres 메타DB 에 붙는 데 필요하다(런타임 라이브러리만).
 # ---------------------------------------------------------------------------
 USER root
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      openjdk-17-jre-headless \
       procps \
       libpq5 \
  && rm -rf /var/lib/apt/lists/* \
- && ln -sfn "$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")" /opt/java-home \
- && mkdir -p /opt/dbt-venv /opt/datamates-venv /opt/spark-events \
+ && mkdir -p /opt/dbt-venv /opt/datamates-venv \
              /opt/datamates/runs /opt/superset/pythonpath \
-             /home/airflow/.ivy2.5.2 \
- && chown airflow:root /opt/dbt-venv /opt/datamates-venv /opt/spark-events \
-                       /opt/datamates/runs /opt/superset/pythonpath \
-                       /home/airflow/.ivy2.5.2
-
-ENV JAVA_HOME=/opt/java-home
-
-# .ivy2.5.2 를 여기서 미리 만들어 두는 이유:
-# Docker Compose가 이 경로에 named volume을 건다. 이미지에 디렉터리가 없으면
-# Docker 가 root 소유로 만들어 버리고, airflow 사용자가 못 써서 spark-submit 이
-# JAVA_GATEWAY_EXITED 로 죽는다. 경로의 2.5.2 는 Spark 4.0 번들 Ivy 의 버전이다
-# (Ivy 는 캐시를 ~/.ivy2 가 아니라 ~/.ivy2.<버전> 에 만든다).
+ && chown airflow:root /opt/dbt-venv /opt/datamates-venv \
+                       /opt/datamates/runs /opt/superset/pythonpath
 
 # 빌더에서 만든 Superset venv 를 그대로 가져온다.
 COPY --from=superset-build --chown=airflow:root /opt/superset-venv /opt/superset-venv
@@ -110,9 +105,15 @@ RUN python -m venv /opt/dbt-venv \
  && /opt/dbt-venv/bin/pip install --upgrade pip \
  && /opt/dbt-venv/bin/pip install \
       "dbt-core==1.12.0" \
-      "dbt-spark[session]==1.11.0" \
-      "pyspark==4.0.4" \
-      "elementary-data[spark]==0.25.1" \
+      "dbt-duckdb==1.11.0" \
+      "duckdb==1.5.5" \
+      "elementary-data==0.25.1" \
+ # DuckDB 확장은 런타임에 자동 설치되지만, 그러려면 컨테이너에서 인터넷이 나가야 한다.
+ # 빌드 때 미리 받아 두면 오프라인에서도 첫 태스크가 뜬다.
+ && /opt/dbt-venv/bin/python -c "\
+import duckdb; c = duckdb.connect(); \
+c.execute('INSTALL ducklake'); c.execute('INSTALL postgres'); c.execute('INSTALL httpfs'); \
+print('duckdb', duckdb.__version__, '확장 설치 완료')" \
  # 런타임에는 패키지 설치 도구가 필요 없다. 같은 레이어에서 제거해야
  # Docker 이미지의 이전 레이어에도 pip 파일이 남지 않는다.
  && /opt/dbt-venv/bin/python -m pip uninstall -y pip \
@@ -120,8 +121,7 @@ RUN python -m venv /opt/dbt-venv \
  && find /opt/dbt-venv -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete \
  # 정리 과정에서 실제 실행 파일까지 손상되지 않았는지 빌드 중 확인한다.
  && /opt/dbt-venv/bin/dbt --version \
- && /opt/dbt-venv/bin/edr --version \
- && /opt/dbt-venv/bin/python -c 'import pyspark; assert pyspark.__version__ == "4.0.4"'
+ && /opt/dbt-venv/bin/edr --version
 
 # --- Data Mates -----------------------------------------------------------
 COPY datamates/requirements.txt /tmp/requirements-app.txt
@@ -131,17 +131,17 @@ RUN python -m venv /opt/datamates-venv \
  && /opt/datamates-venv/bin/pip install -r /tmp/requirements-app.txt \
  # DuckDB 확장은 첫 조회 때 인터넷에서 받아 온다. 빌드 시점에 받아 이미지에 넣어야
  # 폐쇄망에서도 미리보기가 뜨고, 첫 조회만 유난히 느려지는 일도 없다.
- # httpfs 는 warehouse.py 가 명시적으로 INSTALL 하지 않지만 s3:// 를 읽을 때
- # DuckDB 가 자동 로드하므로 같이 받아 둔다. Superset 쪽 DuckDB 도 같은 캐시를 쓴다.
+ # ducklake·postgres 는 warehouse.py·ingest.py 가 카탈로그에 ATTACH 할 때 쓰고,
+ # httpfs 는 s3:// 를 읽을 때 자동 로드된다. Superset 쪽 DuckDB 도 같은 캐시를 쓴다.
  && /opt/datamates-venv/bin/python -c "import duckdb; c = duckdb.connect(); \
-c.execute('INSTALL iceberg'); c.execute('INSTALL httpfs'); \
-c.execute('LOAD iceberg'); c.execute('LOAD httpfs')" \
+c.execute('INSTALL ducklake'); c.execute('INSTALL postgres'); c.execute('INSTALL httpfs'); \
+c.execute('LOAD ducklake'); c.execute('LOAD httpfs')" \
  && /opt/datamates-venv/bin/python -m pip uninstall -y pip \
  && find /opt/datamates-venv -type d -name __pycache__ -prune -exec rm -rf '{}' + \
  # 세 venv 가 실제로 살아 있는지 빌드 중 한 번에 확인한다. DuckDB 는 앱과 Superset 에
  # 같은 버전이어야 한다 — 다르면 같은 테이블에서 타임존·소수 정밀도가 어긋난다.
  && /opt/datamates-venv/bin/python -c \
-      'import fastapi, uvicorn, pyiceberg, pyarrow, duckdb, sqlglot, ruamel.yaml' \
+      'import fastapi, uvicorn, psycopg, pyarrow, duckdb, sqlglot, ruamel.yaml' \
  && /opt/superset-venv/bin/python -c \
       'import superset, duckdb_engine, psycopg2, duckdb; print("superset venv OK")' \
  && test "$(/opt/datamates-venv/bin/python -c 'import duckdb;print(duckdb.__version__)')" \
@@ -155,7 +155,6 @@ ENV DBT_BIN=/opt/dbt-venv/bin/dbt \
     EDR_BIN=/opt/dbt-venv/bin/edr \
     DATAMATES_DBT_BIN=/opt/dbt-venv/bin/dbt \
     PYTHONPATH=/opt/project \
-    DBT_SPARK_EVENTLOG=/opt/spark-events \
     DO_NOT_TRACK=1
 
 # 저장소를 여기 마운트한다. config.py 의 PROJECT_DIR 은 자기 소스 위치에서 유도되므로

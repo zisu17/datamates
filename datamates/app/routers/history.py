@@ -27,14 +27,16 @@ EL = "ice.analytics_elementary"
 
 # 시각 컬럼은 VARCHAR 다. 매번 쓰기 번거로워 표현을 하나로 모은다.
 #
-# `AT TIME ZONE 'UTC'` 가 붙는 이유. 이 값들은 dbt·elementary 가 **UTC 로** 적어
-# 둔 문자열인데 시간대 표시가 없다. 그대로 TIMESTAMP 로 캐스팅하면 시간대 없는
-# 값이 되어 세 곳이 한꺼번에 어긋난다 —
-#   ① 화면 표시: 시간대 없는 문자열을 화면이 자기 지역 시각으로 읽어 9시간 이르게 그린다.
-#   ② 기간 필터: now() 는 시간대가 있는 값이라 비교 기준이 9시간 밀린다.
-#   ③ 일자 집계: cast(... as date) 가 UTC 날짜로 끊겨 한국 자정과 어긋난다.
-# UTC 임을 명시하면 세션 시간대(KST)가 실려 셋 다 같은 기준이 된다.
-TS = "(CAST({} AS TIMESTAMP) AT TIME ZONE 'UTC')"
+# **오프셋이 붙어 있으므로 그대로 읽는다.** 예전에는
+# `CAST(... AS TIMESTAMP) AT TIME ZONE 'UTC'` 였다 — 시간대 표시가 없는 UTC
+# 문자열이라는 전제였는데, 실제 값은 `2026-08-14T16:47:18+09:00` 처럼 오프셋을
+# 달고 온다. TIMESTAMP 로 캐스팅하는 순간 그 +09:00 이 잘려 나가고, 남은 naive
+# 값을 다시 UTC 로 선언하니 **모든 시각이 9시간 뒤로 밀렸다.**
+# (증상: 오늘 16:47 의 검사가 내일 01:47 로 잡혀 일자별 추이에 «내일» 이 생겼다.)
+#
+# TIMESTAMPTZ 로 캐스팅하면 오프셋이 있으면 그것을, 없으면 세션 시간대를 쓴다 —
+# 두 형태가 섞여 들어와도 맞는 순간을 가리킨다.
+TS = "(CAST({} AS TIMESTAMPTZ))"
 # execution_time 은 FLOAT 라 그대로 반올림하면 17.9 가 17.90999984741211 로 나온다.
 SEC = "CAST({} AS DOUBLE)"
 
@@ -242,7 +244,11 @@ def daily(days: int = Query(14, ge=1, le=365)) -> dict[str, Any]:
 @router.get("/slowest")
 def slowest(days: int = Query(30, ge=1, le=365),
             limit: int = Query(10, ge=1, le=100)) -> dict[str, Any]:
-    """느린 모델 순위 — 총 소요 기준. 한 번 느린 것보다 자주 × 느린 것이 먼저다."""
+    """느린 모델 순위 — 총 소요 기준. 한 번 느린 것보다 자주 × 느린 것이 먼저다.
+
+    동점일 때는 이름으로 끊는다. 기준이 없으면 소요가 같은 모델들의 순서가 실행마다
+    달라지고, limit 로 자르는 자리에서는 «어제는 있던 모델이 오늘은 없는» 목록이 된다.
+    """
     items = _rows(f"""
         select name, count(*) runs,
                round(sum(CAST(execution_time AS DOUBLE)), 1) totalSeconds,
@@ -251,7 +257,7 @@ def slowest(days: int = Query(30, ge=1, le=365),
         from {EL}.dbt_run_results
         where {TS.format('generated_at')} >= {_since(days)}
           and resource_type in ('model','seed','snapshot')
-        group by 1 order by totalSeconds desc limit {int(limit)}""")
+        group by 1 order by totalSeconds desc, name limit {int(limit)}""")
     total = sum(i["totalSeconds"] or 0 for i in items)
     for i in items:
         i["share"] = round((i["totalSeconds"] or 0) / total * 100, 1) if total else 0
@@ -321,3 +327,29 @@ def tests_daily(days: int = Query(14, ge=1, le=365)) -> dict[str, Any]:
     for d in items:
         d["passRate"] = round((d["passes"] or 0) / d["runs"] * 100, 1) if d["runs"] else None
     return {"items": items, "total": len(items), "days": days}
+
+
+# 정적 경로(/tests/daily)보다 뒤에 둔다 — FastAPI 는 선언 순서로 맞추므로
+# 이 규칙이 앞에 오면 daily 가 test_name 으로 잡힌다.
+@router.get("/tests/{test_name}")
+def test_history(test_name: str,
+                 days: int = Query(30, ge=1, le=365),
+                 limit: int = Query(100, ge=1, le=500)) -> dict[str, Any]:
+    """규칙 1개의 실행 시계열. /models/{model_id} 와 같은 구조다.
+
+    /tests 는 규칙별로 **묶은** 값(기간 통과율·최근 실행)을 주는데, 품질 화면의
+    규칙 상세 「실행 이력」 탭은 실행 한 줄씩이 필요하다. 같은 테이블을 묶지 않고
+    읽는다.
+
+    없는 이름이어도 404 를 내지 않는다. 규칙을 지워도 이력은 남으므로 «지운 규칙의
+    이력 조회» 가 정상 요청이다 — 모델과 달리 지금 존재하는지가 조건이 아니다.
+    """
+    items = _rows(f"""
+        select {TS.format('detected_at')} ranAt, status, failures, severity,
+               test_type testType, table_name tableName, column_name columnName,
+               test_unique_id testUniqueId
+        from {EL}.elementary_test_results
+        where test_name = ? and {TS.format('detected_at')} >= {_since(days)}
+        order by ranAt desc
+        limit {int(limit)}""", [test_name])
+    return {"testName": test_name, "items": items, "total": len(items), "days": days}

@@ -57,7 +57,7 @@ function wireGrips() {
     ev.preventDefault(); g.classList.add('on');
     const prev = dock.style.transition; dock.style.transition = 'none';
     const move = (e) => { const r = dock.getBoundingClientRect();
-      S.dockH = Math.max(DOCK_MIN, Math.min(DOCK_MAX, r.bottom - e.clientY));
+      S.dockH = Math.max(DOCK_MIN, Math.min(dockMaxH(dock), r.bottom - e.clientY));
       dock.style.height = S.dockH + 'px'; };
     const up = () => { g.classList.remove('on'); dock.style.transition = prev;
       document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); render(); };

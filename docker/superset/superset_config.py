@@ -117,13 +117,20 @@ TALISMAN_ENABLED = False
 #   type(dbapi_conn).__module__  ==  "duckdb_engine"
 #   type(dbapi_conn).__name__    ==  "ConnectionWrapper"
 
-ICEBERG_REST_URI = _env("ICEBERG_REST_URI", "http://iceberg-rest:8181")
 MINIO_ENDPOINT = _env("MINIO_ENDPOINT", "http://minio:9000")
 MINIO_ROOT_USER = _env("MINIO_ROOT_USER", "minioadmin")
 MINIO_ROOT_PASSWORD = _env("MINIO_ROOT_PASSWORD", "minioadmin")
 
-# dbt 가 쓰는 카탈로그 이름과 구분한다. warehouse.py 의 ALIAS 와 같은 값이어야
-# 두 화면에서 같은 테이블 참조(ice.analytics.fct_events)를 쓸 수 있다.
+# DuckLake 카탈로그(Postgres). 데이터 파일은 s3://warehouse/ducklake/ 의 Parquet 이고
+# 스냅샷·스키마·파일 목록은 이 DB 에 있다.
+POSTGRES_HOST = _env("POSTGRES_HOST", "postgres")
+POSTGRES_PORT = _env("POSTGRES_PORT", "5432")
+POSTGRES_USER = _env("POSTGRES_USER", "datamates")
+POSTGRES_PASSWORD = _env("POSTGRES_PASSWORD", "datamates")
+
+# 카탈로그 별칭. 이름이 `ice` 인 것은 Iceberg 시절의 잔재지만 **바꾸면 안 된다** —
+# 이미 만들어진 Superset 데이터셋이 ice.analytics.<표> 로 저장돼 있어서
+# 바꾸는 순간 기존 차트가 전부 끊긴다. warehouse.py 의 ALIAS 와 같은 값이어야 한다.
 ICEBERG_ALIAS = "ice"
 ICEBERG_DEFAULT_SCHEMA = _env("DBT_SCHEMA", "analytics")
 
@@ -156,53 +163,37 @@ def _attach_sql() -> list[str]:
     사용자 입력이 아니므로 박아 넣는 편이 안전하다.
     """
     host, ssl = _split_endpoint(MINIO_ENDPOINT)
+    ducklake = (f"ducklake:postgres:dbname=ducklake host={POSTGRES_HOST} "
+                f"port={POSTGRES_PORT} user={POSTGRES_USER} password={POSTGRES_PASSWORD}")
     return [
-        "INSTALL iceberg",
-        "LOAD iceberg",
+        "INSTALL ducklake",
+        "INSTALL postgres",
+        "LOAD ducklake",
         (
             f"CREATE OR REPLACE SECRET datamates_s3 ("
             f"TYPE s3, KEY_ID '{MINIO_ROOT_USER}', SECRET '{MINIO_ROOT_PASSWORD}', "
             f"ENDPOINT '{host}', USE_SSL {'true' if ssl else 'false'}, "
             f"URL_STYLE 'path', REGION 'us-east-1')"
         ),
-        (
-            f"ATTACH IF NOT EXISTS 'warehouse' AS {ICEBERG_ALIAS} ("
-            f"TYPE iceberg, ENDPOINT '{ICEBERG_REST_URI}', AUTHORIZATION_TYPE 'none')"
-        ),
+        # READ_ONLY: 분석 화면은 웨어하우스를 읽기만 한다. 쓰기는 dbt(모델)와
+        # ingest(수집)의 일이라, 여기서 막아 두면 프록시가 놓친 경로로도 쓸 수 없다.
+        f"ATTACH IF NOT EXISTS '{ducklake}' AS {ICEBERG_ALIAS} (READ_ONLY)",
         f"SET GLOBAL TimeZone = '{DUCKDB_TIMEZONE}'",
     ]
 
 
-# ── 왜 DESCRIBE 를 한 바퀴 돌리는가 — P0 에서 찾은 것 ────────────
+# ── 컬럼 해석: DuckLake 에서는 필요 없다 ──────────────────────
 #
-# ATTACH 만으로는 Superset 이 데이터셋을 만들 수 없다. ATTACH 직후 Iceberg 테이블의
-# 컬럼 메타데이터가 **아직 해석되지 않은 상태**여서 information_schema 에
-# «__ / UNKNOWN» 컬럼 하나만 들어 있다:
+# Iceberg 시절에는 여기서 테이블마다 DESCRIBE 를 한 바퀴 돌려야 했다. ATTACH 직후
+# information_schema 에 «__ / UNKNOWN» 컬럼 하나만 들어 있어서, 그 상태로 데이터셋을
+# 만들면 껍데기가 되고 시간 컬럼이 없어 시계열 차트를 못 만들었기 때문이다.
 #
-#   ATTACH 직후 → information_schema.columns  = 1컬럼 ('__', UNKNOWN)
-#   DESCRIBE 후 → information_schema.columns  = 9컬럼, 타입 정확
+# DuckLake 는 스키마를 카탈로그(Postgres)에 들고 있어 ATTACH 직후 바로 나온다.
+# 실측(fct_apt_trade): Iceberg 1컬럼 → DuckLake 31컬럼, 시간 컬럼 11개.
+# 커넥션마다 테이블 수만큼 돌던 비용도 함께 사라졌다.
 #
-# Superset 은 SQLAlchemy reflection(= information_schema)으로 데이터셋 컬럼을 잡으므로,
-# 해석 전에 데이터셋을 만들면 «__» 하나만 가진 껍데기가 된다. 시간 컬럼이 없으니
-# 시계열 차트도 못 만든다. 질의는 되는데 차트를 못 만드는 상태라 원인을 찾기 어렵다.
-#
-# 테이블을 한 번 건드리면 DuckDB 가 스키마를 해석해 카탈로그에 채운다.
-# 세 방법을 재봤고 비용이 사실상 같았다(테이블 10개 기준):
-#
-#   SELECT * ... LIMIT 0 로 건드리기   109ms
-#   DESCRIBE                           105ms
-#   memory 카탈로그에 뷰 만들기        113ms
-#
-# DESCRIBE 를 쓴다. 가장 싸고, 순수 메타데이터 연산이며, **카탈로그가 하나로 유지된다.**
-# 뷰 방식은 memory.analytics 가 ice.analytics 를 가리는 두 번째 네임스페이스를 만들어
-# 모델 변경 시 갱신 책임이 생기고, Superset 의 selectStar 도 실제 테이블을 가리키지 않는다.
-#
-# ── 비용의 성질 ────────────────────────────────────────────────
-# 이 비용은 커넥션 × 테이블 수에 비례하고, Iceberg REST 카탈로그가
-# CATALOG_JDBC_POOL__MAX__SIZE=1 로 직렬화돼 있어 동시 접속에서 더 늘어난다
-# (동시 10 커넥션 × 10테이블에서 커넥션당 1초 수준까지 올라갔다).
-# 그래서 커넥션 풀 재사용은 최적화가 아니라 **전제**다 — 설계서 리스크 1·4 참고.
-# 모델이 수백 개로 늘면 RESOLVE_SCHEMAS 를 좁혀야 한다.
+# 남은 것은 기본 카탈로그·스키마 이동뿐이다. 이걸 빼면 Superset 의 스키마 목록에
+# 붙은 카탈로그가 나오지 않아 데이터셋을 만들 수 없다.
 
 RESOLVE_SCHEMAS = [s.strip() for s in
                    _env("DATAMATES_RESOLVE_SCHEMAS", ICEBERG_DEFAULT_SCHEMA).split(",")
@@ -210,15 +201,6 @@ RESOLVE_SCHEMAS = [s.strip() for s in
 
 
 def _resolve_columns(cur: Any) -> None:      # noqa: ANN401
-    for schema in RESOLVE_SCHEMAS:
-        cur.execute(
-            "select table_name from information_schema.tables "
-            f"where table_catalog = '{ICEBERG_ALIAS}' and table_schema = '{schema}'")
-        for (name,) in cur.fetchall():
-            cur.execute(f'DESCRIBE {ICEBERG_ALIAS}.{schema}."{name}"')
-            cur.fetchall()
-    # 기본 카탈로그·스키마를 옮긴다. 이걸 빼면 Superset 의 스키마 목록에
-    # 붙은 카탈로그가 나오지 않아 데이터셋을 만들 수 없다.
     cur.execute(f"USE {ICEBERG_ALIAS}.{RESOLVE_SCHEMAS[0]}")
 
 

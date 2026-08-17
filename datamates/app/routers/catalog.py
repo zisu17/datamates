@@ -68,6 +68,68 @@ def catalog(q: str | None = Query(None, description="이름·경로·설명 부�
     }
 
 
+# 적재량 캐시. 테이블 하나를 세는 데 DuckDB 로 수십 ms 지만, 카탈로그 전체를 세면
+# 테이블 수만큼 곱해진다. 홈 화면이 그릴 때마다 세면 그만큼 화면이 늦게 뜬다.
+# 적재는 분 단위로 도는 일이라 1분 캐시로도 화면이 뒤처지지 않는다.
+_VOLUME: dict[str, Any] = {"at": 0.0, "data": None}
+_VOLUME_TTL = 60.0
+
+# **/catalog/{model_id} 보다 먼저 등록해야 한다.** 뒤에 두면 "volume" 이
+# model_id 로 잡혀 404 가 난다.
+@router.get("/catalog/volume")
+def catalog_volume(refresh: bool = Query(False, description="캐시를 무시하고 다시 센다")
+                   ) -> dict[str, Any]:
+    """테이블별 적재 행 수 — 홈의 «적재 현황» 이 쓴다.
+
+    세는 것 말고 다른 방법이 없다. Iceberg 스냅샷 요약에도 행 수가 있지만 dbt 의
+    table materialization 은 매번 새로 쓰기라 스냅샷마다 값이 갈린다. count(*) 는
+    DuckDB 로 직접 세므로 «지금 그 테이블에 있는 수» 라는 뜻이 흔들리지 않는다.
+
+    아직 한 번도 만들어지지 않은 테이블은 rows 를 **null 로 둔다.** 0 으로 내리면
+    «비어 있다» 로 읽혀서 «아직 없다» 와 구분되지 않는다.
+    """
+    now = time.time()
+    if not refresh and _VOLUME["data"] and now - _VOLUME["at"] < _VOLUME_TTL:
+        return _VOLUME["data"]
+
+    marts = store.marts()
+    items = []
+    for e in manifest.all_entries().values():
+        items.append({
+            "id": e["id"], "name": e["name"], "phys": e["phys"],
+            "schema": e["phys"].split(".")[0] if "." in e["phys"] else "",
+            "group": "DATA MART" if e["id"] in marts else e["group"],
+            "kind": e["kind"],
+            "rows": warehouse.count(e["phys"]),
+        })
+    items.sort(key=lambda x: (-(x["rows"] or 0), x["name"]))
+
+    def agg(key: str) -> list[dict[str, Any]]:
+        out: dict[str, dict[str, Any]] = {}
+        for i in items:
+            b = out.setdefault(i[key], {key: i[key], "tables": 0, "rows": 0, "unknown": 0})
+            b["tables"] += 1
+            if i["rows"] is None:
+                b["unknown"] += 1
+            else:
+                b["rows"] += i["rows"]
+        return sorted(out.values(), key=lambda x: -x["rows"])
+
+    data = {
+        "items": items,
+        "total": len(items),
+        "totalRows": sum(i["rows"] or 0 for i in items),
+        # 못 센 테이블 수. 화면이 «총 N행» 옆에 «M개 미생성» 을 붙일 수 있어야
+        # 합계가 작은 이유를 사람이 알 수 있다.
+        "unknown": sum(1 for i in items if i["rows"] is None),
+        "bySchema": agg("schema"),
+        "byGroup": agg("group"),
+        "countedAt": now,
+    }
+    _VOLUME.update(at=now, data=data)
+    return data
+
+
 @router.get("/catalog/{model_id}")
 def catalog_detail(model_id: str) -> dict[str, Any]:
     e = manifest.get(model_id)

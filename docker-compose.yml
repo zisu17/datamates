@@ -15,6 +15,42 @@
 name: datamates
 
 services:
+  # -------------------------------------------------------------------------
+  # Postgres — 메타스토어 · Airflow 메타DB · Iceberg 카탈로그의 공용 백엔드.
+  #
+  # 셋 다 원래 SQLite 였다. 옮긴 이유는 각각 다르다.
+  #   메타스토어  동시 쓰기가 늘면 SQLite 의 단일 writer 가 병목이 된다.
+  #   Airflow     SQLite 는 SequentialExecutor 를 강제해 태스크가 한 줄로 돈다.
+  #   Iceberg     동시 커밋이 SQLITE_BUSY 로 깨져 iceberg_write 풀로 직렬화해야 했다.
+  #
+  # 「컨테이너를 늘리지 않는다」는 원래 방침을 여기서 한 번 접는다. 셋을 한 인스턴스에
+  # 모아 늘어나는 컨테이너는 하나뿐이다.
+  # -------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-datamates}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-datamates}
+      # init.sql 이 DB 셋을 만든다. 기본 DB 는 접속용으로만 쓴다.
+      POSTGRES_DB: postgres
+    ports:
+      # 호스트에서 도는 플랫폼 서버(datamates/run.sh)가 붙어야 하므로 포트를 연다.
+      # 127.0.0.1 에 묶어 다른 기기에서는 닿지 않게 한다.
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # 데이터 디렉터리가 비어 있을 때만 실행된다.
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      # -d 로 DB 를 지정하지 않으면 기본 DB 를 보는데, init.sql 이 도는 도중에도
+      # 그 DB 는 이미 떠 있어서 healthy 가 먼저 뜬다. 실제로 쓰는 DB 를 찍어야
+      # 뒤따르는 서비스가 「DB 가 아직 없다」로 죽지 않는다.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-datamates} -d iceberg"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   minio:
     image: minio/minio:latest
     container_name: minio
@@ -49,10 +85,16 @@ services:
       "
 
   iceberg-rest:
-    image: apache/iceberg-rest-fixture:1.10.1
+    # 기본 이미지는 SQLite JDBC 드라이버만 번들한다. Postgres 로 붙으려면
+    # 드라이버를 더한 이미지가 필요하다 — docker/iceberg-rest/Dockerfile 참고.
+    build:
+      context: ./docker/iceberg-rest
+    image: local/iceberg-rest-pg:1.10.1
     container_name: iceberg-rest
     depends_on:
       minio:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     ports:
       - "8181:8181"
@@ -66,36 +108,22 @@ services:
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
       AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
       AWS_REGION: us-east-1
-      # 카탈로그 메타데이터(네임스페이스·테이블 포인터)는 sqlite 로 영속화한다.
+      # 카탈로그 메타데이터(네임스페이스·테이블 포인터)는 Postgres 로 영속화한다.
       #
-      # busy_timeout 이 없으면 기본값이 0 이라, 잠깐이라도 락이 잡혀 있으면 기다리지 않고
-      # 즉시 SQLITE_BUSY 로 떨어진다. 파이프라인이 모델을 병렬로 돌리면 카탈로그에
-      # 동시 DDL 이 들어와 이 상황이 바로 재현된다(태스크 2개만 겹쳐도 실패).
-      # 30초를 주면 뒤에 온 쪽이 기다렸다가 진행한다.
-      # `file:` 접두사를 붙이면 안 된다. 그러면 ? 뒤가 SQLite URI 파라미터로 넘어가는데
-      # busy_timeout 은 SQLite URI 파라미터가 아니라 JDBC 드라이버(xerial) 쪽 설정이라
-      # 조용히 무시된다. 접두사를 빼야 드라이버가 읽어 PRAGMA busy_timeout 을 걸어 준다.
-      CATALOG_URI: jdbc:sqlite:/catalog/catalog.db?busy_timeout=30000
-      # 커넥션 풀을 1로 묶는다.
-      # SQLite 는 쓰기 writer 가 하나뿐이라 풀을 넓혀도 처리량이 늘지 않는데,
-      # 풀 안의 커넥션들끼리 서로 락을 기다리다 물리는 일은 생긴다
-      # (증상: busy_timeout 주기마다 SQLITE_BUSY 가 반복되고, 재시작하면 잠깐 낫다).
-      # 1이면 카탈로그 요청이 큐로 직렬화돼 그 교착 자체가 없어진다.
+      # SQLite 였을 때는 동시 커밋이 SQLITE_BUSY 로 깨져서, 수집 태스크와 dbt build 를
+      # Airflow 의 iceberg_write 풀 하나에 묶어 전역 직렬화해야 했다. Postgres 는
+      # 행 단위 잠금이라 그 직렬화가 더는 필요 없다 — daggen 의 풀 설정 참고.
+      CATALOG_URI: jdbc:postgresql://postgres:5432/iceberg
+      CATALOG_JDBC_USER: ${POSTGRES_USER:-datamates}
+      CATALOG_JDBC_PASSWORD: ${POSTGRES_PASSWORD:-datamates}
+      # 커넥션 풀. SQLite 때는 1로 묶어야 했다(writer 가 하나뿐이라 넓혀도 처리량이
+      # 늘지 않는데 풀 안에서 서로 락을 기다리다 물렸다). Postgres 는 그 제약이 없다.
       #
-      # 이름이 `clients` 인 것에 주의. 예전에 쓰던 CATALOG_JDBC_POOL__MAX__SIZE 는
-      # `jdbc.pool-max-size` 로 번역되는데 Iceberg 에 그런 설정이 없다. jdbc. 로
-      # 시작하는 값은 JDBC 드라이버에 그대로 넘어가고, 드라이버도 모르는 이름이라
-      # **아무 일도 일어나지 않은 채 조용히 무시된다** — 풀은 계속 기본값(2)이었다.
+      # 이름이 `clients` 인 것에 주의. CATALOG_JDBC_POOL__MAX__SIZE 는 `jdbc.pool-max-size`
+      # 로 번역되는데 Iceberg 에 그런 설정이 없다. jdbc. 로 시작하는 값은 드라이버에
+      # 그대로 넘어가고, 드라이버도 모르는 이름이라 **조용히 무시된다.**
       # 풀 크기는 Iceberg 의 CatalogProperties.CLIENT_POOL_SIZE, 즉 `clients` 다.
-      CATALOG_CLIENTS: "1"
-    volumes:
-      # 카탈로그 DB 는 named volume(= VM 내부 ext4)에 둔다. 호스트 디렉터리를 바인드하면
-      # SQLite 파일이 virtiofs 위에 놓이는데, 이 조합은 POSIX 파일 락이 제대로 동작하지 않아
-      # 한번 락이 물리면 풀리지 않는다. 증상은 SQLITE_BUSY(database is locked) 가 계속 나면서
-      # 단독 실행조차 실패하는 것이고, 컨테이너를 재시작하면 잠깐 낫다가 다시 재발한다.
-      # 호스트에서 들여다볼 필요가 있으면:
-      #   docker run --rm -v iceberg-catalog:/c alpine cat /c/catalog.db > catalog.db
-      - iceberg-catalog:/catalog
+      CATALOG_CLIENTS: "8"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8181/v1/config"]
       interval: 5s
@@ -127,12 +155,22 @@ services:
         condition: service_healthy
       iceberg-rest:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
     ports:
       - "8080:8080"
     environment:
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      # 메타DB 는 SQLite(기본). 태스크가 순차 실행된다.
-      # 병렬이 필요해지면 Postgres 서비스를 추가하고 executor 를 바꾼다.
+      # 메타DB 는 Postgres. SQLite 는 SequentialExecutor 를 강제해 태스크가 한 줄로
+      # 돌았다 — Airflow 가 기동 때 조합을 검사해서 executor 만 바꾸면 거부한다.
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: >-
+        postgresql+psycopg2://${POSTGRES_USER:-datamates}:${POSTGRES_PASSWORD:-datamates}@postgres:5432/airflow
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      # LocalExecutor 는 스케줄러 프로세스가 태스크를 자식 프로세스로 띄운다.
+      # DuckLake 이관으로 태스크마다 붙던 Spark JVM 이 사라져 상한 근거가
+      # 「메모리」에서 「CPU」로 바뀌었다. VM 이 6 CPU 라 그 안에서 잡는다.
+      AIRFLOW__CORE__PARALLELISM: "6"
+      AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "6"
       # Admin→Config 화면. 기본값 False 면 /api/v2/config 가 403 으로 막힌다.
       # non-sensitive-only 는 민감값(비밀번호·키)을 가리고 나머지만 노출한다.
       AIRFLOW__API__EXPOSE_CONFIG: "non-sensitive-only"
@@ -162,17 +200,12 @@ services:
       # 익명 사용 통계를 끄면 dbt 가 profiles 디렉터리에 .user.yml 을 쓰지 않는다.
       # (읽기전용 마운트라 쓰기를 시도하면 안 된다)
       DO_NOT_TRACK: "1"
-      JAVA_HOME: /opt/java-home
-      # profiles.yml 의 spark.eventLog.dir 기본값은 호스트 경로라 컨테이너에 없다.
-      # 없는 디렉터리를 가리키면 SparkContext 초기화 자체가 실패한다.
-      DBT_SPARK_EVENTLOG: /opt/spark-events
-      # local_heavy 타깃의 Spark 자원 — **VM 기준으로 잡는다.**
-      # colima VM 이 7.7GB 이고 minio·iceberg-rest·superset 스택이 함께 산다.
-      # 호스트 기본값(local[*] · 4g)을 그대로 쓰면 드라이버 JVM 이 OOM 으로 죽고,
-      # dbt 는 py4j 소켓이 끊긴 것만 보고 `[Errno 111] Connection refused` 라고
-      # 알린다 — 메모리 문제로 보이지 않아 찾는 데 시간이 걸린다.
-      SPARK_MASTER: "local[2]"
-      SPARK_DRIVER_MEMORY: "2g"
+      # DuckLake 카탈로그. 호스트에서는 localhost 지만 컨테이너에서는 서비스 이름이다 —
+      # dbt 프로필·warehouse.py·ingest.py 가 모두 이 값들로 같은 카탈로그에 붙는다.
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-datamates}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-datamates}
     volumes:
       - ./dags:/opt/airflow/dags
       # 프로젝트는 읽기전용. 컨테이너가 호스트 파일을 건드리지 못하게 한다.
@@ -183,16 +216,6 @@ services:
       # dbt_project.yml 을 못 찾아 파이프라인 실행만 조용히 실패한다.
       - ${DBT_PROJECT_DIR:-./dbt}:/opt/project/dbt:ro
       - airflow-home:/opt/airflow
-      # Iceberg jar 를 매 태스크마다 Maven 에서 새로 받지 않도록 캐시를 유지한다.
-      #
-      # 경로에 붙은 2.5.2 를 빼면 안 된다. Spark 4.0 이 번들한 Ivy 는 캐시 디렉터리를
-      # ~/.ivy2 가 아니라 ~/.ivy2.<ivy버전> 에 만든다(버전 간 캐시 오염을 막으려는 변경).
-      # ~/.ivy2 에 걸어두면 볼륨은 빈 채로 남고 태스크마다 210MB 를 다시 받는다 —
-      # 그 상태에서 태스크가 동시에 뜨면 다운로드가 경합해 실패하기까지 한다.
-      # Spark 를 올릴 때 컨테이너에서 `ls -d /home/airflow/.ivy*` 로 실제 경로를 확인할 것.
-      - ivy-cache:/home/airflow/.ivy2.5.2
-      # Airflow 가 돌린 Spark 잡도 History Server 로 볼 수 있게 남긴다.
-      - spark-events:/opt/spark-events
       # dbt 실행 산출물(run_results.json)을 호스트에서 읽기 위한 통로.
       # Data Mates API 가 모델별 상태·소요·행수를 여기서 읽는다. Airflow 의 태스크 상태만으로는
       # "몇 건 처리했는지"를 알 수 없어서 dbt 쪽 산출물이 따로 필요하다.
@@ -251,6 +274,9 @@ services:
         condition: service_healthy
       iceberg-rest:
         condition: service_healthy
+      # DuckLake 카탈로그. 없으면 미리보기·이력이 통째로 503 이다.
+      postgres:
+        condition: service_healthy
       # 기동할 때 Iceberg 커밋용 풀을 만들고 admin 비밀번호를 읽는다.
       # Airflow 가 준비되기 전에 뜨면 그 둘이 실패한 채로 서비스가 산다.
       airflow:
@@ -285,9 +311,12 @@ services:
       # manifest.json 을 프로젝트의 target/ 에서 읽어 카탈로그·계보를 그리므로,
       # 쓰는 곳과 읽는 곳이 갈리면 화면이 빈다.
       #
-      # Spark 자원은 airflow 와 같은 이유로 VM 기준으로 잡는다(위 주석 참고).
-      SPARK_MASTER: "local[2]"
-      SPARK_DRIVER_MEMORY: "2g"
+      # DuckLake 카탈로그. airflow 와 같은 값을 봐야 한다 — dbt 가 쓴 스냅샷을
+      # warehouse.py·ingest.py 가 같은 카탈로그에서 읽는다(config.py 의 dbt_env 참고).
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-datamates}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-datamates}
     volumes:
       # 읽기쓰기다. airflow 쪽이 :ro 인 것과 대비되는 지점 — 파일을 쓰는 주체가 여기다.
       # 화면에서 만든 DAG 과 메타스토어가 저장소에 남아야 git 으로 관리된다.
@@ -298,18 +327,16 @@ services:
       # Airflow 가 만든 admin 비밀번호 파일을 읽기 위해 홈을 읽기전용으로 건다.
       # 컨테이너 안에는 docker CLI 가 없어서 docker exec 로 읽을 수 없다.
       - airflow-home:/opt/airflow:ro
-      # seed·품질 검증이 Spark 를 띄우므로 Iceberg jar 캐시를 airflow 와 나눠 쓴다.
-      # 따로 두면 같은 210MB 를 두 번 받는다.
-      - ivy-cache:/home/airflow/.ivy2.5.2
-      - spark-events:/opt/spark-events
 
 volumes:
   minio-data:
   airflow-home:
-  ivy-cache:
-  spark-events:
-  # 외부에서 만들어 기존 catalog.db 를 복사해 넣었다. compose 가 새로 만들지 않도록 external 로 둔다.
-  #   docker volume create iceberg-catalog
-  #   docker run --rm -v iceberg-catalog:/dst -v "$PWD/.iceberg-rest:/src:ro" alpine cp /src/catalog.db /dst/
+  # ivy-cache · spark-events 는 Spark(dbt-spark) 전용이었다. DuckLake 이관으로
+  # Airflow 가 JVM 을 띄우지 않으므로 마운트하지 않는다. 롤백 시 되살릴 것.
+  postgres-data:
+  # 카탈로그가 SQLite 였을 때 쓰던 볼륨. Postgres 로 옮긴 뒤에도 남겨 둔다 —
+  # 이관이 잘못됐을 때 되돌릴 유일한 원본이고, 40KB 라 지울 이유가 없다.
+  # 마운트하는 서비스는 이제 없다.
+  #   docker run --rm -v iceberg-catalog:/c alpine cat /c/catalog.db > catalog.db
   iceberg-catalog:
     external: true

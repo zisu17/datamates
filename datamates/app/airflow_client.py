@@ -158,13 +158,23 @@ def clear_tasks(dag_id: str, run_id: str, task_ids: list[str]) -> Any:
 def ensure_pool(name: str, slots: int, description: str = "") -> None:
     """슬롯 수가 정해진 Airflow 풀을 보장한다.
 
-    Iceberg 커밋을 DAG 을 가로질러 한 줄에 세우는 장치다. 풀이 없으면
-    그 풀을 지정한 태스크는 큐에 들어가지도 못하므로, 있는지 확인하고
-    없으면 만든다. 이미 있으면 슬롯 수를 건드리지 않는다 — 운영자가
-    카탈로그를 Postgres 로 바꾸고 슬롯을 늘렸을 수 있다.
+    웨어하우스 커밋을 DAG 을 가로질러 조이는 장치다. 풀이 없으면 그 풀을 지정한
+    태스크는 큐에 들어가지도 못하므로, 있는지 확인하고 없으면 만든다.
+
+    이미 있을 때는 **줄이는 방향만** 반영한다. 운영자가 넓혀 둔 값은 존중하되,
+    코드가 「이 이상은 안 된다」고 판단해 낮춘 값은 반드시 내려가야 하기 때문이다.
+    실제로 이 비대칭이 필요했다 — 카탈로그를 Postgres 로 옮기며 슬롯을 2로 넓혔다가
+    DuckLake 의 낙관적 동시성 때문에 1로 되돌렸는데, 그냥 두면 옛 슬롯 2가 남아
+    커밋 충돌이 계속됐다.
     """
     try:
-        request("GET", f"/pools/{name}")
+        cur = request("GET", f"/pools/{name}")
+        if int(cur.get("slots") or 0) > slots:
+            # PATCH 본문은 «전체» 를 요구한다. 부분만 보내면 422 이고, 키 이름도
+            # 응답(name)과 달리 요청에서는 pool 이다 — 응답을 그대로 되돌려주면 막힌다.
+            request("PATCH", f"/pools/{name}",
+                    json={"pool": name, "slots": slots, "description": description,
+                          "include_deferred": bool(cur.get("include_deferred", False))})
         return
     except AirflowError as e:
         if e.status != 404:

@@ -5,22 +5,10 @@
    · SOURCE / DATA MODEL 아래에 폴더를 만들어 정리
    · 목록에는 이름만 — 스키마·물리 테이블명은 상세와 툴팁으로
    ============================================================ */
-const FOLDERS = [
-  { id: 'f_ops',  name: '병원 운영', grp: 'SOURCE' },
-  { id: 'f_exam', name: '검사',      grp: 'SOURCE' },
-  { id: 'f_chk',  name: '검진',      grp: 'SOURCE' },
-  { id: 'm_pat',  name: '환자',      grp: 'DATA MODEL' },
-  { id: 'm_exam', name: '검사',      grp: 'DATA MODEL' },
-  { id: 'm_chk',  name: '검진',      grp: 'DATA MODEL' },
-];
-const SEED_FOLDER = {
-  src_patient: 'f_ops', src_visit: 'f_ops',
-  src_exam_result: 'f_exam', src_exam_order: 'f_exam', src_checkup: 'f_chk',
-  stg_patient: 'm_pat', dim_patient: 'm_pat', stg_visit: 'm_pat',
-  stg_examination_result: 'm_exam', fct_patient_examination: 'm_exam', agg_daily_examination: 'm_exam',
-  stg_health_checkup: 'm_chk', agg_checkup_summary: 'm_chk',
-};
-D.forEach(d => { if (d.folder === undefined) d.folder = SEED_FOLDER[d.id] || null; });
+/* 폴더의 원천은 서버다 — api.js 가 부팅 때 /bootstrap 의 folders 로 통째로
+   교체한다. 여기에는 그릇만 둔다. 모델 id 에 폴더를 붙이던 SEED_FOLDER 는
+   그 id 들이 사라진 지금 아무 데도 닿지 않는다. */
+const FOLDERS = [];
 S.fdrOpen = S.fdrOpen || {};
 const fdrOpen = (id) => S.fdrOpen[id] !== false;
 const foldersOf = (grp) => FOLDERS.filter(f => f.grp === grp);

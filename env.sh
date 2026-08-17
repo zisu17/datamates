@@ -60,7 +60,16 @@ export DBT_SPARK_EVENTLOG="${DBT_SPARK_EVENTLOG:-${_ENV_SH_DIR}/.spark-events}"
 mkdir -p "${DBT_SPARK_EVENTLOG}"
 export SPARK_EVENTLOG_ENABLED="${SPARK_EVENTLOG_ENABLED:-true}"
 
-# 로컬 Iceberg REST 카탈로그. docker-compose up -d 로 띄운다.
+# DuckLake 카탈로그(Postgres). 웨어하우스의 메타데이터가 여기 있고,
+# 데이터 파일은 s3://warehouse/ducklake/ 의 Parquet 이다.
+# dbt · warehouse.py · ingest.py 가 모두 이 값들로 같은 카탈로그에 붙는다.
+export POSTGRES_HOST="${POSTGRES_HOST:-localhost}"
+export POSTGRES_PORT="${POSTGRES_PORT:-5432}"
+export POSTGRES_USER="${POSTGRES_USER:-datamates}"
+export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-datamates}"
+
+# 롤백 타깃(DBT_TARGET=spark_local)이 쓰는 Iceberg REST 카탈로그.
+# DuckLake 이관 뒤로 기본 경로에서는 쓰이지 않는다.
 export ICEBERG_REST_URI="${ICEBERG_REST_URI:-http://localhost:8181}"
 
 # --- 원격 Spark Thrift Server 로 붙을 때 ---------------------------------

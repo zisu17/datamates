@@ -6,13 +6,51 @@
 const EROLES = ['기준 데이터', '조인 데이터', '참조 데이터', '일반 입력 데이터'];
 const EROLE_DEF = '일반 입력 데이터';
 Object.assign(S, {
-  laidOut: false, listPreview: null, dockAuto: false, homeBanner: true, pipeZoom: 1,
+      /* 캔버스 첫 배율은 0.8 이다. 100% 로 열면 노드 몇 개만 보이고 나머지는
+       화면 밖이라, 흐름을 보러 온 사람이 먼저 축소부터 해야 했다.
+       사용자가 배율을 바꾸면 그 값이 남고, 「배율 100%」 로 되돌릴 수 있다. */
+    laidOut: false, listPreview: null, dockAuto: false, homeBanner: true,
   soverOpen: false, tfOpen: false,
 });
 S.dockMin = false; S.dockTab = 'detail';
-/* 하단 상세 패널의 처음 높이. 파이프라인의 실행 정보(자동 맞춤 상한 PDOCK_FIT=340)와
-   같은 눈높이로 맞춘다 — 모델을 고르자마자 정의가 잘리지 않고 읽히는 정도다. */
-S.dockH = 320;
+/* 하단 상세 패널의 처음 높이 — **데이터 맵과 파이프라인이 같은 규칙을 쓴다.**
+
+   전에는 두 화면이 각자 상수를 들고 있었다(모델 320 · 파이프라인 300). 숫자가
+   비슷해 맞아 보였지만, 데이터 맵은 노드가 위쪽에 몰려 그려져 캔버스가 470px 을
+   잡아도 아래 절반이 빈 띠로 남았다 — 모델을 고르러 들어온 사람에게는 그만큼
+   상세가 아래로 밀린 셈이다.
+
+   파이프라인이 쓰는 규칙과 같은 상한을 쓴다 — 화면 높이의 52%, 최대 420px.
+   (파이프라인은 거기에 «내용 높이» 까지 함께 보고 더 작은 값을 고른다. 데이터 맵
+   상세는 SQL·속성이 늘 길어 내용 기준이 항상 상한에 걸리므로, 여기서는 상한만 쓴다.)
+   900px 화면에서 320 → 420px. 그립으로 조절한 값은 그대로 남는다. */
+function dockInitH() { return Math.min(420, Math.round(window.innerHeight * 0.52)); }
+
+/* 캔버스 첫 배율 — 화면 크기를 따라간다.
+
+   1440×900 을 기준(0.8)으로 두고, 화면이 크면 올리고 작으면 내린다.
+   가로·세로 중 **작은 쪽**을 쓴다 — 캔버스는 양쪽으로 잘리므로, 넉넉한 축에
+   맞추면 다른 축이 넘친다.
+
+   내용에 맞추지 않고 화면에만 맞추는 이유가 있다. 예전에 진입 시 자동 맞춤을
+   넣었다가 두 가지로 실패했다(api.js linFit 주석) —
+     ① 배치 전에 재면 clientHeight 가 0 이라 (0-48)/h 가 음수가 되고, 하한이
+        그 음수를 붙잡아 «계산 실패» 가 «가장 작은 배율» 로 둔갑했다.
+     ② 모델이 늘어날수록 맞춤 배율이 끝없이 내려가, 쓸수록 처음 화면이 작아졌다.
+   화면 크기는 그릴 것이 없어도 알 수 있고 데이터가 늘어도 변하지 않는다.
+
+   0.65~1 로 묶는다. 그 아래로 내려가면 264px 노드가 172px 아래로 그려져
+   이름이 읽히지 않는다. 전체를 한눈에 보려면 「화면에 맞추기」가 따로 있다. */
+function canvasInitZoom() {
+  const byW = window.innerWidth / 1440;
+  const byH = window.innerHeight / 900;
+  const z = 0.8 * Math.min(byW, byH);
+  return Math.max(0.65, Math.min(1, Math.round(z * 20) / 20));   // 0.05 단위
+}
+S.dockH = dockInitH();
+/* 세 캔버스의 첫 배율은 여기서 넣지 않는다 — b23 의 syncCanvasZoom 이 한꺼번에
+   맡는다. 여기서 미리 넣어 두면 그 값이 «사용자가 직접 바꾼 값» 으로 보여
+   창 크기를 따라가지 못하고 처음 값에 묶인다. */
 
 /* 연결선: 역할만 갖는다 */
 function edgeRole(e) { if (!e.cfg) e.cfg = {}; if (!e.cfg.role) e.cfg.role = EROLE_DEF; return e.cfg.role; }
@@ -84,11 +122,11 @@ openEdgeCfg = function (key) {
     <div class="modal-b"><div class="frm">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div class="fr"><span class="fr-l">입력 모델</span>
-          <div class="statrow"><span class="swatch" style="background:${a ? LAYER[a.layer].color : '#ccc'}"></span>
+          <div class="statrow"><span class="swatch" style="background:${a ? LAYER[a.layer].color : 'var(--w-text-3)'}"></span>
             <span class="col f1" style="gap:0;min-width:0"><span class="t13 trunc">${esc(a ? a.name : e.from)}</span>
               <span class="sub trunc">${esc(a ? a.phys : '')}</span></span></div></div>
         <div class="fr"><span class="fr-l">출력 모델</span>
-          <div class="statrow"><span class="swatch" style="background:${b ? LAYER[b.layer].color : '#ccc'}"></span>
+          <div class="statrow"><span class="swatch" style="background:${b ? LAYER[b.layer].color : 'var(--w-text-3)'}"></span>
             <span class="col f1" style="gap:0;min-width:0"><span class="t13 trunc">${esc(b ? b.name : e.to)}</span>
               <span class="sub trunc">${esc(b ? b.phys : '')}</span></span></div></div>
       </div>
