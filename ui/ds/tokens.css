@@ -1,0 +1,220 @@
+/* ============================================================
+   macOS 27 Web Kit — 토큰 레이어
+   출처: claude.ai/design 프로젝트 «macOS 27 WEB Kit»
+          (styles.css → tokens/fonts · figma/fig-tokens · web · typography)
+
+   이 파일은 **디자인 시스템의 계약**이다. 값을 이 앱 사정에 맞춰 고치지 않는다 —
+   앱 쪽 사정은 app.css 가 이 토큰을 참조해 흡수한다. 그래야 DS 가 갱신될 때
+   이 파일만 갈아 끼울 수 있다.
+
+   가져오지 않은 것과 그 이유
+   - fig-tokens.css 의 576개 변수 중 **색만** 옮겼다. 나머지는 원본 macOS 데스크톱
+     컨트롤 치수(슬라이더 노브·스테퍼·메뉴바 높이 …)이고 웹 컨트롤은 --w-h-* 4단이
+     대신하므로, 그대로 두면 쓰이지 않는 변수 400여 개가 남는다.
+   - components/web.css 의 .wc-* 컴포넌트 레이어는 가져오지 않았다. 이 앱은 이미
+     자체 클래스 어휘(.btn · .card · .tbl · .tab …)를 56개 JS 블록이 문자열로 찍고
+     있어, .wc-* 를 쓰려면 마크업을 전부 바꿔야 한다. 대신 app.css 가 앱의 클래스를
+     이 토큰으로 다시 표현한다 — DS 를 복제하지 않고 재해석한다는 뜻이다.
+   ============================================================ */
+
+/* Wanted Sans — 가변 400~1000. 한글·라틴이 한 가족이라 한글만 OS 고딕으로
+   떨어지지 않는다. SIL OFL. 원본 .fig 의 SF Pro 는 라이선스가 웹 임베드를
+   금지해 쓸 수 없다. */
+@import url('https://cdn.jsdelivr.net/gh/wanteddev/wanted-sans@v1.0.3/packages/wanted-sans/fonts/webfonts/variable/complete/WantedSansVariable.min.css');
+
+/* ── 원본 키트 색 (fig-tokens.css) ─────────────────────────────
+   Accents 12종 + 각 vibrant 쌍, Labels 불투명도 램프, 표면.
+   **새 색을 만들지 않는다.** 필요한 색은 전부 아래 --w-* 로 접근한다. */
+:root{
+  --accents-red:rgb(255,56,60);
+  --accents-orange:rgb(255,141,40);
+  --accents-yellow:rgb(255,204,0);
+  --accents-green:rgb(52,199,89);
+  --accents-mint:rgb(0,200,179);
+  --accents-teal:rgb(0,195,208);
+  --accents-cyan:rgb(0,192,232);
+  --accents-blue:rgb(0,136,255);        /* Primary */
+  --accents-indigo:rgb(97,85,245);
+  --accents-purple:rgb(203,48,224);
+  --accents-pink:rgb(255,45,85);
+  --accents-brown:rgb(172,127,94);
+
+  --accents-vibrant-red:rgb(245,47,50);
+  --accents-vibrant-orange:rgb(245,134,37);
+  --accents-vibrant-yellow:rgb(245,194,0);
+  --accents-vibrant-green:rgb(38,191,77);
+  --accents-vibrant-mint:rgb(0,189,169);
+  --accents-vibrant-teal:rgb(0,179,191);
+  --accents-vibrant-cyan:rgb(0,171,207);
+  --accents-vibrant-blue:rgb(0,120,240);
+  --accents-vibrant-indigo:rgb(92,80,230);
+  --accents-vibrant-purple:rgb(183,43,201);
+  --accents-vibrant-pink:rgb(245,35,75);
+  --accents-vibrant-brown:rgb(158,115,84);
+
+  /* 원본 키트의 Grays. 글자에는 쓰지 않는다(글자는 아래 Labels 램프) —
+     계층 색처럼 «중립» 을 나타내는 불투명 색이 필요한 자리에만 쓴다. */
+  --grays-black:rgb(0,0,0);
+  --grays-gray:rgb(142,142,147);
+  --grays-white:rgb(255,255,255);
+
+  /* 텍스트는 «회색»이 아니라 검정 불투명도다. 두 번째 회색 팔레트를 만들지 않는다. */
+  --labels-primary:rgba(0,0,0,0.85);
+  --labels-secondary:rgba(0,0,0,0.5);
+  --labels-tertiary:rgba(0,0,0,0.25);
+  --labels-quaternary:rgba(0,0,0,0.1);
+  --labels-white:rgb(255,255,255);
+
+  --window-background:rgb(255,255,255);
+  --miscellaneous-alerts-overlay:rgba(171,171,171,0.6);
+}
+
+/* ── 타이포그래피 (tokens/typography.css) ────────────────────── */
+:root{
+  --font-system:"Wanted Sans Variable","Wanted Sans",-apple-system,BlinkMacSystemFont,
+    "Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --font-rounded:var(--font-system);
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+
+  --fw-regular:400;
+  --fw-medium:510;
+  --fw-semibold:590;
+  --fw-bold:700;
+  --fw-heavy:860;
+
+  --wt-display-size:32px;--wt-display-lh:40px;
+  --wt-h1-size:24px;--wt-h1-lh:32px;
+  --wt-h2-size:20px;--wt-h2-lh:28px;
+  --wt-h3-size:17px;--wt-h3-lh:24px;
+  --wt-h4-size:15px;--wt-h4-lh:22px;
+  --wt-body-size:14px;--wt-body-lh:22px;      /* Core size */
+  --wt-sm-size:13px;--wt-sm-lh:20px;
+  --wt-caption-size:12px;--wt-caption-lh:18px;
+  --wt-micro-size:11px;--wt-micro-lh:16px;
+}
+
+/* ── 웹 시맨틱 레이어 (tokens/web.css) ────────────────────────── */
+:root{
+  /* Surfaces */
+  --w-bg:rgb(246,246,246);
+  --w-surface:var(--window-background);
+  --w-surface-sunken:rgba(0,0,0,0.02);
+  --w-surface-raised:var(--window-background);
+  --w-overlay:var(--miscellaneous-alerts-overlay);
+
+  /* Text — Labels 램프 */
+  --w-text:var(--labels-primary);
+  --w-text-2:var(--labels-secondary);
+  --w-text-3:var(--labels-tertiary);
+  --w-text-disabled:var(--labels-quaternary);
+  --w-text-on-accent:var(--labels-white);
+
+  /* Borders — 웹은 1px, 원본 0.5 헤어라인은 --w-hairline 로 보존 */
+  --w-border:rgba(0,0,0,0.10);
+  --w-border-strong:rgba(0,0,0,0.22);
+  --w-border-focus:var(--accents-blue);
+  --w-hairline:0.5px;
+
+  /* State overlays */
+  --w-hover:rgba(0,0,0,0.05);
+  --w-active:rgba(0,0,0,0.09);
+  --w-selected:rgba(0,136,255,0.08);
+  --w-focus-ring:0 0 0 3px rgba(0,136,255,0.28);
+
+  /* Accent + status — 원본 12 accents 에서 선택 */
+  --w-accent:var(--accents-blue);
+  --w-accent-hover:var(--accents-vibrant-blue);
+  --w-success:var(--accents-green);
+  --w-warning:var(--accents-orange);
+  --w-danger:var(--accents-red);
+  --w-info:var(--accents-cyan);
+
+  /* Control scale — 4단 */
+  --w-h-lg:40px;--w-h-md:32px;--w-h-sm:28px;--w-h-xs:24px;
+  --w-px-lg:16px;--w-px-md:12px;--w-px-sm:10px;--w-px-xs:8px;
+  --w-fs-lg:15px;--w-fs-md:14px;--w-fs-sm:13px;--w-fs-xs:12px;
+
+  /* Radius — sm 6 이 컨트롤 표준, md 8 이 카드·표·리스트, lg 12 가 모달 */
+  --w-r-xs:4px;--w-r-sm:6px;--w-r-md:8px;--w-r-lg:12px;--w-r-xl:16px;--w-r-pill:999px;
+
+  /* Spacing — 4배수 */
+  --w-s-1:4px;--w-s-2:8px;--w-s-3:12px;--w-s-4:16px;--w-s-5:20px;
+  --w-s-6:24px;--w-s-8:32px;--w-s-10:40px;--w-s-12:48px;
+
+  /* Elevation — 3레벨. 컬러 그림자·내부 글로우 없음 */
+  --w-shadow-1:0 1px 2px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05);
+  --w-shadow-2:0 4px 12px rgba(0,0,0,0.10),0 0 0 1px rgba(0,0,0,0.06);
+  --w-shadow-3:0 12px 32px rgba(0,0,0,0.16),0 0 0 1px rgba(0,0,0,0.06);
+
+  /* Layout skeleton */
+  --w-topnav-h:52px;
+  --w-sidebar-w:240px;
+  --w-sidebar-collapsed-w:56px;
+  --w-content-max:1200px;
+  --w-content-pad:24px;
+
+  /* Motion — 원본 .fig 에 모션 스펙이 없어 웹 최소 전환값만 둔다 */
+  --w-dur:150ms;
+  --w-ease:cubic-bezier(.2,.7,.3,1);
+
+  /* Chart palette — 12 accents 의 데이터 시각화 순서 */
+  --w-chart-1:var(--accents-blue);
+  --w-chart-2:var(--accents-orange);
+  --w-chart-3:var(--accents-teal);
+  --w-chart-4:var(--accents-purple);
+  --w-chart-5:var(--accents-green);
+  --w-chart-6:var(--accents-pink);
+  --w-chart-7:var(--accents-indigo);
+  --w-chart-8:var(--accents-yellow);
+  --w-chart-9:var(--accents-mint);
+  --w-chart-10:var(--accents-red);
+  --w-chart-11:var(--accents-cyan);
+  --w-chart-12:var(--accents-brown);
+}
+
+/* 다크 모드 — DS 계약이라 값은 남기지만, 이 앱은 아직 light 고정이다
+   (헤더에 테마 토글이 없고 app.css 가 color-scheme:light 를 선언한다).
+   토글을 붙이려면 :root 에 data-theme="dark" 를 세우면 이 블록이 살아난다. */
+:root[data-theme="dark"]{
+  --labels-primary:rgba(255,255,255,0.85);
+  --labels-secondary:rgba(255,255,255,0.55);
+  --labels-tertiary:rgba(255,255,255,0.25);
+  --labels-quaternary:rgba(255,255,255,0.1);
+  --window-background:rgb(30,30,30);
+  --accents-blue:rgb(0,145,255);
+  --accents-green:rgb(48,209,88);
+  --accents-orange:rgb(255,146,48);
+  --accents-red:rgb(255,66,69);
+  --accents-cyan:rgb(60,211,254);
+  --w-bg:rgb(22,22,22);
+  --w-surface-sunken:rgba(255,255,255,0.03);
+  --w-border:rgba(255,255,255,0.12);
+  --w-border-strong:rgba(255,255,255,0.28);
+  --w-hover:rgba(255,255,255,0.07);
+  --w-active:rgba(255,255,255,0.12);
+  --w-selected:rgba(0,145,255,0.18);
+  --w-shadow-1:0 1px 2px rgba(0,0,0,0.5),0 0 0 1px rgba(255,255,255,0.06);
+  --w-shadow-2:0 4px 12px rgba(0,0,0,0.55),0 0 0 1px rgba(255,255,255,0.07);
+  --w-shadow-3:0 12px 32px rgba(0,0,0,0.65),0 0 0 1px rgba(255,255,255,0.08);
+}
+
+/* ── 타입 스케일 유틸리티 (tokens/typography.css) ──────────────
+   앱 마크업은 자체 크기 클래스(.t11 · .t12 · b6 …)를 쓰므로 app.css 가
+   그것들을 이 스케일에 맞춘다. 여기 .w-* 는 새로 손보는 마크업에서 쓴다. */
+.w-display,.w-h1,.w-h2,.w-h3,.w-h4,.w-body,.w-sm,.w-caption,.w-micro{
+  font-family:var(--font-system);color:var(--w-text);margin:0}
+.w-display{font-size:32px;line-height:40px;font-weight:700;letter-spacing:-0.4px}
+.w-h1{font-size:24px;line-height:32px;font-weight:700;letter-spacing:-0.3px}
+.w-h2{font-size:20px;line-height:28px;font-weight:590;letter-spacing:-0.2px}
+.w-h3{font-size:17px;line-height:24px;font-weight:590;letter-spacing:-0.1px}
+.w-h4{font-size:15px;line-height:22px;font-weight:590}
+.w-body{font-size:14px;line-height:22px;font-weight:400}
+.w-body--strong{font-weight:590}
+.w-sm{font-size:13px;line-height:20px;font-weight:400}
+.w-caption{font-size:12px;line-height:18px;font-weight:400;color:var(--w-text-2)}
+.w-micro{font-size:11px;line-height:16px;font-weight:510;color:var(--w-text-3)}
+.w-num{font-variant-numeric:tabular-nums}
+.w-text-1{color:var(--w-text)}
+.w-text-2{color:var(--w-text-2)}
+.w-text-3{color:var(--w-text-3)}
+.w-text-accent{color:var(--w-accent)}

@@ -86,7 +86,7 @@ function anaPickData(p) {
   buildLoadOptions();
 
   /* 헤더는 스크롤 밖에 둔다 — 세로로 움직이는 것은 .ana-scroll 하나뿐이다. */
-  const band = el(`<div class="ana-top row" style="align-items:center">
+  const band = el(`<div class="ana-top inset row" style="align-items:center">
     <button class="iconbtn" id="pkBack" title="데이터 분석으로">${ic14('chevl')}</button>
     <div class="f1" style="min-width:0">
       <h1 class="tt" style="font-size:var(--fs-page)">새 분석</h1>
@@ -171,158 +171,228 @@ function anaPickData(p) {
 
 /* ── 화면 3 — 분석/시각화 ───────────────────────────────────── */
 
-function bSec(title, extra) {
-  return el(`<div class="ana-sec"><span class="sect-t">${esc(title)}`
-    + `${extra || ''}</span></div>`);
+/* ── 분석 만들기 ─────────────────────────────────────────────────
+   구성은 받은 디자인(데이터 분석.dc.html)을 따른다.
+
+     상단 바   ← · 이름 · DATA MART/물리명 · 대시보드 선택 · 실행 · 저장
+     좌 360px  보기 형식 5종 · 세 개의 담는 자리(기준/값/조건) · 요약·초기화
+     우        결과 — 실행 전에는 체크리스트, 실행 후에는 표 또는 막대
+
+   담는 자리에 컬럼 목록을 늘어놓지 않고 **모달로 고른다.** 예전에는 컬럼을
+   전부 칩으로 깔았는데, 마트 하나가 12~18개라 패널이 그 목록으로 가득 찼다.
+   무엇을 담았는지가 목록에 묻혀 «지금 무엇을 만들고 있는가» 가 보이지 않았다. */
+
+S.bPick = S.bPick || null;      // 'dim' | 'val' | 'cond' — 열린 선택 모달
+S.bQuery = S.bQuery || '';      // 모달 안 검색어
+
+const B_ZONES = [
+  { key: 'dim',  label: '무엇으로 나눌까요', icon: 'tbl',
+    hint: '기준이 될 항목을 담습니다. 예: 자치구, 면적대' },
+  { key: 'val',  label: '무엇을 볼까요', icon: 'spark',
+    hint: '숫자 항목을 담습니다. 예: 전세가율, 갭' },
+  { key: 'cond', label: '조건', icon: 'filter',
+    hint: '조회 범위를 좁힙니다. 담지 않으면 전체 조회' },
+];
+
+/* 담긴 것 — 자리마다 저장 위치가 다르다. */
+function bItems(key) {
+  const s = BUILD.spec;
+  if (key === 'dim') return s.dimensions.map(n => ({ name: buildLabel(n), raw: n, role: '기준' }));
+  if (key === 'val') return s.metrics.map((m, i) => ({
+    name: m.col ? buildLabel(m.col) : '(컬럼 미선택)', raw: m.col, role: m.agg, idx: i }));
+  return s.filters.map((f, i) => ({
+    name: f.col ? buildLabel(f.col) : '(컬럼 미선택)', raw: f.col,
+    role: `${f.op} ${f.val ?? ''}`.trim(), idx: i }));
 }
 
-function bViz(host) {
-  const sec = bSec('어떻게 볼까요');
-  sec.appendChild(el(`<div class="row g6" style="flex-wrap:wrap">${
-    (BUILD.opts.viz || []).map(v =>
-      `<button class="pk ${BUILD.spec.viz === v.key ? 'on' : ''}" data-v="${esc(v.key)}">`
-      + `${esc(v.label)}</button>`).join('')}</div>`));
-  host.appendChild(sec);
-  $$('[data-v]', sec).forEach(b => b.onclick = () => {
-    BUILD.spec.viz = b.dataset.v; BUILD.result = null; render();
-  });
+function bDrop(key, it) {
+  const s = BUILD.spec;
+  if (key === 'dim') s.dimensions = s.dimensions.filter(n => n !== it.raw);
+  else if (key === 'val') s.metrics.splice(it.idx, 1);
+  else s.filters.splice(it.idx, 1);
+  BUILD.result = null; render();
 }
 
-function bDims(host) {
-  const r = buildRule();
-  if (r.dims[1] === 0) return;
-  const sec = bSec('무엇으로 나눌까요',
-    ` <span class="mt" style="text-transform:none;font-weight:400">${
-      BUILD.spec.dimensions.length}/${r.dims[1]}</span>`);
-  sec.appendChild(el(`<div class="row g6" style="flex-wrap:wrap">${
-    buildCols().map(c =>
-      `<button class="pk ${BUILD.spec.dimensions.includes(c.name) ? 'on' : ''}"
-        data-d="${esc(c.name)}" title="${esc(c.desc || c.type || '')}">${esc(c.label)}</button>`
-    ).join('')}</div>`));
-  host.appendChild(sec);
-  $$('[data-d]', sec).forEach(b => b.onclick = () => {
-    const n = b.dataset.d, a = BUILD.spec.dimensions, i = a.indexOf(n);
-    if (i >= 0) a.splice(i, 1);
-    else if (a.length < r.dims[1]) a.push(n);
-    else { toast(`${r.dims[1]}개까지 고를 수 있습니다.`, 'warn'); return; }
-    BUILD.result = null; render();
-  });
-}
-
-function bMetrics(host) {
-  const r = buildRule();
-  const sec = bSec('무엇을 볼까요',
-    ` <span class="mt" style="text-transform:none;font-weight:400">${
-      BUILD.spec.metrics.length}/${r.metrics[1]}</span>`);
-  const cols = buildCols();
-
-  BUILD.spec.metrics.forEach((m, i) => {
-    sec.appendChild(el(`<div class="row g6">
-      <select class="inp f1" data-mc="${i}">
-        <option value="">컬럼 선택</option>
-        ${cols.map(c => `<option value="${esc(c.name)}" ${m.col === c.name ? 'selected' : ''}>`
-          + `${esc(c.label)}</option>`).join('')}
-      </select>
-      <select class="inp" data-ma="${i}" style="max-width:116px">
-        ${(BUILD.opts.agg || []).map(a =>
-          `<option value="${esc(a.key)}" ${m.agg === a.key ? 'selected' : ''}>${esc(a.label)}</option>`
-        ).join('')}
-      </select>
-      <button class="iconbtn" data-mx="${i}" title="지우기">${ic14('x')}</button>
-    </div>`));
-  });
-  if (BUILD.spec.metrics.length < r.metrics[1]) {
-    sec.appendChild(el(`<button class="btn gho sm" id="bAddM">${ic14('plus')}추가</button>`));
-  }
-  host.appendChild(sec);
-
-  const add = $('#bAddM', sec);
-  if (add) add.onclick = () => {
-    BUILD.spec.metrics.push({ col: '', agg: 'SUM' }); BUILD.result = null; render();
-  };
-  $$('[data-mc]', sec).forEach(s => s.onchange = (e) => {
-    BUILD.spec.metrics[+s.dataset.mc].col = e.target.value; BUILD.result = null; render();
-  });
-  $$('[data-ma]', sec).forEach(s => s.onchange = (e) => {
-    BUILD.spec.metrics[+s.dataset.ma].agg = e.target.value; BUILD.result = null; render();
-  });
-  $$('[data-mx]', sec).forEach(b => b.onclick = () => {
-    BUILD.spec.metrics.splice(+b.dataset.mx, 1); BUILD.result = null; render();
-  });
-}
-
-/* 조건은 구조화해서 받는다. 자유 SQL 을 받지 않는 이유는 조회 전용 보장이
-   문자열 검사로 내려가면 무의미해지기 때문이다. */
-function bFilters(host) {
-  const cols = buildCols(), ops = BUILD.opts.ops || [];
-  const sec = bSec('조건');
-  BUILD.spec.filters.forEach((f, i) => {
-    const op = ops.find(o => o.key === f.op) || ops[0] || {};
-    sec.appendChild(el(`<div class="row g6">
-      <select class="inp f1" data-fc="${i}">
-        <option value="">컬럼 선택</option>
-        ${cols.map(c => `<option value="${esc(c.name)}" ${f.col === c.name ? 'selected' : ''}>`
-          + `${esc(c.label)}</option>`).join('')}
-      </select>
-      <select class="inp" data-fo="${i}" style="max-width:100px">
-        ${ops.map(o => `<option value="${esc(o.key)}" ${f.op === o.key ? 'selected' : ''}>`
-          + `${esc(o.label)}</option>`).join('')}
-      </select>
-      ${op.needsValue === false ? ''
-        : `<input class="inp" data-fv="${i}" style="max-width:132px" placeholder="값"
-             value="${esc(f.val ?? '')}">`}
-      <button class="iconbtn" data-fx="${i}" title="지우기">${ic14('x')}</button>
-    </div>`));
-  });
-  sec.appendChild(el(`<button class="btn gho sm" id="bAddF">${ic14('plus')}추가</button>`));
-  host.appendChild(sec);
-
-  $('#bAddF', sec).onclick = () => {
-    BUILD.spec.filters.push({ col: '', op: '==', val: '' }); BUILD.result = null; render();
-  };
-  $$('[data-fc]', sec).forEach(s => s.onchange = (e) => {
-    BUILD.spec.filters[+s.dataset.fc].col = e.target.value; BUILD.result = null; render();
-  });
-  $$('[data-fo]', sec).forEach(s => s.onchange = (e) => {
-    BUILD.spec.filters[+s.dataset.fo].op = e.target.value; BUILD.result = null; render();
-  });
-  $$('[data-fv]', sec).forEach(s => s.oninput = (e) => {
-    BUILD.spec.filters[+s.dataset.fv].val = e.target.value; BUILD.result = null;
-  });
-  $$('[data-fx]', sec).forEach(b => b.onclick = () => {
-    BUILD.spec.filters.splice(+b.dataset.fx, 1); BUILD.result = null; render();
-  });
-}
-
-/* 결과 — P4-1 은 표다. 최종 UX 가 아니다. P4-2 에서 같은 결과로 차트를 그린다. */
-function bResult(host) {
-  const sec = bSec('결과', BUILD.result
-    ? ` <span class="mt" style="text-transform:none;font-weight:400">${BUILD.result.rowCount}행</span>` : '');
-  if (BUILD.error) {
-    sec.appendChild(el(`<div class="ana-empty">${esc(BUILD.error)}</div>`));
-  } else if (BUILD.running) {
-    sec.appendChild(el('<div class="ana-empty">실행 중…</div>'));
-  } else if (!BUILD.result) {
-    sec.appendChild(el(`<div class="ana-empty">${
-      esc(buildBlocked() || '「실행」을 눌러 결과를 확인하세요.')}</div>`));
-  } else if (!BUILD.result.rows.length) {
-    sec.appendChild(el('<div class="ana-empty">조건에 맞는 데이터가 없습니다.</div>'));
+function bAdd(key, colName) {
+  const s = BUILD.spec, r = buildRule();
+  if (key === 'dim') {
+    if (s.dimensions.includes(colName)) return;
+    if (s.dimensions.length >= r.dims[1]) { toast(`${r.dims[1]}개까지 담을 수 있습니다.`, 'warn'); return; }
+    s.dimensions.push(colName);
+  } else if (key === 'val') {
+    if (s.metrics.length >= r.metrics[1]) { toast(`${r.metrics[1]}개까지 담을 수 있습니다.`, 'warn'); return; }
+    s.metrics.push({ col: colName, agg: 'SUM' });
   } else {
-    /* 플랫폼의 표 문법 — .tbl 은 CSS grid 이고 --cols 로 열을 정한다.
-       데이터 미리보기 탭과 같은 모양이어야 다른 도구처럼 느껴지지 않는다. */
-    const h = BUILD.result.headers || BUILD.result.columns;
-    const wrap = el(`<div style="overflow:auto;max-height:420px">
-      <div class="tbl" style="--cols:${h.map(() => 'minmax(120px,1fr)').join(' ')};min-width:100%"></div>
-    </div>`);
-    const t = $('.tbl', wrap);
-    t.appendChild(el(`<div class="th">${h.map(x => `<span>${esc(x)}</span>`).join('')}</div>`));
-    BUILD.result.rows.forEach(r => t.appendChild(el(
-      `<div class="tr static" style="min-height:34px">${r.map(v =>
-        `<span class="mono t12 trunc">${v === null || v === undefined ? '—' : esc(v)}</span>`
-      ).join('')}</div>`)));
-    sec.appendChild(wrap);
+    s.filters.push({ col: colName, op: '==', val: '' });
   }
-  host.appendChild(sec);
+  BUILD.result = null; render();
+}
+
+/* 담는 자리 하나 */
+function bZone(z) {
+  const items = bItems(z.key);
+  const r = buildRule();
+  const cap = z.key === 'dim' ? r.dims[1] : z.key === 'val' ? r.metrics[1] : null;
+  const box = el(`<div class="dcb-zone">
+    <div class="dcb-zh">
+      <span class="row g6" style="align-items:center">
+        ${ic14(z.icon, 'fnt')}<span class="t">${z.label}</span>
+        <span class="n">${cap ? `${items.length}/${cap}` : items.length}</span></span>
+      <button class="btn gho sm dcb-add">${ic14('plus')}추가</button>
+    </div>
+    <div class="dcb-items"></div>
+  </div>`);
+  const host = $('.dcb-items', box);
+  if (!items.length) {
+    const e = el(`<button class="dcb-empty">${esc(z.hint)}</button>`);
+    e.onclick = () => { S.bPick = z.key; S.bQuery = ''; render(); };
+    host.appendChild(e);
+  }
+  items.forEach(it => {
+    const chip = el(`<div class="dcb-chip">
+      <span class="nm trunc">${esc(it.name)}</span>
+      <span class="rl">${esc(it.role)}</span>
+      <button class="iconbtn xs" title="빼기">${ic14('x')}</button></div>`);
+    $('.iconbtn', chip).onclick = () => bDrop(z.key, it);
+    host.appendChild(chip);
+  });
+  $('.dcb-add', box).onclick = () => { S.bPick = z.key; S.bQuery = ''; render(); };
+  return box;
+}
+
+/* 필드 선택 모달 — 자리마다 고를 수 있는 항목이 다르다. */
+function bPicker() {
+  const key = S.bPick;
+  if (!key) return null;
+  const cols = buildCols();
+  const q = (S.bQuery || '').trim().toLowerCase();
+  const match = (c) => !q || String(c.label).toLowerCase().includes(q)
+    || String(c.name).toLowerCase().includes(q);
+
+  const groups = key === 'dim'
+    ? [{ label: '구분 항목', items: cols.filter(c => c.role !== 'measure') }]
+    : key === 'val'
+      ? [{ label: '숫자 항목', items: cols.filter(c => c.role === 'measure') }]
+      : [{ label: '구분 항목', items: cols.filter(c => c.role !== 'measure') },
+         { label: '숫자 항목', items: cols.filter(c => c.role === 'measure') }];
+
+  const picked = new Set([
+    ...BUILD.spec.dimensions,
+    ...BUILD.spec.metrics.map(m => m.col),
+    ...BUILD.spec.filters.map(f => f.col)].filter(Boolean));
+
+  /* 앞서 띄운 것을 먼저 걷는다. render() 는 #app 만 비우고 모달 스크림은
+     document.body 에 남으므로, 그냥 두면 렌더마다 한 겹씩 쌓인다 —
+     위에 덮인 옛 모달이 보이면서 «다른 자리를 골랐는데 같은 목록» 처럼 보였다. */
+  $$('.scrim').forEach(sc => { if ($('.dcb-pmodal', sc)) sc.remove(); });
+
+  const title = key === 'dim' ? '나눌 기준 선택' : key === 'val' ? '볼 값 선택' : '조건 항목 선택';
+  const hint = key === 'cond' ? '담은 항목마다 조건값을 지정합니다.' : '담은 항목은 아래 자리에 쌓입니다.';
+
+  const h = `<div class="modal-h"><span class="modal-t">${title}</span>
+      <button class="iconbtn sp" data-close>${ic('x')}</button></div>
+    <div class="dcb-psrch">${ic14('search', 'fnt')}
+      <input placeholder="필드 검색" value="${esc(S.bQuery || '')}"></div>
+    <div class="modal-b dcb-plist"></div>
+    <div class="modal-f" style="justify-content:space-between">
+      <span class="t12 fnt">${hint}</span>
+      <button class="btn" data-close>닫기</button></div>`;
+  const { m, close } = modal(h, { sm: true });
+  m.classList.add('dcb-pmodal');
+
+  const list = $('.dcb-plist', m);
+  groups.forEach(g => {
+    const hit = g.items.filter(match);
+    if (!hit.length) return;
+    list.appendChild(el(`<div class="dcb-pgrp">${g.label}
+      <span class="n">${hit.length}</span></div>`));
+    hit.forEach(c => {
+      const on = picked.has(c.name);
+      const b = el(`<button class="dcb-pitem ${on ? 'on' : ''}">
+        ${ic14(c.role === 'measure' ? 'spark' : 'code', 'fnt')}
+        <span class="nm trunc">${esc(c.label)}</span>
+        <span class="st">${on ? '담김' : ''}</span></button>`);
+      b.onclick = () => { bAdd(key, c.name); };
+      list.appendChild(b);
+    });
+  });
+  if (!list.children.length) {
+    list.appendChild(el('<div class="ana-empty">맞는 필드가 없습니다. 검색어를 줄여 보세요.</div>'));
+  }
+
+  const srch = $('.dcb-psrch input', m);
+  srch.oninput = (e) => {
+    S.bQuery = e.target.value;
+    const at = e.target.selectionStart; render();
+    const again = $('.dcb-psrch input');
+    if (again) { again.focus(); again.setSelectionRange(at, at); }
+  };
+  $$('[data-close]', m).forEach(b => b.onclick = () => { S.bPick = null; S.bQuery = ''; close(); render(); });
+  setTimeout(() => srch.focus(), 0);
+  return m;
+}
+
+/* 결과 — 실행 전에는 체크리스트, 실행 후에는 표 또는 막대.
+   체크리스트를 두는 이유는, 실행이 안 될 때 «왜» 를 버튼 흐림만으로 알 수 없어서다.
+   무엇이 채워졌고 무엇이 비었는지를 한 줄씩 보여준다. */
+function bResult(host) {
+  const s = BUILD.spec;
+  const why = buildBlocked();
+  const card = el(`<div class="dcb-res">
+    <div class="dcb-rh">
+      <span class="row" style="align-items:baseline">
+        <span class="t">결과</span>
+        <span class="n">${BUILD.result
+          ? `${BUILD.result.rowCount}행` : (BUILD.running ? '실행 중…' : '실행 전')}</span></span>
+    </div></div>`);
+
+  if (BUILD.error) {
+    card.appendChild(el(`<div class="ana-empty">${esc(BUILD.error)}</div>`));
+    host.appendChild(card); return;
+  }
+
+  if (!BUILD.result) {
+    const chk = (label, ok, val, need) => `<div class="dcb-chk">
+      ${ic14(ok ? 'checkc' : (need ? 'alert' : 'minus'), ok ? 'ok' : 'fnt')}
+      <span class="lb">${label}</span>
+      <span class="vl trunc">${esc(val)}</span></div>`;
+    const dims = s.dimensions.map(buildLabel);
+    const vals = s.metrics.map(m => m.col ? buildLabel(m.col) : '(컬럼 미선택)');
+    const conds = s.filters.map(f => f.col ? buildLabel(f.col) : '(컬럼 미선택)');
+    const vizLabel = ((BUILD.opts && BUILD.opts.viz) || [])
+      .find(v => v.key === s.viz);
+
+    const box = el(`<div class="dcb-empty-wrap">
+      <div class="col g6" style="align-items:center">
+        <span class="t1">${why ? '볼 항목을 먼저 담아 주세요.' : '실행하면 결과가 나옵니다.'}</span>
+        <span class="t2">${esc(why || '설정은 저장할 때 함께 보관됩니다.')}</span>
+      </div>
+      <div class="dcb-chks">
+        ${chk('보기 형식', true, (vizLabel && vizLabel.label) || s.viz, false)}
+        ${chk('나눌 기준', dims.length > 0, dims.join(', ') || '선택 필요', true)}
+        ${chk('볼 값', vals.length > 0, vals.join(', ') || '선택 필요', true)}
+        ${chk('조건', conds.length > 0, conds.join(', ') || '없음', false)}
+      </div></div>`);
+    const run = el(`<button class="btn pri" ${BUILD.running ? 'disabled' : ''}>
+      ${ic14('play')}${BUILD.running ? '실행 중…' : '실행'}</button>`);
+    run.onclick = buildRun;
+    box.appendChild(run);
+    card.appendChild(box); host.appendChild(card); return;
+  }
+
+  /* 표 — 데이터 미리보기와 같은 문법을 쓴다. 다른 도구처럼 느껴지지 않게. */
+  const h = BUILD.result.headers || BUILD.result.columns;
+  const wrap = el(`<div class="dcb-rbody">
+    <div class="tbl" style="--cols:${h.map(() => 'minmax(120px,1fr)').join(' ')};min-width:100%"></div>
+  </div>`);
+  const t = $('.tbl', wrap);
+  t.appendChild(el(`<div class="th">${h.map(x => `<span>${esc(x)}</span>`).join('')}</div>`));
+  BUILD.result.rows.forEach(r => t.appendChild(el(
+    `<div class="tr static" style="min-height:34px">${r.map(v =>
+      `<span class="mono t12 trunc">${v === null || v === undefined ? '—' : esc(v)}</span>`
+    ).join('')}</div>`)));
+  card.appendChild(wrap);
+  host.appendChild(card);
 }
 
 function anaBuild(p) {
@@ -330,65 +400,88 @@ function anaBuild(p) {
   const model = ((BUILD.opts && BUILD.opts.models) || [])
     .find(m => m.id === BUILD.spec.modelId);
 
-  const band = el(`<div class="ana-top row" style="align-items:center">
-    <button class="iconbtn" id="bBack" title="데이터 선택으로">${ic14('chevl')}</button>
-    <div class="f1 col g4" style="min-width:0">
-      <input class="ana-name" id="bName" placeholder="분석 이름"
-        style="font-size:var(--fs-page)" value="${esc(BUILD.name || '')}">
-      <p class="td row g6" style="margin:0;align-items:center">
-        ${model ? grpTag('DATA MART') : ''}
-        ${model ? `<a class="lnk" id="bToModel" style="font-size:var(--fs-body)"
-          title="이 분석이 쓰는 데이터 모델을 봅니다">${esc(model.name || model.id)}</a>` : ''}</p>
+  /* 상단 바 — 이름과 출처가 한 줄, 동작이 오른쪽. */
+  const bar = el(`<div class="dcb-bar">
+    <div class="row g12" style="min-width:0;align-items:center">
+      <button class="iconbtn" id="bBack" title="목록으로">${ic14('chevl')}</button>
+      <div class="col" style="gap:2px;min-width:0">
+        <input class="dcb-name" id="bName" placeholder="분석 이름"
+          value="${esc(BUILD.name || '')}">
+        <span class="row g6" style="align-items:center;min-width:0">
+          ${grpTag('DATA MART')}
+          <span class="fnt">/</span>
+          <span class="dcb-src trunc">${esc(model ? (model.phys || model.id) : '데이터 미선택')}</span>
+        </span>
+      </div>
     </div>
-      <select class="inp sm" id="bDash" style="max-width:168px">
+    <div class="row" style="flex:none;align-items:center">
+      <select class="inp sm" id="bDash" style="max-width:190px">
         <option value="">대시보드에 넣지 않음</option>
         ${((ANA.data && ANA.data.dashboards) || []).map(d =>
           `<option value="${d.id}">${esc(d.name)}</option>`).join('')}
         <option value="__new">＋ 새 대시보드…</option>
       </select>
       <input class="inp sm" id="bNewDash" placeholder="새 대시보드 이름"
-        style="max-width:160px;display:none">
+        style="max-width:170px;display:none">
       <button class="btn sm" id="bRun" ${BUILD.running ? 'disabled' : ''}>
         ${ic14('play')}${BUILD.running ? '실행 중…' : '실행'}</button>
       <button class="btn pri sm" id="bSave" ${BUILD.saving ? 'disabled' : ''}>
         ${ic14('save')}${BUILD.saving ? '저장 중…' : '저장'}</button>
+    </div>
   </div>`);
-  p.appendChild(band);
-  /* 분석에서 그 데이터가 어디서 왔는지로 되돌아가는 통로. 흐름의 마지막
-     화면에서도 앞 단계를 볼 수 있어야 서비스가 한 덩어리로 읽힌다. */
-  const toModel = $('#bToModel', band);
-  if (toModel) toModel.onclick = () => go('modeling', BUILD.spec.modelId);
+  p.appendChild(bar);
+
   const scroll = el('<div class="ana-scroll"></div>');
-  const wrap = el('<div class="ana-inner"></div>');
-  scroll.appendChild(wrap); p.appendChild(scroll);
-  p = wrap;
+  const grid = el('<div class="dcb-grid"></div>');
+  scroll.appendChild(grid); p.appendChild(scroll);
 
   if (!BUILD.opts) {
-    p.appendChild(el(`<div class="ana-empty">${BUILD.error ? esc(BUILD.error) : '불러오는 중…'}</div>`));
-    $('#bBack', band).onclick = () => { S.anaView = 'pick'; render(); };
+    grid.appendChild(el(`<div class="ana-empty">${
+      BUILD.error ? esc(BUILD.error) : '불러오는 중…'}</div>`));
+    $('#bBack', bar).onclick = () => { S.anaView = 'pick'; render(); };
     return;
   }
 
-  /* 왼쪽은 설정, 오른쪽은 결과. 흐름이 왼→오 로 읽히게 둔다.
-     둘 다 박스를 두지 않는다 — 섹션 제목과 컨트롤만 있다. */
-  const cols = el('<div class="row t g14" style="align-items:flex-start"></div>');
-  const left = el('<div class="col" style="width:320px;flex:none"></div>');
-  const right = el('<div class="col f1" style="min-width:0"></div>');
-  cols.appendChild(left); cols.appendChild(right);
-  p.appendChild(cols);
+  /* 좌 — 설정 패널 */
+  const panel = el('<div class="dcb-panel"></div>');
+  const viz = el(`<div class="dcb-viz">
+    <span class="lb">어떻게 볼까요</span>
+    <div class="tiles"></div></div>`);
+  const tiles = $('.tiles', viz);
+  (BUILD.opts.viz || []).forEach(v => {
+    const on = BUILD.spec.viz === v.key;
+    const b = el(`<button class="dcb-tile ${on ? 'on' : ''}">
+      ${ic14({ table: 'tbl', bar: 'chart', line: 'spark', pie: 'cube', kpi: 'code' }[v.key] || 'chart')}
+      <span>${esc(v.label)}</span></button>`);
+    b.onclick = () => { BUILD.spec.viz = v.key; BUILD.result = null; render(); };
+    tiles.appendChild(b);
+  });
+  panel.appendChild(viz);
+  B_ZONES.forEach(z => panel.appendChild(bZone(z)));
+  const foot = el(`<div class="dcb-pfoot">
+    <span class="t12 fnt">${esc(BUILD.spec.viz)} · 기준 ${BUILD.spec.dimensions.length} · 값 ${BUILD.spec.metrics.length} · 조건 ${BUILD.spec.filters.length}</span>
+    <button class="lnk" id="bReset">초기화</button></div>`);
+  $('#bReset', foot).onclick = () => {
+    buildReset(BUILD.spec.modelId);
+    buildLoadColumns(BUILD.spec.modelId); render();
+  };
+  panel.appendChild(foot);
+  grid.appendChild(panel);
 
-  bViz(left); bDims(left); bMetrics(left); bFilters(left);
+  /* 우 — 결과 */
+  const right = el('<div class="col" style="min-width:0"></div>');
   bResult(right);
+  grid.appendChild(right);
 
-  const sel = $('#bDash', band), nd = $('#bNewDash', band);
+  /* 동작 */
+  const sel = $('#bDash', bar), nd = $('#bNewDash', bar);
   sel.onchange = () => { nd.style.display = sel.value === '__new' ? '' : 'none'; };
-  $('#bName', band).oninput = (e) => { BUILD.name = e.target.value; };
-  $('#bBack', band).onclick = () => { S.anaView = 'pick'; render(); };
-  $('#bRun', band).onclick = buildRun;
-
-  $('#bSave', band).onclick = async () => {
+  $('#bName', bar).oninput = (e) => { BUILD.name = e.target.value; };
+  $('#bBack', bar).onclick = () => { S.anaView = ''; S.bPick = null; render(); };
+  $('#bRun', bar).onclick = buildRun;
+  $('#bSave', bar).onclick = async () => {
     const name = (BUILD.name || '').trim();
-    if (!name) { toast('분석 이름을 입력해 주세요.', 'warn'); $('#bName', band).focus(); return; }
+    if (!name) { toast('분석 이름을 입력해 주세요.', 'warn'); $('#bName', bar).focus(); return; }
     const why = buildBlocked();
     if (why) { toast(why, 'warn'); return; }
     const body = { name, spec: BUILD.spec };
@@ -403,13 +496,12 @@ function anaBuild(p) {
       const r = await api('/analytics/build/save',
         { method: 'POST', body: JSON.stringify(body) });
       toast(`「${r.name}」 저장됨` + (r.dashboardId ? ' · 대시보드에 추가' : ''));
-      ANA.data = null; await anaLoad(true);
-      S.anaView = '';
-      if (r.dashboardId) {
-        anaOpenTab(r.dashboardId);
-      }
+      S.anaView = ''; ANA.data = null; await anaLoad(true);
+      if (r.dashboardId) { delete ANA.frames[r.dashboardId]; anaOpenTab(r.dashboardId); }
     } catch (e) {
       toast((e && e.message) || '저장에 실패했습니다.', 'err');
     } finally { BUILD.saving = false; render(); }
   };
+
+  if (S.bPick) bPicker();
 }

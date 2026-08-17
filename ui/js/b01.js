@@ -25,9 +25,15 @@ function go(page, arg) {
     }
     page = 'modeling'; arg = null;
   } else if (page === 'settings') { settingsModal(); return; }
-  else if (page === 'quality' && arg && ruleById(arg)) {
-    const q = ruleById(arg);
-    S.qSel = q.id; S.vSel = q.id; S.qTab = q.status === 'ok' ? '규칙' : '위반 내역';
+  else if (page === 'quality' && arg) {
+    /* 품질 화면의 인자는 두 가지 모양으로 들어온다.
+         dbt 테스트 id  — 데이터 모델 화면의 품질 규칙 탭, 홈 알림이 준다
+         묶음 규칙 id   — 주소(#/quality/R-1234)가 준다
+       둘 다 «그 규칙의 상세를 열어라» 는 뜻이다. dbt 테스트 id 로 들어오면
+       그 테스트가 속한 묶음을 찾아 열고, 그 테스트를 오류 행의 기본 대상으로
+       잡아 둔다(qOpenRule). */
+    if (ruleById(arg)) qOpenRule(arg);
+    else if (qGroupOf(arg)) { S.qSel = arg; S.qView = 'detail'; S.qDTab = '적용 대상'; }
   }
   if (page === 'pipeline' && !arg) S.pipeNode = null;
 
@@ -58,9 +64,11 @@ function render() {
   if (S.page === 'modeling') afterModelingRender();
   fixTerms(app);          // 화면 용어 통일(데이터 모델링→데이터 모델 등)은 항상 마지막 DOM 에
 
-  /* 홈·품질 — 제목줄(.page-h)을 탭 줄에 합쳐 한 줄을 아낀다.
-     .page-a 는 그릇이라 안엣것만 옮긴다(노드 이동이라 클릭 핸들러가 따라간다). */
-  if (S.page === 'home' || S.page === 'quality') {
+  /* 홈 — 제목줄(.page-h)을 탭 줄에 합쳐 한 줄을 아낀다.
+     .page-a 는 그릇이라 안엣것만 옮긴다(노드 이동이라 클릭 핸들러가 따라간다).
+     품질도 여기 있었으나 빠졌다 — 새 품질 화면은 DS 셸(.wc-shell__head)을 쓰고
+     .page-h 를 만들지 않는다. */
+  if (S.page === 'home') {
     const ph = $('#app .main .page-h');
     if (ph) {
       const strip = ph.nextElementSibling;
@@ -130,7 +138,8 @@ function topbar() {
      드롭다운·사이드바 없이 이 줄이 서비스 전체 이동의 유일한 통로다. */
   const t = el(`<header class="top">
     <button class="brand" id="brandHome" title="홈으로">
-      <span class="brand-m" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a2.4 2.4 0 0 0 2 1a2.4 2.4 0 0 0 2 -1a2.4 2.4 0 0 1 2 -1a2.4 2.4 0 0 1 2 1a2.4 2.4 0 0 0 2 1a2.4 2.4 0 0 0 2 -1a2.4 2.4 0 0 1 2 -1a2.4 2.4 0 0 1 2 1a2.4 2.4 0 0 0 2 1a2.4 2.4 0 0 0 2 -1"/><path d="M4 18l-1 -5h18l-2 4"/><path d="M5 13v-6h8l4 6"/><path d="M7 7v-4h-1"/></svg></span><span class="brand-l">Data Mates</span></button>
+      <svg class="brand-m" viewBox="0 0 64 64" aria-hidden="true"><use href="#dm-mark"/></svg
+      ><span class="brand-l"><span class="brand-w1">DATA</span><span class="brand-w2"> MATES</span></span></button>
     <nav class="gnav" aria-label="전체 페이지 이동"></nav>
     <button class="iconbtn" id="btnHelp" title="현재 메뉴 사용법" style="margin-left:auto">${ic('help')}</button>
     <button class="iconbtn" id="btnNoti" title="알림">${ic('bell')}<span class="dot-n"></span></button>

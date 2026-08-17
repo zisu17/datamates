@@ -10,30 +10,12 @@
 (function () {
   const LSK = 'datamates.catalog.tree.v1';
 
-  /* ── 초기 폴더 구조 ── */
-  const SEED_F = [
-    { id: 's_hos', name: '병원 데이터', grp: 'SOURCE', parent: null },
-    { id: 's_care', name: '진료', grp: 'SOURCE', parent: 's_hos' },
-    { id: 's_exam', name: '검사', grp: 'SOURCE', parent: 's_hos' },
-    { id: 's_quiz', name: '문진', grp: 'SOURCE', parent: 's_hos' },
-    { id: 's_ext', name: '외부 연계 데이터', grp: 'SOURCE', parent: null },
-    { id: 'm_ref', name: '정제 모델', grp: 'DATA MODEL', parent: null },
-    { id: 'm_biz', name: '업무 모델', grp: 'DATA MODEL', parent: null },
-    { id: 'm_kpi', name: '경영지표', grp: 'DATA MODEL', parent: 'm_biz' },
-    { id: 'm_exan', name: '검사 분석', grp: 'DATA MODEL', parent: 'm_biz' },
-  ];
-  const SEED_A = {
-    src_patient: 's_care', src_visit: 's_care',
-    src_exam_result: 's_exam', src_exam_order: 's_exam', src_checkup: 's_quiz',
-    stg_patient: 'm_ref', stg_visit: 'm_ref', dim_patient: 'm_ref',
-    stg_examination_result: 'm_ref', stg_health_checkup: 'm_ref',
-    agg_checkup_summary: 'm_kpi',
-    fct_patient_examination: 'm_exan', agg_daily_examination: 'm_exan',
-  };
-
-  FOLDERS.splice(0, FOLDERS.length);
-  SEED_F.forEach(f => FOLDERS.push(Object.assign({}, f)));
-  D.forEach(d => d.folder = SEED_A[d.id] || null);
+  /* 폴더는 서버가 준다 — api.js 가 부팅 때 /bootstrap 의 folders 로 FOLDERS 를
+     통째로 교체하고, 모델의 folder 값도 서버 값을 그대로 쓴다.
+     예전에는 여기서 예시 트리를 넣고 모델마다 폴더를 붙였는데, 그러면
+     ① 서버가 폴더를 주기 전 한 프레임 동안 없는 폴더가 보였다 사라지고
+     ② `D.forEach(d => d.folder = SEED_A[d.id] || null)` 이 서버가 준 폴더까지
+        null 로 덮어쓸 위험이 있었다. 지금은 손대지 않는다. */
 
   let HID = new Set(), FAV = new Set();
   S.fdrOpen = {}; S.grpOpen = { SOURCE: true, 'DATA MODEL': true, 'DATA MART': true };
@@ -395,26 +377,37 @@
 
   /* ── 항목 행 (모델링 화면) ── */
   function itemRow(d, q, pad, path) {
-    const graph = S.mView === 'graph';
-    const on = !!nodeAt(d.id), st = qStatusOf(d.id);
+    const st = qStatusOf(d.id);
     const fav = FAV.has(d.id);
-    const row = el('<div class="tg-r i ' + (S.sel === d.id ? 'on' : '') + '" tabindex="0" draggable="true"'
+    /* 데이터 맵에서 제외했는가. − 를 누르면 맵에서 빠지고 + 로 되돌린다.
+       카탈로그에서는 계속 보인다 — 지우는 것이 아니라 맵에서만 가리는 것이다. */
+    const off = linHidden(d.id);
+    /* 「폴더 이동」 버튼(data-mv)은 없앴다. 행 자체가 draggable 이고 폴더가 드롭
+       대상이라(dropInto) 끌어다 놓으면 그대로 옮겨진다 — 같은 일을 하는 버튼이
+       행마다 붙어 이름·품질 배지가 들어갈 자리를 먹고 있었다.
+       오른쪽 클릭 메뉴의 「폴더 이동」도 그대로 남아 있어 길이 둘이다. */
+    const row = el('<div class="tg-r i ' + (S.sel === d.id ? 'on' : '') + (off ? ' off' : '')
+      + '" tabindex="0" draggable="true"'
       + ' style="padding-left:' + (pad + 13) + 'px"'
-      + ' title="' + esc2(d.name) + '\n' + esc2(d.phys) + (d.desc ? '\n' + esc2(d.desc) : '') + '">'
+      + ' title="' + esc2(d.name) + '\n' + esc2(d.phys) + (d.desc ? '\n' + esc2(d.desc) : '')
+      + (off ? '\n\n데이터 맵에서 제외됨' : '') + '">'
       + '<span class="tg-i" style="color:' + grpColor(d) + '">' + ic14(d.kind === 'source' ? 'tbl' : 'cube') + '</span>'
       + '<span class="tg-n">' + hit(d.name, q) + '</span>'
       + (fav ? '<span class="tg-fav">' + ic14('star') + '</span>' : '')
       + (st !== 'ok' ? '<span style="color:var(--' + (st === 'err' ? 'err' : 'warn') + ');display:flex;flex:none" title="품질 '
           + (st === 'err' ? '실패' : '주의') + '">' + ic14(st === 'err' ? 'xc' : 'alert') + '</span>' : '')
       + (path ? '<span class="tg-path">' + esc2(path) + '</span>' : '')
-      + '<button class="tg-b" data-mv title="폴더 이동">' + ic14('move') + '</button>'
-      + (graph ? (on ? '<button class="tg-b" data-rm title="관계도에서 제거">' + ic14('minus') + '</button>'
-                     : '<button class="tg-b" data-add title="관계도에 추가">' + ic14('plus') + '</button>') : '') + '</div>');
+      + (off ? '<button class="tg-b" data-mapon title="데이터 맵에 다시 넣기">' + ic14('plus') + '</button>'
+             : '<button class="tg-b" data-mapoff title="데이터 맵에서 제외">' + ic14('minus') + '</button>')
+      + '</div>');
     row.onclick = (ev) => { if (ev.target.closest('button')) return;
-      S.sel = d.id; if (graph && !nodeAt(d.id)) addNodeFromCatalog(d.id); render(); };
-    $('[data-mv]', row).onclick = (ev) => { ev.stopPropagation(); moveItem(d); };
-    const a = $('[data-add]', row); if (a) a.onclick = (ev) => { ev.stopPropagation(); addNodeFromCatalog(d.id); render(); };
-    const rm = $('[data-rm]', row); if (rm) rm.onclick = (ev) => { ev.stopPropagation(); removeNode(d.id, false); };
+      /* 맵에서 빠진 모델을 고르면 볼 것이 없다 — 누르면 다시 넣고 고른다. */
+      if (linHidden(d.id)) { linToggleHide(d.id); S.sel = d.id; render(); return; }
+      S.sel = d.id; render(); };
+    const mo = $('[data-mapoff]', row);
+    if (mo) mo.onclick = (ev) => { ev.stopPropagation(); linToggleHide(d.id); };
+    const mn = $('[data-mapon]', row);
+    if (mn) mn.onclick = (ev) => { ev.stopPropagation(); linToggleHide(d.id); };
     return row;
   }
 
@@ -435,7 +428,7 @@
         const onN = all.filter(id => !HID.has(id)).length;
         const gh = el('<button style="' + rowCss + ';font-weight:600">'
           + '<span style="width:13px;height:13px;flex:none;border-radius:3px;border:1px solid var(--line);'
-          + 'display:grid;place-items:center;background:' + (onN ? 'var(--accent, #2b6cf6)' : 'transparent') + ';'
+          + 'display:grid;place-items:center;background:' + (onN ? 'var(--pri)' : 'transparent') + ';'
           + 'color:#fff">' + (onN ? (onN === all.length ? ic14('check') : '<span style="width:7px;height:2px;background:#fff"></span>') : '') + '</span>'
           + '<span style="flex:1">' + g + '</span>'
           + '<span class="t11 fnt">' + onN + ' / ' + all.length + '</span></button>');
@@ -450,7 +443,7 @@
             const r = el('<button style="' + rowCss + ';padding-left:' + (14 + depth * 15) + 'px;'
               + (par ? 'opacity:.45' : '') + '">'
               + '<span style="width:13px;height:13px;flex:none;border-radius:3px;border:1px solid var(--line);'
-              + 'display:grid;place-items:center;background:' + (on ? 'var(--accent, #2b6cf6)' : 'transparent') + ';color:#fff">'
+              + 'display:grid;place-items:center;background:' + (on ? 'var(--pri)' : 'transparent') + ';color:#fff">'
               + (on ? ic14('check') : '') + '</span>'
               + '<span style="color:' + (par ? 'var(--faint)' : 'inherit') + '">' + esc2(f.name) + '</span>'
               + '<span class="t11 fnt sp">' + rollup(f.id) + '</span></button>');

@@ -14,7 +14,9 @@ const PDOCK_MODEL_TABS = ['빌드 정보', '품질 결과', '로그'];
 
 function pipeDock(pp) {
   const g = pgraph(pp), runs = runsG(pp), r = R();
-  const p = el(`<div class="dock pdock" style="flex:0 1 auto;max-height:60%">
+  /* 위 한계는 dockMaxH(b45) 와 같은 규칙이다 — 흐름도 132px 만 남기고 올릴 수 있다.
+     60% 로 묶여 있던 동안에는 그립을 끝까지 끌어도 절반쯤에서 멈췄다. */
+  const p = el(`<div class="dock pdock" style="flex:0 1 auto;max-height:calc(100% - 132px)">
     <div class="grip-h" id="gripPH" title="높이 조절"></div></div>`);
   if (!PDOCK_TABS.includes(S.pipeTab)) S.pipeTab = '빌드 정보';
   const modelTab = PDOCK_MODEL_TABS.includes(S.pipeTab);
@@ -154,7 +156,8 @@ function pipeDockChrome(p) {
   const grip = $('.grip-h', p);
   if (S.pdockMin) { if (grip) grip.remove(); p.style.height = ''; return p; }
 
-  p.style.height = (S.pdockH || 260) + 'px';
+  /* 저장된 높이가 지금 화면보다 크면(창을 줄였을 때) 흐름도가 0 이 된다 */
+  p.style.height = Math.min(S.pdockH || 260, dockMaxH(p)) + 'px';
   /* (칸 나누기는 pipeDock 이 한 곳에서 정한다 — 여기서 224px 로 다시 쓰던 층은 제거.
      칸을 억지로 좁혀 두 줄을 유지하면 긴 경로가 옆 칸을 파고들었다.) */
 
@@ -163,7 +166,7 @@ function pipeDockChrome(p) {
     const prev = p.style.transition; p.style.transition = 'none';
     S.pdockUser = true;
     const move = (e) => { const r = p.getBoundingClientRect();
-      S.pdockH = Math.max(PDOCK_MIN, Math.min(PDOCK_MAX, r.bottom - e.clientY));
+      S.pdockH = Math.max(PDOCK_MIN, Math.min(dockMaxH(p), r.bottom - e.clientY));
       p.style.height = S.pdockH + 'px'; };
     const up = () => { grip.classList.remove('on'); p.style.transition = prev;
       document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); render(); };

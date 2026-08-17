@@ -17,7 +17,7 @@
    화면에서 마트 · 데이터 마트 같은 흔들리는 표기를 쓰지 않는다 — DATA MART 다. */
 const GRP = { SRC: 'SOURCE', MODEL: 'DATA MODEL', MART: 'DATA MART' };
 const GRPS = [GRP.SRC, GRP.MODEL, GRP.MART];
-const KINDC = { 'SOURCE': '#94A3B8', 'DATA MODEL': '#6366F1', 'DATA MART': '#0E9F6E' };
+const KINDC = { 'SOURCE': 'var(--grays-gray)', 'DATA MODEL': 'var(--accents-indigo)', 'DATA MART': 'var(--accents-green)' };
 const isMart = (x) => { const d = typeof x === 'string' ? byId(x) : x; return !!(d && d.isMart); };
 const grpOf = (x) => {
   const d = typeof x === 'string' ? byId(x) : x;
@@ -148,7 +148,7 @@ HELP.pipeline.items = [
    양 끝이라 «앞뒤로 무엇이 이어지는가» 를 여기서 말해 준다. */
 HELP.ingest = { t: '데이터 수집', items: [
   '외부 데이터 소스에 연결해 수집기를 만듭니다. 흐름의 시작점입니다.',
-  '수집 대상·적재 방식(덧붙이기·전체 교체)·실행 방식(예약·수동)을 정합니다.',
+  '수집 대상·적재 방식(증분 적재·전체 적재)·실행 방식(예약·수동)을 정합니다.',
   '가공은 하지 않습니다 — 원본 그대로 넣고, 정제는 데이터 모델이 맡습니다.',
   '적재된 데이터는 SOURCE 가 되어 데이터 모델 화면에서 입력으로 쓸 수 있습니다.',
   '수집 상세의 다음 단계 에서 SOURCE 확인 · 데이터 모델 만들기로 바로 넘어갑니다.',

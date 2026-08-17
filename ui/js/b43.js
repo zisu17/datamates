@@ -76,9 +76,9 @@ function taskGraph(pp) {
 /* 3) 연결선은 넘겨받은 그래프를 그린다 */
 drawPEdges = function (pp, host, svg, edit, gOv) {
   svg.innerHTML = `<defs><marker id="pah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-    <path d="M 0 0 L 10 5 L 0 10 z" fill="#A8B2C6"/></marker>
+    <path d="M 0 0 L 10 5 L 0 10 z" style="fill:rgba(0,0,0,.22)"/></marker>
     <marker id="pahg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-    <path d="M 0 0 L 10 5 L 0 10 z" fill="#0E9F6E"/></marker></defs>`;
+    <path d="M 0 0 L 10 5 L 0 10 z" style="fill:var(--w-success)"/></marker></defs>`;
   const g = gOv || pgraph(pp), runs = edit ? null : runsG(pp);
   g.edges.forEach(e => {
     const a = nodeOf(g, e.from), b = nodeOf(g, e.to); if (!a || !b) return;
@@ -99,7 +99,8 @@ drawPEdges = function (pp, host, svg, edit, gOv) {
     }
     const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     p.setAttribute('d', dd); p.setAttribute('fill', 'none');
-    p.setAttribute('stroke', done ? '#0E9F6E' : '#A8B2C6');
+    /* style 로 넣는다 — SVG 의 stroke 는 presentation attribute 라 var() 가 풀리지 않는다 */
+    p.style.stroke = done ? 'var(--w-success)' : 'rgba(0,0,0,.22)';
     p.setAttribute('stroke-width', done ? '2.4' : '1.7');
     if (!done && runs) p.setAttribute('stroke-dasharray', '6 4');
     p.setAttribute('marker-end', done ? 'url(#pahg)' : 'url(#pah)');
@@ -119,11 +120,14 @@ pipeCanvas = function (pp, edit) {
   /* 머리말은 실행 단위 수만 센다. 완료 표식은 일을 하지 않으므로 빼고 센다. */
   const headLabel = `Task ${g.nodes.filter(n => n.kind !== 'marker').length}개`;
   const holder = el(`<div class="f1" style="min-width:0;min-height:0;position:relative;display:flex;flex-direction:column">
-    <div class="row g8" style="padding:9px 16px;border-bottom:1px solid var(--line-2);background:var(--surface);flex:none">
-      <span class="b6 t13">${edit ? '가공 흐름 구성' : '실행 흐름'}</span>
-      ${edit ? '' : `<span class="t11 fnt">${headLabel}</span>`}
-      <span class="row g6 sp">${edit ? '' : ['ok', 'run', 'err', 'skip', 'wait'].map(s => stBadge(s)).join('')}</span></div>
-    <div class="canvas-wrap" id="pfWrap" style="background-color:#F4F6FB">
+    ${/* 보기 모드에서는 이 줄을 통째로 두지 않는다.
+         Task 수와 상태 범례는 위 .mod-bar 로 옮겼다 — 상태·실행 시각과 같은
+         «이 파이프라인이 지금 어떤가» 라서 한 줄에 있어야 읽힌다. 둘로 나눠 두면
+         두 줄이 각각 반쯤 빈 채로 세로를 먹는다.
+         구성 모드는 자기 막대가 없으므로 이 줄을 그대로 쓴다. */ ''}
+    ${edit ? `<div class="row g8" style="padding:9px 16px;border-bottom:1px solid var(--line-2);background:var(--surface);flex:none">
+      <span class="b6 t13">가공 흐름 구성</span></div>` : ''}
+    <div class="canvas-wrap" id="pfWrap" style="background-color:var(--canvas-pipe)">
       <div id="pfSizer" style="position:relative">
         <div class="canvas" id="pf" style="width:${w}px;height:${h}px">
           <svg class="edges" id="pfEdges" style="pointer-events:${edit ? 'auto' : 'none'};overflow:visible"></svg>
@@ -175,7 +179,7 @@ pipeCanvas = function (pp, edit) {
       const port = ev.target.closest('[data-pport]'); if (!port) return;
       ev.preventDefault(); ev.stopPropagation();
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      path.setAttribute('stroke', '#0E9F6E'); path.setAttribute('stroke-width', '2.2');
+      path.style.stroke = 'var(--w-success)'; path.setAttribute('stroke-width', '2.2');
       path.setAttribute('fill', 'none'); path.setAttribute('stroke-dasharray', '5 4');
       svg.appendChild(path);
       link = { from: port.dataset.pport, path };

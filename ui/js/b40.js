@@ -8,24 +8,11 @@ Object.assign(RUNST, {
   srcwarn: { label: '원천 · 지연', icon: 'alert', tone: 'warn' },
 });
 
-/* 병원 방문 데이터 수집 은 원천만 있던 파이프라인 —
-   dbt DAG 가 되도록 정제 모델을 붙인다 */
-if (!byId('stg_visit')) {
-  D.push({ id: 'stg_visit', name: '병원 방문 정제', phys: 'staging.stg_visit', layer: '정제', kind: 'model',
-    desc: '병원 방문 원천에서 방문번호가 비었거나 중복인 행을 걸러낸 정제 데이터입니다.',
-    owner: '이지훈', team: '데이터플랫폼팀', updated: '오늘 09:02', freq: '1시간마다', rows: '1,881,900',
-    quality: 'ok', certified: false, usable: true, fav: false, mat: 'View', tags: ['정제', '방문'],
-    cols: [['visit_id', '방문번호', 'STRING', '필수'], ['patient_id', '환자번호', 'STRING', '필수'],
-           ['visit_dt', '방문일자', 'DATE', '필수'], ['visit_type', '방문구분', 'STRING', '선택'],
-           ['dept_cd', '진료과코드', 'STRING', '선택']],
-    prev: [['V20260803A0091', 'P00012841', '2026-08-03', '외래', 'IM']],
-    sql: "select\n    visit_id,\n    patient_id,\n    visit_dt,\n    visit_type,\n    dept_cd\nfrom {{ source('raw_hospital', 'hospital_visit') }}\nwhere visit_id is not null" });
-}
-(function () {
-  const pv = PIPES.find(x => x.id === 'pl_visit');
-  if (pv) { pv.name = '병원 방문 데이터 정제'; pv.targets = ['stg_visit']; pv.graph = null; pv.rg = null; pv.__rsig = null; }
-  const g = WSGROUPS.find(w => w.id === 'ws_ingest'); if (g) g.name = '방문 데이터';
-})();
+/* (예시 모델·파이프라인 보정 — 제거.
+   시드 카탈로그가 있던 시절, 원천만 있던 예시 파이프라인에 정제 모델을 얹어
+   dbt DAG 모양을 맞추던 블록이었다. 시드를 비운 지금은 얹을 대상이 없고,
+   실행되면 부팅 전 한 프레임 동안 서버에 없는 모델이 카탈로그에 들어갔다
+   사라진다. RUNST 의 srcok·srcwarn 은 실제 화면이 쓰므로 위에 남겨 둔다.) */
 
 /* 모델 실행 상세 — SOURCE 를 고르면 실행 정보 대신 최신성 정보를 보여준다 */
 /* (pipeDock — 도달 불가. 실행 흐름은 SOURCE 선택을 매 렌더마다 지우므로
