@@ -1,0 +1,346 @@
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1300 660" width="1300" height="660" role="img" aria-labelledby="archify-diagram-title archify-diagram-description">
+        <title id="archify-diagram-title">Data Mates 런타임 아키텍처</title>
+        <desc id="archify-diagram-description">화살표는 호출·개시 방향 — 데이터가 어디로 가는지는 라벨에 있다</desc>
+  <style>
+    /* 라이트가 기본. GitHub 다크 테마는 아래 media 로 받는다. */
+    :root {
+      --page:             #ffffff;
+      --grid:             #e2e8f0;
+      --mask:             #ffffff;
+      --text:             #0f172a;
+      --text-muted:       #64748b;
+      --arrow:            #94a3b8;
+      --arrow-emphasis:   #059669;
+      --frontend-fill:    rgba(34, 211, 238, 0.15);
+      --frontend-stroke:  #0891b2;
+      --backend-fill:     rgba(52, 211, 153, 0.18);
+      --backend-stroke:   #059669;
+      --database-fill:    rgba(167, 139, 250, 0.2);
+      --database-stroke:  #7c3aed;
+      --cloud-fill:       rgba(251, 191, 36, 0.18);
+      --cloud-stroke:     #d97706;
+      --messagebus-fill:  rgba(251, 146, 60, 0.15);
+      --messagebus-stroke:#ea580c;
+      --external-fill:    rgba(148, 163, 184, 0.18);
+      --external-stroke:  #64748b;
+      --security-stroke:  #e11d48;
+      --region-fill:      rgba(251, 191, 36, 0.05);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --page:             #0d1117;
+        --grid:             #15233a;
+        --mask:             #07101e;
+        --text:             #f5fbff;
+        --text-muted:       #9eb0c7;
+        --arrow:            #7890ad;
+        --arrow-emphasis:   #2dd4bf;
+        --frontend-fill:    rgba(6, 182, 212, 0.14);
+        --frontend-stroke:  #67e8f9;
+        --backend-fill:     rgba(16, 185, 129, 0.14);
+        --backend-stroke:   #5eead4;
+        --database-fill:    rgba(139, 92, 246, 0.16);
+        --database-stroke:  #c4b5fd;
+        --cloud-fill:       rgba(245, 158, 11, 0.13);
+        --cloud-stroke:     #fcd34d;
+        --messagebus-fill:  rgba(249, 115, 22, 0.13);
+        --messagebus-stroke:#fdba74;
+        --external-fill:    rgba(71, 85, 105, 0.24);
+        --external-stroke:  #a5b4c7;
+        --security-stroke:  #fb7185;
+        --region-fill:      rgba(245, 158, 11, 0.05);
+      }
+    }
+    .c-grid       { stroke: var(--grid); fill: none; }
+    .c-mask       { fill: var(--mask); stroke: none; }
+    .c-region     { fill: var(--region-fill); stroke: var(--cloud-stroke); stroke-dasharray: 8,4; }
+    .c-frontend   { fill: var(--frontend-fill);   stroke: var(--frontend-stroke); }
+    .c-backend    { fill: var(--backend-fill);    stroke: var(--backend-stroke); }
+    .c-database   { fill: var(--database-fill);   stroke: var(--database-stroke); }
+    .c-cloud      { fill: var(--cloud-fill);      stroke: var(--cloud-stroke); }
+    .c-messagebus { fill: var(--messagebus-fill); stroke: var(--messagebus-stroke); }
+    .c-external   { fill: var(--external-fill);   stroke: var(--external-stroke); }
+    .t-primary    { fill: var(--text); }
+    .t-muted      { fill: var(--text-muted); }
+    .t-frontend   { fill: var(--frontend-stroke); }
+    .t-backend    { fill: var(--backend-stroke); }
+    .t-database   { fill: var(--database-stroke); }
+    .t-cloud      { fill: var(--cloud-stroke); }
+    .t-messagebus { fill: var(--messagebus-stroke); }
+    .t-external   { fill: var(--external-stroke); }
+    .a-default    { stroke: var(--arrow); fill: none; }
+    .a-emphasis   { stroke: var(--arrow-emphasis); fill: none; }
+    .a-security   { stroke: var(--security-stroke); fill: none; stroke-dasharray: 5,5; }
+    .a-dashed     { stroke: var(--database-stroke); fill: none; stroke-dasharray: 4,4; }
+    .m-default    { fill: var(--arrow); }
+    .m-emphasis   { fill: var(--arrow-emphasis); }
+    .m-security   { fill: var(--security-stroke); }
+    .m-dashed     { fill: var(--database-stroke); }
+    .semantic-sigil {
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.35;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      opacity: 0.76;
+    }
+    .semantic-sigil .sigil-fill { fill: currentColor; stroke: none; }
+    .s-frontend   { color: var(--frontend-stroke); }
+    .s-backend    { color: var(--backend-stroke); }
+    .s-database   { color: var(--database-stroke); }
+    .s-cloud      { color: var(--cloud-stroke); }
+    .s-messagebus { color: var(--messagebus-stroke); }
+    .s-external   { color: var(--external-stroke); }
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif; }
+  </style>
+  <rect width="100%" height="100%" fill="var(--page)"/>
+        <!-- Definitions -->
+        <defs>
+          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-default" />
+          </marker>
+          <marker id="arrowhead-emphasis" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-emphasis" />
+          </marker>
+          <marker id="arrowhead-security" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-security" />
+          </marker>
+          <marker id="arrowhead-dashed" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-dashed" />
+          </marker>
+          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" class="c-grid" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+        <!-- Background Grid -->
+        <rect width="100%" height="100%" fill="url(#grid)" />
+        <!-- Boundaries (behind everything) -->
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" x="1000" y="360" width="230" height="270" rx="12" class="c-region" stroke-width="1"/>
+        <text x="1008" y="378" class="t-cloud" font-size="9" font-weight="600">DuckLake 웨어하우스</text>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="1" x="250" y="360" width="470" height="120" rx="12" class="c-region" stroke-width="1"/>
+        <text x="258" y="378" class="t-cloud" font-size="9" font-weight="600">설치형 서버 프로세스</text>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="2" x="490" y="510" width="470" height="120" rx="12" class="c-region" stroke-width="1"/>
+        <text x="498" y="528" class="t-cloud" font-size="9" font-weight="600">Superset 프로세스</text>
+        <!-- Connection paths (before components for correct z-order) -->
+        <path data-edge-from="browser" data-edge-to="api" data-edge-label="HTTPS /api/*" data-edge-key="0" data-edge-id="browser-to-api" data-composition-points="210,425;280,425" d="M 210 425 L 280 425" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="api" data-edge-to="duckdb" data-edge-label="미리보기 조회" data-edge-key="1" data-edge-id="api-to-duckdb" data-composition-points="450,418;520,418" d="M 450 418 L 520 418" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="duckdb" data-edge-to="catalog" data-edge-label="직접 ATTACH · 읽기 전용" data-edge-key="2" data-edge-id="duckdb-to-catalog" data-composition-points="690,425;1030,425" d="M 690 425 L 1030 425" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="api" data-edge-to="metastore" data-edge-label="파이프라인 정의 저장" data-edge-key="3" data-edge-id="api-to-metastore" data-composition-points="365,460;365,540" d="M 365 460 L 365 540" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="api" data-edge-to="superset" data-edge-label="/superset/* 프록시 · 데이터셋 동기화" data-edge-key="4" data-edge-id="api-to-superset" data-composition-points="450,432;485,432;485,575;520,575" d="M 450 432 L 477 432 Q 485 432 485 440 L 485 567 Q 485 575 493 575 L 520 575" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="api" data-edge-to="airflow" data-edge-label="DAG 생성 · 실행 트리거" data-edge-key="5" data-edge-id="api-to-airflow" data-composition-points="358,390;358,280" d="M 358 390 L 358 280" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="api" data-edge-to="dbt" data-edge-label="모델 SQL 쓰기 · manifest 읽기" data-edge-key="6" data-edge-id="api-to-dbt" data-composition-points="372,390;372,366;496,366;496,252;520,252" d="M 372 390 L 372 374 Q 372 366 380 366 L 488 366 Q 496 366 496 358 L 496 260 Q 496 252 504 252 L 520 252" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="airflow" data-edge-to="ingest" data-edge-label="수집 태스크" data-edge-key="7" data-edge-id="airflow-to-ingest" data-composition-points="365,210;365,130" d="M 365 210 L 365 130" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="airflow" data-edge-to="dbt" data-edge-label="dbt build" data-edge-key="8" data-edge-id="airflow-to-dbt" data-composition-points="450,238;520,238" d="M 450 238 L 520 238" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="ingest" data-edge-to="sources" data-edge-label="원본 조회 (GET)" data-edge-key="9" data-edge-id="ingest-to-sources" data-composition-points="280,95;210,95" d="M 280 95 L 210 95" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="dbt" data-edge-to="compute" data-edge-label="dbt-duckdb" data-edge-key="10" data-edge-id="dbt-to-compute" data-composition-points="690,245;760,245" d="M 690 245 L 760 245" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="ingest" data-edge-to="catalog" data-edge-label="raw 테이블 커밋" data-edge-key="11" data-edge-id="ingest-to-catalog" data-composition-points="450,95;1115,95;1115,390" d="M 450 95 L 1107 95 Q 1115 95 1115 103 L 1115 390" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="compute" data-edge-to="catalog" data-edge-label="DuckLake 테이블 쓰기" data-edge-key="12" data-edge-id="compute-to-catalog" data-composition-points="930,245;980,245;980,411;1030,411" d="M 930 245 L 972 245 Q 980 245 980 253 L 980 403 Q 980 411 988 411 L 1030 411" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="catalog" data-edge-to="minio" data-edge-label="테이블 위치 참조" data-edge-key="13" data-edge-id="catalog-to-minio" data-composition-points="1115,460;1115,540" d="M 1115 460 L 1115 540" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="superset" data-edge-to="supduck" data-edge-label="차트 질의" data-edge-key="14" data-edge-id="superset-to-supduck" data-composition-points="690,575;760,575" d="M 690 575 L 760 575" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="supduck" data-edge-to="catalog" data-edge-label="같은 DuckLake 카탈로그 ATTACH" data-edge-key="15" data-edge-id="supduck-to-catalog" data-composition-points="930,575;980,575;980,439;1030,439" d="M 930 575 L 972 575 Q 980 575 980 567 L 980 447 Q 980 439 988 439 L 1030 439" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <!-- Components -->
+        <g id="node-sources" data-node-id="sources" data-node-label="외부 데이터 소스" data-node-kind="external" data-node-sublabel="CSV · JSON · XML · REST API" data-node-context="Architecture component">
+          <title>외부 데이터 소스 · CSV · JSON · XML · REST API · Architecture component</title>
+          <rect x="40" y="60" width="170" height="70" rx="6" class="c-mask"/>
+          <rect x="40" y="60" width="170" height="70" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(46 66) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text x="125" y="93" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">외부 데이터 소스</text>
+        <text data-detail="context" x="125" y="109" class="t-muted" font-size="9" text-anchor="middle">CSV · JSON · XML · REST API</text>
+        </g>
+        <g id="node-ingest" data-node-id="ingest" data-node-label="수집기" data-node-kind="backend" data-node-sublabel="DuckDB · 원본 보존" data-node-context="Architecture component">
+          <title>수집기 · DuckDB · 원본 보존 · Architecture component</title>
+          <rect x="280" y="60" width="170" height="70" rx="6" class="c-mask"/>
+          <rect x="280" y="60" width="170" height="70" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(286 66) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text x="365" y="93" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">수집기</text>
+        <text data-detail="context" x="365" y="109" class="t-muted" font-size="9" text-anchor="middle">DuckDB · 원본 보존</text>
+        </g>
+        <g id="node-airflow" data-node-id="airflow" data-node-label="Airflow" data-node-kind="backend" data-node-sublabel="생성 DAG datamates_*" data-node-tag=":8080" data-node-context="Architecture component">
+          <title>Airflow · 생성 DAG datamates_* · Architecture component · :8080</title>
+          <rect x="280" y="210" width="170" height="70" rx="6" class="c-mask"/>
+          <rect x="280" y="210" width="170" height="70" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(286 216) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text x="365" y="243" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Airflow</text>
+        <text data-detail="context" x="365" y="259" class="t-muted" font-size="9" text-anchor="middle">생성 DAG datamates_*</text>
+        </g>
+        <g id="node-dbt" data-node-id="dbt" data-node-label="dbt 프로젝트" data-node-kind="backend" data-node-sublabel="모델 SSoT · manifest.json" data-node-context="Architecture component">
+          <title>dbt 프로젝트 · 모델 SSoT · manifest.json · Architecture component</title>
+          <rect x="520" y="210" width="170" height="70" rx="6" class="c-mask"/>
+          <rect x="520" y="210" width="170" height="70" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(526 216) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text x="605" y="243" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">dbt 프로젝트</text>
+        <text data-detail="context" x="605" y="259" class="t-muted" font-size="9" text-anchor="middle">모델 SSoT · manifest.json</text>
+        </g>
+        <g id="node-compute" data-node-id="compute" data-node-label="DuckDB" data-node-kind="backend" data-node-sublabel="dbt-duckdb · 변환 엔진" data-node-context="Architecture component">
+          <title>DuckDB · dbt-duckdb · 변환 엔진 · Architecture component</title>
+          <rect x="760" y="210" width="170" height="70" rx="6" class="c-mask"/>
+          <rect x="760" y="210" width="170" height="70" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(766 216) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text x="845" y="243" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">DuckDB</text>
+        <text data-detail="context" x="845" y="259" class="t-muted" font-size="9" text-anchor="middle">dbt-duckdb · 변환 엔진</text>
+        </g>
+        <g id="node-browser" data-node-id="browser" data-node-label="브라우저 UI" data-node-kind="frontend" data-node-sublabel="ui/ 정적 SPA" data-node-context="Architecture component">
+          <title>브라우저 UI · ui/ 정적 SPA · Architecture component</title>
+          <rect x="40" y="390" width="170" height="70" rx="6" class="c-mask"/>
+          <rect x="40" y="390" width="170" height="70" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(46 396) scale(0.6875)">
+            <rect x="2" y="3" width="12" height="10" rx="2"/>
+            <path d="M2 6.5h12"/>
+            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
+            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
+          </g>
+          <text x="125" y="423" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">브라우저 UI</text>
+        <text data-detail="context" x="125" y="439" class="t-muted" font-size="9" text-anchor="middle">ui/ 정적 SPA</text>
+        </g>
+        <g id="node-api" data-node-id="api" data-node-label="Data Mates 서버" data-node-kind="backend" data-node-sublabel="FastAPI · /api/*" data-node-tag=":8000" data-node-context="설치형 서버 프로세스">
+          <title>Data Mates 서버 · FastAPI · /api/* · 설치형 서버 프로세스 · :8000</title>
+          <rect x="280" y="390" width="170" height="70" rx="6" class="c-mask"/>
+          <rect x="280" y="390" width="170" height="70" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(286 396) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text x="365" y="423" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Data Mates 서버</text>
+        <text data-detail="context" x="365" y="439" class="t-muted" font-size="9" text-anchor="middle">FastAPI · /api/*</text>
+        </g>
+        <g id="node-duckdb" data-node-id="duckdb" data-node-label="DuckDB" data-node-kind="database" data-node-sublabel="warehouse.py · 미리보기" data-node-context="설치형 서버 프로세스">
+          <title>DuckDB · warehouse.py · 미리보기 · 설치형 서버 프로세스</title>
+          <rect x="520" y="390" width="170" height="70" rx="6" class="c-mask"/>
+          <rect x="520" y="390" width="170" height="70" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(526 396) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text x="605" y="423" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">DuckDB</text>
+        <text data-detail="context" x="605" y="439" class="t-muted" font-size="9" text-anchor="middle">warehouse.py · 미리보기</text>
+        </g>
+        <g id="node-catalog" data-node-id="catalog" data-node-label="DuckLake 카탈로그" data-node-kind="cloud" data-node-sublabel="PostgreSQL 메타데이터" data-node-tag=":5432" data-node-context="DuckLake 웨어하우스">
+          <title>DuckLake 카탈로그 · PostgreSQL 메타데이터 · DuckLake 웨어하우스 · :5432</title>
+          <rect x="1030" y="390" width="170" height="70" rx="6" class="c-mask"/>
+          <rect x="1030" y="390" width="170" height="70" rx="6" class="c-cloud" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(1036 396) scale(0.6875)">
+            <path d="M4.3 12.5h7.3a2.4 2.4 0 0 0 .2-4.8 4 4 0 0 0-7.5-1.3A3.1 3.1 0 0 0 4.3 12.5Z"/>
+          </g>
+          <text x="1115" y="423" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">DuckLake 카탈로그</text>
+        <text data-detail="context" x="1115" y="439" class="t-muted" font-size="9" text-anchor="middle">PostgreSQL 메타데이터</text>
+        </g>
+        <g id="node-metastore" data-node-id="metastore" data-node-label="플랫폼 메타DB" data-node-kind="database" data-node-sublabel="PostgreSQL · 운영 메타데이터" data-node-context="Architecture component">
+          <title>플랫폼 메타DB · PostgreSQL · 운영 메타데이터 · Architecture component</title>
+          <rect x="280" y="540" width="170" height="70" rx="6" class="c-mask"/>
+          <rect x="280" y="540" width="170" height="70" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(286 546) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text x="365" y="573" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">플랫폼 메타DB</text>
+        <text data-detail="context" x="365" y="589" class="t-muted" font-size="9" text-anchor="middle">PostgreSQL · 운영 메타데이터</text>
+        </g>
+        <g id="node-superset" data-node-id="superset" data-node-label="Superset" data-node-kind="external" data-node-sublabel="차트 · 대시보드" data-node-context="Superset 프로세스">
+          <title>Superset · 차트 · 대시보드 · Superset 프로세스</title>
+          <rect x="520" y="540" width="170" height="70" rx="6" class="c-mask"/>
+          <rect x="520" y="540" width="170" height="70" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(526 546) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text x="605" y="573" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Superset</text>
+        <text data-detail="context" x="605" y="589" class="t-muted" font-size="9" text-anchor="middle">차트 · 대시보드</text>
+        </g>
+        <g id="node-supduck" data-node-id="supduck" data-node-label="DuckDB" data-node-kind="database" data-node-sublabel="gunicorn 워커마다 1개" data-node-context="Superset 프로세스">
+          <title>DuckDB · gunicorn 워커마다 1개 · Superset 프로세스</title>
+          <rect x="760" y="540" width="170" height="70" rx="6" class="c-mask"/>
+          <rect x="760" y="540" width="170" height="70" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(766 546) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text x="845" y="573" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">DuckDB</text>
+        <text data-detail="context" x="845" y="589" class="t-muted" font-size="9" text-anchor="middle">gunicorn 워커마다 1개</text>
+        </g>
+        <g id="node-minio" data-node-id="minio" data-node-label="MinIO" data-node-kind="cloud" data-node-sublabel="Parquet on S3" data-node-tag=":9000" data-node-context="DuckLake 웨어하우스">
+          <title>MinIO · Parquet on S3 · DuckLake 웨어하우스 · :9000</title>
+          <rect x="1030" y="540" width="170" height="70" rx="6" class="c-mask"/>
+          <rect x="1030" y="540" width="170" height="70" rx="6" class="c-cloud" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(1036 546) scale(0.6875)">
+            <path d="M4.3 12.5h7.3a2.4 2.4 0 0 0 .2-4.8 4 4 0 0 0-7.5-1.3A3.1 3.1 0 0 0 4.3 12.5Z"/>
+          </g>
+          <text x="1115" y="573" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">MinIO</text>
+        <text data-detail="context" x="1115" y="589" class="t-muted" font-size="9" text-anchor="middle">Parquet on S3</text>
+        </g>
+        <!-- Connection labels -->
+        <g data-detail="context" data-edge-from="browser" data-edge-to="api" data-edge-label="HTTPS /api/*" data-edge-key="0" data-edge-id="browser-to-api">
+          <rect x="211.2" y="405" width="67.6" height="14" rx="3" class="c-mask"/>
+          <text x="245" y="415" class="t-backend" font-size="8" text-anchor="middle">HTTPS /api/*</text>
+        </g>
+        <g data-detail="context" data-edge-from="api" data-edge-to="duckdb" data-edge-label="미리보기 조회" data-edge-key="1" data-edge-id="api-to-duckdb">
+          <rect x="448.8" y="398" width="72.4" height="14" rx="3" class="c-mask"/>
+          <text x="485" y="408" class="t-backend" font-size="8" text-anchor="middle">미리보기 조회</text>
+        </g>
+        <g data-detail="context" data-edge-from="duckdb" data-edge-to="catalog" data-edge-label="직접 ATTACH · 읽기 전용" data-edge-key="2" data-edge-id="duckdb-to-catalog">
+          <rect x="799.8" y="405" width="120.39999999999999" height="14" rx="3" class="c-mask"/>
+          <text x="860" y="415" class="t-backend" font-size="8" text-anchor="middle">직접 ATTACH · 읽기 전용</text>
+        </g>
+        <g data-detail="context" data-edge-from="api" data-edge-to="metastore" data-edge-label="파이프라인 정의 저장" data-edge-key="3" data-edge-id="api-to-metastore">
+          <rect x="312" y="464" width="106" height="14" rx="3" class="c-mask"/>
+          <text x="365" y="474" class="t-muted" font-size="8" text-anchor="middle">파이프라인 정의 저장</text>
+        </g>
+        <g data-detail="context" data-edge-from="api" data-edge-to="superset" data-edge-label="/superset/* 프록시 · 데이터셋 동기화" data-edge-key="4" data-edge-id="api-to-superset">
+          <rect x="393.6" y="483.5" width="182.79999999999998" height="14" rx="3" class="c-mask"/>
+          <text x="485" y="493.5" class="t-muted" font-size="8" text-anchor="middle">/superset/* 프록시 · 데이터셋 동기화</text>
+        </g>
+        <g data-detail="context" data-edge-from="api" data-edge-to="airflow" data-edge-label="DAG 생성 · 실행 트리거" data-edge-key="5" data-edge-id="api-to-airflow">
+          <rect x="230.2" y="370" width="115.6" height="14" rx="3" class="c-mask"/>
+          <text x="288" y="380" class="t-muted" font-size="8" text-anchor="middle">DAG 생성 · 실행 트리거</text>
+        </g>
+        <g data-detail="context" data-edge-from="api" data-edge-to="dbt" data-edge-label="모델 SQL 쓰기 · manifest 읽기" data-edge-key="6" data-edge-id="api-to-dbt">
+          <rect x="419.4" y="346" width="149.2" height="14" rx="3" class="c-mask"/>
+          <text x="494" y="356" class="t-muted" font-size="8" text-anchor="middle">모델 SQL 쓰기 · manifest 읽기</text>
+        </g>
+        <g data-detail="context" data-edge-from="airflow" data-edge-to="ingest" data-edge-label="수집 태스크" data-edge-key="7" data-edge-id="airflow-to-ingest">
+          <rect x="333.6" y="190" width="62.8" height="14" rx="3" class="c-mask"/>
+          <text x="365" y="200" class="t-muted" font-size="8" text-anchor="middle">수집 태스크</text>
+        </g>
+        <g data-detail="context" data-edge-from="airflow" data-edge-to="dbt" data-edge-label="dbt build" data-edge-key="8" data-edge-id="airflow-to-dbt">
+          <rect x="458.4" y="218" width="53.199999999999996" height="14" rx="3" class="c-mask"/>
+          <text x="485" y="228" class="t-muted" font-size="8" text-anchor="middle">dbt build</text>
+        </g>
+        <g data-detail="context" data-edge-from="ingest" data-edge-to="sources" data-edge-label="원본 조회 (GET)" data-edge-key="9" data-edge-id="ingest-to-sources">
+          <rect x="204" y="134" width="82" height="14" rx="3" class="c-mask"/>
+          <text x="245" y="144" class="t-muted" font-size="8" text-anchor="middle">원본 조회 (GET)</text>
+        </g>
+        <g data-detail="context" data-edge-from="dbt" data-edge-to="compute" data-edge-label="dbt-duckdb" data-edge-key="10" data-edge-id="dbt-to-compute">
+          <rect x="684" y="284" width="82" height="14" rx="3" class="c-mask"/>
+          <text x="725" y="294" class="t-muted" font-size="8" text-anchor="middle">dbt-duckdb</text>
+        </g>
+        <g data-detail="context" data-edge-from="ingest" data-edge-to="catalog" data-edge-label="raw 테이블 커밋" data-edge-key="11" data-edge-id="ingest-to-catalog">
+          <rect x="1074" y="222.5" width="82" height="14" rx="3" class="c-mask"/>
+          <text x="1115" y="232.5" class="t-muted" font-size="8" text-anchor="middle">raw 테이블 커밋</text>
+        </g>
+        <g data-detail="context" data-edge-from="compute" data-edge-to="catalog" data-edge-label="DuckLake 테이블 쓰기" data-edge-key="12" data-edge-id="compute-to-catalog">
+          <rect x="929.4" y="308" width="101.2" height="14" rx="3" class="c-mask"/>
+          <text x="980" y="318" class="t-muted" font-size="8" text-anchor="middle">DuckLake 테이블 쓰기</text>
+        </g>
+        <g data-detail="context" data-edge-from="catalog" data-edge-to="minio" data-edge-label="테이블 위치 참조" data-edge-key="13" data-edge-id="catalog-to-minio">
+          <rect x="1071.6" y="464" width="86.8" height="14" rx="3" class="c-mask"/>
+          <text x="1115" y="474" class="t-messagebus" font-size="8" text-anchor="middle">테이블 위치 참조</text>
+        </g>
+        <g data-detail="context" data-edge-from="superset" data-edge-to="supduck" data-edge-label="차트 질의" data-edge-key="14" data-edge-id="superset-to-supduck">
+          <rect x="698.4" y="555" width="53.199999999999996" height="14" rx="3" class="c-mask"/>
+          <text x="725" y="565" class="t-muted" font-size="8" text-anchor="middle">차트 질의</text>
+        </g>
+        <g data-detail="context" data-edge-from="supduck" data-edge-to="catalog" data-edge-label="같은 DuckLake 카탈로그 ATTACH" data-edge-key="15" data-edge-id="supduck-to-catalog">
+          <rect x="917.4" y="487" width="125.19999999999999" height="14" rx="3" class="c-mask"/>
+          <text x="980" y="497" class="t-muted" font-size="8" text-anchor="middle">같은 DuckLake 카탈로그 ATTACH</text>
+        </g>
+        <!-- Legend -->
+      </svg>

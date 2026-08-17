@@ -60,72 +60,7 @@ Data Mates는 기존 dbt 프로젝트와 실행 환경을 그대로 연결해 **
 
 ## 🏗️ Architecture
 
-```mermaid
-flowchart LR
-    API["HTTP API"]
-    FILE["CSV · JSONL"]
-    DBTP["dbt Project"]
-
-    APP["Data Mates<br/>FastAPI · Web UI"]
-    AIR["Airflow<br/>Orchestration"]
-    TRANS["dbt · DuckDB<br/>Transformation"]
-    LAKE["DuckLake<br/>Catalog · PostgreSQL"]
-    MINIO[("MinIO<br/>Parquet on S3")]
-    DUCK["DuckDB<br/>Query Engine"]
-    SUPER["Superset<br/>Analytics"]
-
-    API -->|Collect| APP
-    FILE -->|Collect| APP
-    DBTP <-->|Models · Metadata| APP
-    APP -->|Create DAG · Run| AIR
-    AIR -->|dbt build| TRANS
-    APP -->|DuckDB ingest| LAKE
-    TRANS -->|Write tables| LAKE
-    LAKE --> MINIO
-    LAKE --> DUCK
-    DUCK --> APP
-    DUCK --> SUPER
-    SUPER -->|Embedded analytics| APP
-
-    classDef core fill:#4f46e5,color:#fff,stroke:#3730a3,stroke-width:2px;
-    classDef compute fill:#fff7ed,color:#9a3412,stroke:#fb923c;
-    classDef storage fill:#eff6ff,color:#1e3a8a,stroke:#60a5fa;
-    classDef analytics fill:#ecfdf5,color:#065f46,stroke:#34d399;
-    class APP core;
-    class AIR,TRANS compute;
-    class LAKE,MINIO storage;
-    class DUCK,SUPER analytics;
-```
-
-- **Control plane** — FastAPI와 웹 UI가 dbt 프로젝트, 메타데이터, 계보와 실행 이력을 연결합니다.
-- **Execution plane** — Airflow가 실행을 오케스트레이션하고 dbt와 DuckDB가 모델을 변환합니다.
-- **Data plane** — DuckLake가 PostgreSQL 카탈로그와 MinIO의 Parquet으로 테이블을 저장하며, DuckDB와 Superset이 조회와 분석을 담당합니다.
-
-변환·조회·적재가 모두 같은 DuckDB 엔진을 씁니다. Iceberg + Spark에서 옮겨 온 배경과 검증 결과는 [DuckLake 이관 기록](docs/2026-08-14-ducklake-migration.md)에 정리했습니다.
-
-## 🔄 Data Flow
-
-<p align="center">
-  <strong>🗂️ Source</strong><br/>
-  <sub>HTTP API · CSV · JSONL</sub><br/>
-  ↓<br/>
-  <strong>📥 Collect</strong><br/>
-  <sub>원천 확인 · 수동/예약 적재</sub><br/>
-  ↓<br/>
-  <strong>🧱 Model</strong><br/>
-  <sub>SQL 변환 · 모델 정의 · 메타데이터</sub><br/>
-  ↓<br/>
-  <strong>⚙️ Pipeline</strong><br/>
-  <sub>의존성 기반 실행 · 상태 · 재실행</sub><br/>
-  ↓<br/>
-  <strong>✅ Quality</strong><br/>
-  <sub>테스트 · 실패 원인 · 위반 데이터</sub><br/>
-  ↓<br/>
-  <strong>📊 Analytics</strong><br/>
-  <sub>데이터 마트 · 데이터셋 · 대시보드</sub>
-</p>
-
-모델과 컬럼의 계보는 이 흐름 전체를 연결해 데이터의 출처와 변환 과정, 하류 분석 자산까지 추적합니다.
+![Data Mates 아키텍처](docs/images/architecture.svg)
 
 ## 🛠️ Tech Stack
 
@@ -143,9 +78,8 @@ flowchart LR
 ### Prerequisites
 
 - Python 3.11
-- Docker 환경(Docker Desktop 또는 Colima)
+- Docker 환경
 - 연결할 dbt 프로젝트
-- Java 17은 Spark 롤백 타깃(`DBT_TARGET=spark_local`)을 쓸 때만 필요합니다
 
 ### Run
 
