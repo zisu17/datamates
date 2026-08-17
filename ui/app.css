@@ -26,24 +26,7 @@
   --bg:var(--w-bg); --surface:var(--w-surface);
   --surface-2:var(--w-surface-sunken);        /* 가라앉은 면 — 표머리·읽기전용 입력 */
   --surface-3:var(--w-hover);                 /* 한 단 더 — 세그먼트 트랙·태그 바탕 */
-  /* ── 글자 — 회색이 아니라 검정 불투명도 램프 ──
-     DS 램프는 네 단(.85 / .5 / .25 / .1)인데 이 앱은 세 단(--text · --muted ·
-     --faint)을 쓴다. 순서대로 .85 / .5 / .25 로 맞추면 --faint 가 .25 가 되고,
-     이 앱에서 --faint 가 맡은 것은 장식이 아니라 캡션급 **내용**이라(차트 날짜축 ·
-     기준 시각 · 카드 헤더의 «최근 7일» · 키·값 라벨) .25 의 대비 1.9:1 로는
-     읽히지 않는다.
 
-     그래서 처음에는 --faint 를 secondary(.5)로 올리고 셋째 단을 크기·굵기로만
-     만들었는데, 그러면 원래 #989898(≒.40)이던 캡션이 #808080 으로 **진해진다.**
-     둘째·셋째 단이 같은 .5 하나로 붙으면서 화면 전체의 회색이 무거워졌다.
-
-     지금은 셋째 단을 색으로 되살리되, 두 단 모두 원래보다 한 톤 옅게 잡는다.
-     값은 여전히 «검정 불투명도» 라 새 색이 아니고, DS 의 .5 / .25 사이에서
-     읽히는 범위를 고른 것이다.
-         --muted .45  (≒#8C8C8C, 대비 3.7:1) — 라벨 · 표머리 · 보조 본문
-         --faint .34  (≒#A8A8A8, 대비 2.5:1) — 캡션 · 메타 · 차트 축
-     --w-text-3(.25)는 placeholder · 빈 상태 아이콘 · 화살표처럼 읽지 않아도 되는
-     자리에 아래에서 이름을 직접 불러 쓴다. */
   --ink:var(--w-text); --text:var(--w-text);
   --muted:rgba(0,0,0,.45); --faint:rgba(0,0,0,.34);
   --ink-2:var(--w-text-disabled);
@@ -64,26 +47,7 @@
   --shadow-1:var(--w-shadow-1);
   --shadow-2:var(--w-shadow-2);
   --shadow-3:var(--w-shadow-3);
-  /* ── 타이포그래피 스케일 — **원래 스케일로 되돌렸다** ─────────────
-     한때 DS 웹 스케일(본문 14px = Core size)로 한 단씩 올렸다. DS 기준으로는
-     맞지만, 이 제품에서는 표·배지·캡션이 전부 한 단씩 커지면서 한 화면에 들어오는
-     정보가 눈에 띄게 줄었다 — 계보·파이프라인·품질 표를 훑는 도구인데 훑을 거리가
-     늘어난 것이다. 「전체적으로 퍼져 보인다」 는 지적의 뿌리가 여기였다.
 
-     그래서 **크기·간격은 원래 값**으로 돌리고, DS 에서는 색·서체·굵기 체계만
-     가져간다. 서체가 Wanted Sans 로 바뀌어 같은 13px 도 Noto Sans KR 보다 또렷하다.
-
-     역할 → 단
-       KPI 수치               --fs-display   26
-       페이지 제목            --fs-page      18
-       섹션 · 모달 제목        --fs-title     16
-       카드 · 패널 제목        --fs-strong    14
-       본문 · 버튼 · 입력 · 탭  --fs-body      13   ← 기준
-       보조 본문 · 폼 라벨      --fs-sm        12
-       캡션 · 메타 · 표머리 · 배지 --fs-cap    11
-       캔버스 노드 내부         --fs-micro     10   (좁은 상자 전용 예외)
-
-     새 크기를 쓰고 싶으면 여기에 단을 더한다 — 규칙 바깥의 px 을 쓰지 않는다. */
   /* 전역 헤더 — 화면 폭과 무관하게 **고정**이다.
      폭에 따라 글자·컨트롤을 키우면 같은 헤더가 모니터마다 다른 제품처럼 보이고,
      본문 글자와의 크기 관계도 화면마다 달라진다. 반응형은 padding·gap·요소 배치와
@@ -139,21 +103,12 @@
   --tab-w:176px;
   /* 추이 막대 폭 상한 — 막대(.trend i)와 날짜축(.trend-x span)이 함께 읽는다 */
   --trend-bar:52px;
-  /* ── 캔버스 면 — DS 팔레트 밖의 값을 의도적으로 남긴 자리 ──────────────
-     원래 화면이 쓰던 파랑 기운 흰색 네 개다. 개편 때 «새 색을 만들지 않는다» 는
-     DS 규칙에 맞춰 --bg + 검정 2% 로 바꿨는데, 그러면 계보·파이프라인 캔버스가
-     250 → **241** 로 내려간다. 캔버스는 노드가 **흰 카드로 떠 있어야** 하는 면이라
-     배경이 카드 흰색에 가까워지면 상자가 면에 잠기고, 반대로 어두워지면 화면
-     절반이 회색 판이 된다. 원래 값이 이 균형을 잡고 있었으므로 그대로 되돌린다.
 
-     이 다섯 개는 **넓은 바탕면 전용**이다. 컴포넌트에서 부르지 않는다 — 팔레트
-     밖의 색이 화면 전체로 번지는 것을 막으려고 이름을 붙여 여기 모아 둔다. */
   --canvas-bg:#F7F8FA;    /* 계보·모델 캔버스 바탕 */
   --canvas-dot:#E1E1E1;   /* 점 격자 */
   --canvas-bar:#F6F7F9;   /* lin-view · pipe-view 툴바 */
   --canvas-pipe:#F4F6FB;  /* 파이프라인 흐름 캔버스 */
-  /* 거의 흰 스크롤 면. 계보·파이프라인 캔버스가 한 단 더 밝아지는 자리와,
-     데이터 수집·파이프라인의 본문 패널이 같은 값을 쓴다(원래도 같았다). */
+
   --panel-bg:#FAFBFC;
   --r-s:var(--w-r-sm); --r-m:var(--w-r-md); --r-l:var(--w-r-lg);
   --sans:var(--font-system);
@@ -161,10 +116,7 @@
 }
 *{box-sizing:border-box}
 html,body{height:100%}
-/* 전역 letter-spacing:-0.5px 을 걷어냈다. Noto Sans KR 을 좁혀 쓰던 보정인데,
-   Wanted Sans 는 한글 자간이 이미 그렇게 짜여 있어 한 번 더 좁히면 14px 본문에서
-   글자가 서로 붙는다. DS 는 본문 자간 0 이고, 음수 자간은 큰 제목에만 준다
-   (H3 -0.1 · H2 -0.2 · H1 -0.3 · Display -0.4 — 아래 제목 규칙에서 각자 준다). */
+
 body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);
   font-size:var(--fs-body);line-height:var(--lh-base);-webkit-font-smoothing:antialiased;
   -moz-osx-font-smoothing:grayscale}
@@ -296,13 +248,7 @@ select.sel.env{font-weight:var(--fw-med)}
 .me-role{font-size:var(--fs-cap);color:var(--muted)}
 
 .shell{flex:1;min-height:0;display:flex}
-/* 전역 사이드바(.side)의 내부 부품 규칙 — .side-l · .nav-i · .nav-c · .side-f ·
-   .side-note — 은 여기 있었으나 지웠다. v4.6 이 사이드바를 걷어낸 뒤로 어느
-   화면에도 실체가 없다(아래 «전역 사이드바 잔해 정리» 절 참고).
-   화면 안의 좌측 목록은 .side 가 아니라 .mod-l 이다.
 
-   .nav-b 만 남는다 — 헤더 메뉴(.gnav-i) 위의 알림 개수 배지가 이 클래스를 쓴다.
-   DS Badge 의 count 변형(최소 20 · pill · danger 채움)을 따른다. */
 .nav-b{margin-left:auto;min-width:20px;height:20px;padding:0 6px;border-radius:var(--w-r-pill);
   background:var(--err);color:var(--w-text-on-accent);font-size:var(--fs-cap);font-weight:var(--fw-semi);
   display:grid;place-items:center;font-variant-numeric:tabular-nums}
@@ -756,10 +702,7 @@ select.inp:hover,select.sel:hover{background-color:var(--w-hover)}
 /* 접으면 탭 줄만 남는다 — 머리(제목·설명)와 본문이 함께 접힌다 */
 .dock.min{height:41px}
 .dock.min .dk-head,.dock.min .dock-b{display:none}
-/* 스크롤은 **독 전체가 한 겹**이다. 예전에는 .dock-b 만 스크롤돼서, 제목·설명은
-   붙박이고 탭 안쪽만 움직였다 — 독을 낮게 줄이면 볼 수 있는 칸이 탭 본문 몇 줄로
-   쪼그라들었다. 이제 머리부터 본문 끝까지 한 번에 흐르고, 탭 줄만 위에 붙어 남는다
-   (탭이 함께 흘러가면 다른 탭으로 옮기려고 매번 위로 되감아야 한다). */
+
 .dock-scroll{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column}
 .dock.min .dock-scroll{overflow:hidden}
 .dock-h .btn{margin:0;flex:none}
@@ -857,7 +800,7 @@ select.inp:hover,select.sel:hover{background-color:var(--w-hover)}
 .list-i.dis:hover{background:none}
 .swatch{width:8px;height:8px;border-radius:2px;flex:none}
 
-/* ══════════════ v1.1 보정 ══════════════ */
+
 
 /* 클릭 가능 요소 · 목록 항목 공통 */
 .list-i{border:0;background:transparent;appearance:none;font:inherit;color:inherit;
@@ -887,58 +830,25 @@ select.sel{max-width:150px;text-overflow:ellipsis}
 /* (사이드바 접기 규칙 .side.mini · .side-tgl 도 함께 지웠다 — 접을 사이드바가
    없다. 아래 절 참고.) */
 
-/* ───── 전역 사이드바 잔해 정리 (v4.6 이 남긴 것) ─────────────────────
-   v4.6 이 좌측 GNB 를 걷어내고 메뉴를 헤더 한 줄로 옮겼다. 그런데 걷어낸 방식이
-   «규칙을 지우기» 가 아니라 «뒤에서 되돌리기» 였다 — 어두운 사이드바 색 15줄과
-   고정 배치·폭 200/48px 규칙 12줄이 그대로 남고, 그 아래에서
-   .side{display:none} · .top{margin-left:0} · .shell{padding-left:0} 로
-   되돌려 놓았다. 서로를 지우는 두 층이 80줄 가까이 쌓여 있었다.
 
-   지금 markup 에서 sidebar() 는 빈 <nav class="side" aria-hidden="true"> 하나를
-   돌려주고, .nav-i · .side-l · .nav-c · .side-f · .side-note · .side-tgl ·
-   .side.mini 은 어느 화면에도 실체가 없다(마크업은 전부 js/ 가 찍고, 거기에
-   이 클래스들이 없다). 그래서 두 층을 통째로 지웠다.
-
-   .nav-b 만 살아 있다 — 헤더 메뉴(.gnav-i)의 알림 개수 배지가 그 클래스를 쓴다.
-   화면 안의 좌측 목록(수집 작업 · 파이프라인 · 대시보드 트리)은 .side 가 아니라
-   .mod-l 이고, 그건 아래 «사이드바 공통 규격» 절이 담당한다. */
 .side{display:none}
 /* 아래 두 줄은 이 절에서 유일하게 살아 있는 규칙이다 — 지우면 본문이 두 번
    스크롤되고(body + .page) 헤더가 sticky 로 떠 캔버스 위에 그림자를 남긴다. */
 html,body{overflow:hidden}
 .top{position:static}
 
-/* 페이지 전환 드롭다운(.gnb / .gnb-t / .gnb-k)은 전역 네비게이션으로 대체돼
-   규칙까지 걷어냈다 — 맨 아래 «전역 네비게이션» 블록이 그 자리를 대신한다.
-   아래 .menu 규칙은 남은 다른 드롭다운(분석 카드 메뉴 등)이 계속 쓴다. */
+
 .menu button.on{color:var(--pri);font-weight:var(--fw-semi)}
 .menu button.on .ic{color:var(--pri)}
 
-/* ───── v4.7 — 본문 제목 줄 제거 ─────
-   모델·파이프라인은 원래 제목 없이 바로 내용으로 들어간다. 홈·품질만 제목이
-   있어서 헤더 드롭다운과 같은 단어가 위아래로 겹쳤다. 제목 줄을 없애고
-   그 줄에 있던 것(날짜·버튼)은 바로 아래 탭 스트립 오른쪽으로 옮긴다. */
+
 .tabs,.qtabs{align-items:center}
 .tabs-a{margin-left:auto;display:flex;align-items:center;gap:6px;flex:none;padding:0 2px 0 12px}
 .tabs-a .page-d{margin:0}
 
-/* ───── v4.8 — 좌측 패널 폭 통일 ─────
-   카탈로그 228px · 파이프라인 목록 262px 로 달랐다. S.leftW 하나로 모은다.
 
-   딸려 있던 «서비스명을 그 폭(--lw)에 맞춘다» 는 걷어냈다 — 로고와 페이지 메뉴가
-   한 묶음으로 읽혀야 하는데, 로고 상자가 좌측 패널 경계까지 늘어나면 둘 사이에
-   150px 짜리 빈 칸이 생겨 서로 다른 영역처럼 갈라져 보였다. 브랜드 생김새는
-   맨 아래 «전역 네비게이션» 블록이 한 곳에서 정하고, --lw 는 읽는 곳이 없어져
-   api.js 의 설정까지 함께 걷어냈다. */
 
-/* ───── v4.9 — 좌측 패널 확대 ─────
-   폭 228 → 264, 글자도 한 단씩 올린다. 카탈로그 트리와 파이프라인 목록이
-   같은 .mod-l 을 쓰므로 여기 한 곳만 손대면 두 화면이 함께 커진다.
 
-   데이터 품질의 사이드바 머리(.q-sidehead)도 여기서 함께 정한다. 그 화면은
-   .mod-l 이 아니라 DS 사이드바를 쓰지만 **머리 제목은 같은 자리의 같은 역할**
-   이므로, 선택자를 여기 얹지 않으면 세 번째 사이드바가 또 갈라진다(실제로
-   13px 로 갈라져 있었다 — 다른 둘은 14px). */
 .mod-l-head .b6, .q-sidehead .b6{font-size:var(--fs-strong)}
 .mod-l .tg-r{height:26px;font-size:var(--fs-body);gap:5px}
 .mod-l .tg-r.g{height:28px}
@@ -946,10 +856,7 @@ html,body{overflow:hidden}
 .mod-l .t12{font-size:var(--fs-body)}
 .mod-l .t11{font-size:var(--fs-sm)}
 
-/* ───── v5.0 — 데이터 계보 캔버스 (관계 화면) ─────
-   ERD(FK 추론)가 아니라 실제 SQL 데이터 흐름을 그린다.
-   상자는 .ent 의 문법을 따르되, 행 단위 포트·경로 강조가 붙는다.
-   행 높이(24)·머리(4+44) 는 JS 의 포트 좌표 계산과 한 몸이다 — 같이 바꿔야 한다. */
+
 .lin-node{position:absolute;width:264px;background:var(--surface);border:1px solid var(--line);
   border-radius:9px;box-shadow:var(--shadow-1);user-select:none}
 .lin-node.sel{border-color:var(--pri);box-shadow:0 0 0 2px var(--pri-soft),var(--shadow-2)}
@@ -1015,7 +922,7 @@ html,body{overflow:hidden}
 /* 전체 흐름의 파이프라인 상자는 배지가 들어가 머리가 살짝 높다 */
 .pf-n .lin-h{height:52px}
 .pf-n .lin-n{margin-top:2px}
-/* v5.3 — 파이프라인 탭 스트립 (IDE 식) */
+
 .ptabs{display:flex;align-items:center;gap:2px;border-bottom:1px solid var(--line);
   background:var(--bg);height:46px;padding:0 8px;flex:none;overflow-x:auto;scrollbar-width:none}
 .ptabs::-webkit-scrollbar{display:none}
@@ -1050,10 +957,7 @@ html,body{overflow:hidden}
 .lin-node.psel{border-color:var(--pri);box-shadow:0 0 0 2px var(--pri-soft),var(--shadow-2)}
 .psel-chk{flex:none;width:16px;height:16px;border-radius:50%;background:var(--pri);color:var(--w-text-on-accent);
   display:inline-flex;align-items:center;justify-content:center}
-/* 남이 적재하는 모델을 함께 고른 경우 — 적재가 아니라 조회 전용 입력.
-   수식어를 psel-ro 로 길게 두는 이유: 두 글자짜리 .ro 는 예전 규칙 안내 줄의
-   클래스와 같아서, 그 규칙의 padding 이 16px 원을 안쪽부터 밀어 아이콘 폭을
-   0 으로 만들었다(주황 점만 보이던 원인). 짧은 유틸 이름은 이렇게 부딪힌다. */
+
 .psel-chk.psel-ro{background:var(--warn)}
 .lin-node.psel:has(.psel-chk.psel-ro){border-color:var(--warn-line);box-shadow:0 0 0 2px var(--warn-soft),var(--shadow-2)}
 .psel-chk .ic{width:11px;height:11px}
@@ -1061,10 +965,7 @@ html,body{overflow:hidden}
 .tab.dirty::after,.lin-n.dirty::after{content:'';width:6px;height:6px;border-radius:50%;
   background:var(--warn);display:inline-block;margin-left:5px;flex:none}
 
-/* ───── v5.8 — 데이터 계보 화면의 명도 3단 계층 ─────
-   사이드바(흰색) | 헤더(연회색) / 캔버스(아주 연한 회색) / 상세 패널(흰색).
-   구조·컴포넌트·노드 색은 그대로 두고 배경 층위만 가른다.
-   lin-view 는 데이터 모델 화면에서만 붙는 클래스라 다른 화면은 영향이 없다. */
+
 #app.lin-view .mod-bar,#app.pipe-view .mod-bar{background:var(--canvas-bar)}
 #app.lin-view .erd-wrap,#app.pipe-view .erd-wrap{background-color:var(--panel-bg)}
 #app.pipe-view .canvas-wrap{background-color:var(--panel-bg) !important}
@@ -1163,7 +1064,7 @@ html,body{overflow:hidden}
    높이 값은 앞쪽에서 DS compact 단계로 통일했다.) */
 
 /* ════════ style block 02 (index.html 에서 추출) ════════ */
-/* ══════════════ v1.2 ══════════════ */
+
 .elabel{position:absolute;transform:translate(-50%,-50%);background:var(--surface);border:1px solid var(--line);
   border-radius:999px;padding:2px 9px;font-size:var(--fs-cap);color:var(--muted);white-space:nowrap;z-index:6;
   box-shadow:var(--shadow-1);max-width:170px;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
@@ -1175,7 +1076,7 @@ html,body{overflow:hidden}
 .node:hover .node-x{display:flex}
 .node-x:hover{background:var(--surface-3);color:var(--err)}
 .node-st{display:flex;align-items:center;gap:4px;font-size:var(--fs-cap);font-weight:var(--fw-semi);padding:1px 6px;border-radius:4px;border:1px solid}
-/* (.node.ro — 옛 캔버스의 조회 전용 카드. 'ro' 를 붙이던 코드가 없어 도달하지 않는다.) */
+
 
 /* (.wscard · .wsgrid · .crumbs — 홈의 워크 스페이스 탭에서만 쓰던 규칙이라
    탭과 함께 제거. 빵부스러기(.crumbs)도 그 상세 화면에만 있었다) */
@@ -1195,7 +1096,7 @@ html,body{overflow:hidden}
 .statrow{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r-s)}
 
 /* ════════ style block 03 (index.html 에서 추출) ════════ */
-/* ══════════════ v1.3 ══════════════ */
+
 .elabel{max-width:130px;font-size:var(--fs-cap);padding:1px 8px}
 .node.flow{width:230px}
 .canvas-top{height:36px;flex:none;display:flex;align-items:center;gap:6px;padding:0 12px;
@@ -1232,7 +1133,7 @@ html,body{overflow:hidden}
 .tfsec-t{font-size:var(--fs-sm);font-weight:var(--fw-semi);color:var(--ink);display:flex;align-items:center;gap:6px}
 
 /* ════════ style block 04 (index.html 에서 추출) ════════ */
-/* ══════════════ v2.1 ══════════════ */
+
 .mp{width:352px;flex:none;background:var(--surface);border-left:1px solid var(--line);
   display:flex;flex-direction:column;overflow:hidden;min-height:0;transition:width .12s ease}
 .mp.closed{width:44px}
@@ -1262,8 +1163,7 @@ html,body{overflow:hidden}
    에서 --line-str(22%) 로 올렸다. 10% 회색 트랙은 흰 카드 위에서 «꺼짐» 이 아니라
    «비활성» 처럼 보여, 켤 수 있는 스위치인지 알기 어려웠다.
    노브 흰색과 그림자는 DS 값 그대로다. */
-/* display 를 명시한다 — <span> 이라 flex 컨테이너 밖에 놓이면 inline 이 되어
-   width·height 가 통째로 무시된다(품질 규칙 표의 «사용» 칸에서 실제로 사라졌다). */
+
 .tgl{display:inline-block;width:34px;height:20px;border-radius:var(--w-r-pill);
   background:var(--line-str);position:relative;flex:none;
   transition:background var(--w-dur) var(--w-ease)}
@@ -1289,7 +1189,7 @@ html,body{overflow:hidden}
 /* (.hmrow 정의가 여기 한 번 더 있었다 — 위쪽 것과 글자까지 같은 중복이라 지웠다.) */
 
 /* ════════ style block 05 (index.html 에서 추출) ════════ */
-/* ══════════════ v2.2 ══════════════ */
+
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden;background:var(--surface);flex:none}
 .seg button{height:28px;padding:0 11px;font-size:var(--fs-sm);font-weight:var(--fw-semi);color:var(--muted);
   background:transparent;border:0;border-right:1px solid var(--line);display:inline-flex;align-items:center;gap:5px;cursor:pointer}
@@ -1307,9 +1207,7 @@ html,body{overflow:hidden}
 .def-b{display:flex;flex-direction:column;gap:13px}
 .def-b .sec,.def-b .info2{background:var(--surface)}
 .g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:13px;align-items:start}
-/* (.ro — 파이프라인 흐름 위에 있던 «규칙 안내 줄». 그 요소는 v5.4 에서 사라졌는데
-   규칙만 남아, 두 글자 이름을 쓰던 다른 요소(.pn.ro · .psel-chk.ro)에 padding 과
-   회색 배경을 몰래 입히고 있었다. 쓰는 곳이 없으므로 지운다.) */
+
 .pick{display:flex;align-items:center;gap:9px;padding:9px 12px;border:1px solid var(--line);
   border-radius:var(--r-m);background:var(--surface);cursor:pointer}
 .pick:hover{border-color:var(--pri-line)}
@@ -1319,7 +1217,7 @@ html,body{overflow:hidden}
   font-size:var(--fs-cap);display:grid;place-items:center;flex:none}
 
 /* ════════ style block 06 (index.html 에서 추출) ════════ */
-/* ══════════════ v2.3 — ERD ══════════════ */
+
 .erd-wrap{flex:1;min-height:0;overflow:auto;position:relative;background:var(--canvas-bg);
   background-image:radial-gradient(var(--canvas-dot) 1px,transparent 1px);background-size:20px 20px}
 .erd-wrap::-webkit-scrollbar{width:0;height:0}
@@ -1355,7 +1253,7 @@ html,body{overflow:hidden}
   box-shadow:var(--shadow-1);font-size:var(--fs-cap);color:var(--muted)}
 
 /* ════════ style block 07 (index.html 에서 추출) ════════ */
-/* ══════════════ v2.4 — 컬럼이 많은 테이블 ══════════════ */
+
 .ent-cols{overflow-y:auto;overflow-x:hidden;scrollbar-width:thin}
 .ent-cols::-webkit-scrollbar{width:7px}
 .ent-cols::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
@@ -1372,7 +1270,7 @@ html,body{overflow:hidden}
 .relk b{font-weight:var(--fw-semi);color:var(--pri)}
 
 /* ════════ style block 08 (index.html 에서 추출) ════════ */
-/* ══════════════ v2.5 ══════════════ */
+
 .kindt{display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:4px;
   font-family:var(--mono);font-size:var(--fs-micro);font-weight:var(--fw-semi);letter-spacing:.4px;flex:none}
 .grp-h{display:flex;align-items:center;gap:6px;padding:9px 9px 5px;font-family:var(--mono);
@@ -1414,7 +1312,7 @@ html,body{overflow:hidden}
   font-size:var(--fs-micro);display:grid;place-items:center}
 
 /* ════════ style block 09 (index.html 에서 추출) ════════ */
-/* ══════════════ v2.6 — UI 다듬기 ══════════════ */
+
 /* 본문 보조 텍스트 대비 개선 (사이드바는 자체 색을 쓰므로 영향 없음) */
 /* 키보드 초점 표시 */
 .btn:focus-visible,.tab:focus-visible,.iconbtn:focus-visible,.lnk:focus-visible,
@@ -1442,7 +1340,7 @@ html,body{overflow:hidden}
 .dock-b{scrollbar-width:thin}
 
 /* ════════ style block 10 (index.html 에서 추출) ════════ */
-/* ══════════════ v2.8 — DAG task 캔버스 ══════════════ */
+
 .pn-hd{display:flex;align-items:center;gap:6px;min-width:0}
 .pn-seq{width:19px;height:19px;border-radius:50%;background:var(--pri);color:var(--w-text-on-accent);
   font-size:var(--fs-cap);font-weight:var(--fw-semi);display:grid;place-items:center;flex:none;font-family:var(--mono)}
@@ -1450,7 +1348,7 @@ html,body{overflow:hidden}
 .pn.src{border-style:dashed}
 
 /* ════════ style block 11 (index.html 에서 추출) ════════ */
-/* ══════════════ v3.0 — 카탈로그 폴더 ══════════════ */
+
 .fdr{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:var(--r-s);
   cursor:pointer;min-width:0;user-select:none}
 .fdr:hover{background:var(--surface-3)}
@@ -1481,7 +1379,7 @@ html,body{overflow:hidden}
 .mod-l-head .iconbtn{width:28px;height:28px}
 
 /* ════════ style block 13 (index.html 에서 추출) ════════ */
-/* ══════════════ v3.1 — 카탈로그 폴더 트리 다듬기 ══════════════ */
+
 .ct{padding:0 6px 10px}
 .ct-grp{position:sticky;top:0;z-index:3;background:var(--surface);
   display:flex;align-items:center;gap:7px;padding:9px 6px 6px;margin-top:2px}
@@ -1526,7 +1424,7 @@ html,body{overflow:hidden}
 .ct-hit{background:oklch(.92 .12 95);border-radius:2px;padding:0 1px}
 
 /* ════════ style block 14 (index.html 에서 추출) ════════ */
-/* ══════════════ v3.2 — 논리 폴더 탐색기 (밀도 높은 트리) ══════════════ */
+
 .tg{padding:2px 0 12px;font-size:var(--fs-sm);user-select:none}
 .tg-bar{display:flex;align-items:center;gap:2px;padding:4px 6px;border-bottom:1px solid var(--line-2)}
 .tg-bar .iconbtn{width:24px;height:24px;border-radius:5px}
@@ -1845,8 +1743,7 @@ button.brand{display:flex;align-items:center;flex:none;height:100%;position:rela
    간격 11px 은 규정의 «심볼 폭의 0.3배» 규칙 — 38 × 0.3 ≒ 11. */
 .brand-w1{font-weight:var(--fw-heavy);letter-spacing:-0.4px}
 .brand-w2{font-weight:var(--fw-reg)}
-/* 심볼은 이제 <svg> 자체다(예전에는 배지 <span> 안에 svg 를 넣었다). radius 도
-   배경도 없으므로 크기와 flex 만 정한다. .brand-m svg 규칙은 그 중첩이 사라져 지웠다. */
+
 .brand-m{width:var(--hd-logo);height:var(--hd-logo);flex:none}
 .brand:hover .brand-m{opacity:.85}
 .brand:hover,.gnav-i:hover{color:var(--ink)}
@@ -1892,15 +1789,9 @@ button.brand{display:flex;align-items:center;flex:none;height:100%;position:rela
    움직인다. 이 칸은 **좌측 패널의 기본 폭을 나타내는 고정 기준선**이고, 패널이 지금
    접혀 있는지와는 무관하다. 폭이 화면마다 달라지면 기준선이 아니게 된다. */
 #app.xnar .gnav{padding-left:4px}
-/* 가장 좁을 때도 워드마크를 남긴다. 예전에는 글자를 감추고 배지만 남겼는데, 그건
-   브랜드가 남는 공간을 다투던 때의 처리다. 이제 브랜드 칸이 264 를 고정으로 갖고
-   있어서 글자를 감춰도 그 폭이 줄지 않는다 — 감추면 264 짜리 빈 칸에 26px 배지만
-   덜렁 남는다. 1024 에서 브랜드 264 + 메뉴 5개 + 컨트롤 3개가 들어가는 것은 확인했다. */
 
-/* ════════ 파이프라인 실행 설정 (v6.1 재구성) ════════
-   설정 페이지다. 카드를 겹치지 않는다 — 섹션 제목 + 구분선 + 설정 행이 전부이고,
-   경계는 여백과 선으로만 만든다. 실행 대상은 «구성이 정해 준 결과» 라 참고 정보로
-   낮추고, 실제로 바꾸는 값(방식·예약·환경·실패·알림)이 화면의 주인이 된다. */
+
+
 .pcfg .def-in{max-width:1080px;padding:14px 24px 32px;gap:0}
 
 /* 머리 — 한 줄 안내(왼쪽) + 페이지 동작(오른쪽) */
@@ -1971,7 +1862,7 @@ button.brand{display:flex;align-items:center;flex:none;height:100%;position:rela
 .modal-b .pcfg .def-in{max-width:none;margin:0;padding:0}
 .modal-b .pcfg .pcfg-top{display:none}          /* 모달은 제목줄과 푸터가 대신한다 */
 .modal-f #pcmOk .btn{margin:0}
-/* 이력 탭 — 원래 한 화면을 차지하던 뷰라 그릇을 독 안으로 눕힌다 */
+
 .pdock .dock-b > .def{overflow:visible;background:none;flex:none}
 .pdock .dock-b > .def > .def-in{max-width:none;margin:0;padding:0}
 
@@ -2261,8 +2152,7 @@ button.brand{display:flex;align-items:center;flex:none;height:100%;position:rela
    div 라 늘어나지 않는다(SVG 안에 두면 타원이 된다). */
 .q-trend{display:grid;grid-template-columns:auto minmax(0,1fr);
   grid-template-rows:190px auto;column-gap:8px}
-/* 눈금 글자와 격자선이 **같은 퍼센트**를 읽는다. flex space-between 으로 나누면
-   글자 상자 높이만큼 어긋난다(실측 10~19px). 둘 다 절대 위치로 못박는다. */
+
 .q-trend-y{grid-row:1;position:relative;min-width:30px;font-size:var(--fs-micro);
   color:var(--w-text-3);font-variant-numeric:tabular-nums;line-height:1}
 .q-trend-y span{position:absolute;right:0;transform:translateY(-50%);white-space:nowrap}
@@ -2279,7 +2169,7 @@ button.brand{display:flex;align-items:center;flex:none;height:100%;position:rela
 .q-trend-last{position:absolute;transform:translate(-50%,-160%);white-space:nowrap;
   font-size:var(--fs-cap);font-weight:var(--fw-semi);color:var(--w-text);
   font-variant-numeric:tabular-nums}
-/* 마지막 점이 오른쪽 끝에 있으면 라벨이 플롯 밖으로 나간다(실측 18px) — 점 왼쪽으로 */
+
 .q-trend-last.end{transform:translate(calc(-100% - 6px),-160%)}
 .q-trend-cross{position:absolute;top:0;bottom:0;width:1px;background:var(--w-border-strong);
   pointer-events:none}
@@ -2382,21 +2272,7 @@ button.brand{display:flex;align-items:center;flex:none;height:100%;position:rela
 .q-shell .wc-tabs--segment .wc-tab,.q-shell .wc-tabs--pill .wc-tab{font-size:var(--fs-sm)}
 .q-shell .wc-tab__badge{font-size:var(--fs-micro)}
 .q-shell .wc-crumbs,.q-shell .wc-page__btn,.q-shell .wc-page__info{font-size:var(--fs-sm)}
-/* ── 사이드바 — 다른 사이드바와 같은 리듬으로 ────────────────────
-   글자 크기만 맞춰서는 이질감이 남았다. 실측해 보니 어긋난 것이 셋이었다.
 
-                     데이터 품질(DS 원본)   데이터 모델(.mod-l)
-       그룹 라벨      11px 590 .25 자간.2    12px 400 .45
-       항목 글자      13px 510               13px 400
-       항목 높이      36px                   28px
-
-   DS 의 사이드바는 «앱 전역 내비» 를 전제해 행이 36 이고 그룹 라벨이 작고 굵은
-   대문자풍이다. 이 앱에서 이 자리는 **화면 안의 하위 내비**(카탈로그 트리·
-   파이프라인 목록과 같은 층)라 그쪽 리듬을 따라야 한다 — 행이 8px 더 크면
-   글자를 맞춰도 목록이 덩어리째 커 보인다.
-
-   활성 표시는 굵기가 아니라 색과 배경이 맡는다(.is-active) — 그래야 굵기를
-   목록 전체에서 하나로 둘 수 있다. */
 .q-shell .wc-sidebar__body{padding:6px 8px 10px}
 .q-shell .wc-sidebar__item{height:28px;font-size:var(--fs-body);font-weight:var(--fw-reg);
   padding:0 8px;gap:8px}
@@ -2419,24 +2295,7 @@ button.brand{display:flex;align-items:center;flex:none;height:100%;position:rela
   color:var(--w-text-2)}
 .q-soon .ic{flex:none;margin-top:3px;color:var(--w-text-3)}
 
-/* ══════════════════════════════════════════════════════════════
-   데이터 파이프라인 — 개편 디자인 (v2)
-   ──────────────────────────────────────────────────────────────
-   claude.ai/design «데이터 파이프라인 페이지 리디자인» v2 를 옮긴 층이다.
-   마크업은 js/b56.js 가 만들고, 여기서는 그 모양만 정한다.
 
-   품질 화면(.q-*)과 같은 규칙을 따른다 —
-     · 색·반경·그림자·간격은 DS 토큰(--w-*)만 쓴다. 새 색을 만들지 않는다.
-     · 글자 크기는 앱 스케일(--fs-*)이다. DS 기준 14 를 앱 기준 13 으로 한 단
-       내리는 매핑을 이 화면에서도 지킨다(맨 아래 ④ 절).
-     · 골격(.mod · .mod-l · .dock · .erd-wrap)은 데이터 모델 화면과 공유한다.
-       여기서 다시 만들지 않는다 — 두 벌이 되면 메뉴를 오갈 때 경계가 튄다.
-
-   원본이 색으로 말하는 것 —
-     띠·사각형 = 단계(수집 초록 · 가공 남색), 점·글자 = 상태(성공·실행 중·실패),
-     선 = 고른 카드와의 관계(선행 초록 · 후속 주황). 세 축이 겹치지 않아야 카드
-     하나를 보고 세 가지를 동시에 읽을 수 있다. v1 은 띠와 배지가 둘 다 상태였다.
-   ══════════════════════════════════════════════════════════════ */
 
 /* ── ① 좌측 목록 ── */
 .pl-side .pl-srch{padding:8px 12px 4px;flex:none}
@@ -2582,8 +2441,7 @@ button.brand{display:flex;align-items:center;flex:none;height:100%;position:rela
 
 /* ── ⑤ 가공 탭 — 모델 카드 · 빌드 추이 ── */
 .pl-pn{cursor:pointer}
-/* 고른 카드는 흐름도와 같은 고리로 표시한다 — 두 화면에서 «고름» 이 다른 모양이면
-   같은 조작으로 읽히지 않는다(예전 파란 테두리는 링크 색과도 겹쳤다). */
+
 .pn.pl-pn.sel{border-color:var(--w-border);box-shadow:var(--w-shadow-1);
   outline:2px solid var(--w-warning);outline-offset:2px}
 .pl-pn-b{padding:9px 12px 10px;display:flex;flex-direction:column;gap:4px;min-width:0}

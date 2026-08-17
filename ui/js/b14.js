@@ -124,10 +124,7 @@ async function qLoad(force) {
   try {
     /* 이력 두 개는 Elementary 를 집계하므로 저장소가 없으면 실패한다. 대시보드는
        manifest 만 보므로 살아 있다 — 하나가 실패해도 나머지는 그린다. */
-    /* 추이는 /quality/trend 를 쓴다. 예전에는 /history/tests/daily(=Elementary 의
-       실행 단위 통과율)였는데, KPI 는 규칙 단위라 분모가 서로 달랐다 —
-       한 화면에 100% 와 90.4% 가 함께 뜬 원인이다. 지금은 둘 다 규칙 단위이고
-       마지막 점이 KPI 와 같은 값이 된다. */
+
     const [dash, daily, tests] = await Promise.all([
       api('/quality/dashboard'),
       api(`/quality/trend?days=${days}`).catch(() => null),
@@ -523,12 +520,7 @@ function qDashView(main) {
   if (QUAL.error) body.appendChild(el(`<div class="note err">${ic('xc')}<span>${esc(QUAL.error)}</span></div>`));
 
   /* ── KPI 4장 ── */
-  /* KPI 네 장은 **전부 서버(/quality/dashboard) 값**이다.
-     예전에는 통과율만 서버 것이고 나머지는 화면이 QRULES 로 따로 셌다. 그래서
-     ① 통과율은 호출 시점, 나머지는 페이지 연 시점이라 갱신되면 갈라졌고
-     ② 「실패 0건」 옆에 「오류 행 7,151」 같은 조합이 나왔다(화면은 심각도를,
-        서버는 결과를 세고 있었다).
-     한 곳에서 계산해 내려받으면 이 둘이 생길 자리가 없다. */
+
   const kp = el('<div class="q-grid4"></div>');
   const measured = d ? d.measured : null;
   kp.appendChild(qKpi('검증 통과율',
@@ -564,24 +556,7 @@ function qDashView(main) {
   body.appendChild(r2);
 }
 
-/* ── 검증 통과율 추이 ──────────────────────────────────────────
-   **막대가 아니라 꺾은선이다.** 원본 디자인은 통과/실패·경고를 쌓은 100% 막대였는데,
-   실데이터에서 세 가지가 어긋났다.
 
-     ① 시간에 따른 «비율의 추이» 는 선의 일이다. 막대는 0 기준에서 길이로 크기를
-        비교하는 마크다. 통과율은 크기가 아니라 위치를 읽는 값이다.
-     ② 통과율이 89~100 사이에 모여 있어 0 기준 막대에서는 잉크의 89% 가 죽고
-        신호가 맨 위 10% 에 눌린다 — 실측 범위가 89.5~100.0 이었다.
-     ③ **실행이 없는 날은 항목이 없다.** 같은 폭 막대를 붙여 놓으면 08.05·08.06 이
-        빠진 것이 안 보이고 연속된 날처럼 읽힌다. 선을 «날짜 좌표» 로 그리면 그 자리가
-        빈 구간으로 드러난다.
-
-   y 축은 0 부터 그리지 않는다. 대신 **눈금을 적어 축 범위를 드러낸다** — 비율 감시
-   차트의 관행이고, 축을 숨긴 채 좁히는 것과는 다르다. 0 기준을 지켜야 하는 것은
-   길이로 크기를 말하는 막대 쪽 규칙이다.
-
-   계열이 하나라 범례 상자를 두지 않는다(제목이 계열 이름이다). 대신 마지막 값을
-   선 끝에 직접 적고, 나머지 값은 눈금과 십자선 도움말이 맡는다. */
 function qTrendCard() {
   const c = qCard('검증 통과율 추이', `${S.qPeriod} · 일자별`);
   const b = $('.wc-card__body', c);

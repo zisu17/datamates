@@ -1,9 +1,6 @@
-/* ── b06 — ── b06 — v1.2 — 연결 작업 · 워크 스페이스 카탈로그 · 모델링↔파이프라인 ── (index.html 블록에서 기계적 추출, 동작 불변) */
 
-/* ============================================================
-   v1.2 — 연결 작업 · 워크 스페이스 카탈로그 · 모델링↔파이프라인
-   (뒤에 정의한 함수가 앞의 동명 함수를 대체한다)
-   ============================================================ */
+
+
 
 /* ── 연결 작업 정의 ── */
 function edgeCfg(e) { if (!e.cfg) e.cfg = edgeDefaults(); return e.cfg; }
@@ -11,13 +8,7 @@ function edgeCfg(e) { if (!e.cfg) e.cfg = edgeDefaults(); return e.cfg; }
 function edgeKey(e) { return e.from + '>' + e.to; }
 function findEdge(k) { return S.edges.find(e => edgeKey(e) === k); }
 
-/* ── 워크 스페이스 (제거) ──
-   홈의 두 번째 탭에서만 쓰던 묶음이다. 기본 4개(전체·원천·정제·분석)는 층 필터였고,
-   내 워크 스페이스 4개는 의료 데모 시절 테이블 id(dim_patient · agg_checkup_summary …)를
-   들고 있어 지금 데이터에서는 하나도 찾히지 않았다 — 넷 다 «0개 파이프라인» 만 그렸다.
-   홈을 한 화면으로 정리하며 WS_BASE · WS_USER · wsTables · wsById 를 걷어냈고,
-   화면 쪽(homeWsView 등)은 b11, 만들기 모달(wsCreateModal)은 b07 에서 함께 지웠다.
-   딸려 있던 상태 키(ws · wsTable · wsTab · wsQ · wsSort)도 읽는 곳이 없어 뺀다. */
+
 /* ── 상태 확장 ── */
 Object.assign(S, {
   selEdge: null,

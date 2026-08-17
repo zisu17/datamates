@@ -1,6 +1,6 @@
-/* ── b41 — ── b41 — ── v2.8 — 캔버스는 DAG task 로. 설명 문구 대신 실행 순서를 카드에 붙인다 ── (index.html 블록에서 기계적 추출, 동작 불변) */
 
-/* ── v2.8 — 캔버스는 DAG task 로. 설명 문구 대신 실행 순서를 카드에 붙인다 ── */
+
+
 let _seqCache = { sig: null, map: null };
 function execSeq(pp) {
   const sig = gsig(pp);

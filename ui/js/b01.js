@@ -8,11 +8,7 @@ function go(page, arg) {
   if (page === 'pipeline' && arg && arg !== S.pipe) S.pipeScroll = null;
 
   if (page === 'catalog' || (page === 'modeling' && arg)) {
-    /* 카탈로그 화면은 v2.1 에서 데이터 모델로 합쳐졌다 — 항목만 얹고 넘어간다.
-       modeling 에 인자를 준 경우도 같은 뜻이다: «그 모델을 열어라».
-       다른 화면(분석·수집·파이프라인)이 모델로 되돌아오는 통로가 전부 이 줄을
-       지나므로, 여기서 선택까지 해 주지 않으면 «이동은 했는데 아무 것도 안
-       열린» 화면이 된다. */
+
     /* 관계도를 먼저 채우고 나서 «있는가» 를 본다.
        seedCanvas 는 첫 호출에 카탈로그 전체를 올리는데, 그 전에 물어보면 항상
        «없다» 가 나와 addNodeFromCatalog 가 상류까지 다시 올리려 든다. 그러면
@@ -107,11 +103,10 @@ function applyTierDefaults() {
   if (t.xnar) { S.leftOpen = false; S.rightOpen = false; }      // 상세는 오버레이로 열림
   else if (w < 1340) { S.leftOpen = false; S.rightOpen = true; } // 데이터 목록은 필요할 때 펼침
   else { S.leftOpen = true; S.rightOpen = true; }
-  S.mPanelOpen = true;                                          // v2.1 이 덧붙이던 한 줄
+  S.mPanelOpen = true;
 }
 /* 캔버스 폭이 부족하면 보조 버튼을 더보기로 넘긴다 */
-/* 툴바 여유폭 — 좁으면 보조 버튼이 더보기로 넘어간다.
-   사이드바(v4.6)와 우측 상세(v4.x)가 사라져 이제 왼쪽 목록만 차지한다. */
+
 function barBudget() {
   const left = S.leftOpen ? S.leftW : 44;
   return window.innerWidth - left;
@@ -162,8 +157,7 @@ function topbar() {
 }
 
 
-/* 전역 사이드바는 v4.6 에서 헤더 GNB 드롭다운으로 접었다.
-   레이아웃 골격(.shell 첫 칸)은 남아야 해서 빈 자리 표시자만 그린다. */
+
 function sidebar() { return el('<nav class="side" aria-hidden="true"></nav>'); }
 
 function pageView() {
@@ -171,7 +165,7 @@ function pageView() {
     case 'home': return pageHome();
     case 'ingest': return pageIngest();
     case 'modeling': return pageModeling();
-    /* 상세(pagePipeDetail)는 v5.4 부터 파이프라인 탭이 대신한다 — 같은 함수였다 */
+
     case 'pipeline': return pagePipeline();
     case 'quality': return pageQuality();
     /* 분석은 b53.js 가 정의한다 — 파일이 없으면 메뉴도 없으므로 여기 오지 않는다 */
@@ -201,7 +195,7 @@ function modal(html, opts) {
 
   document.body.appendChild(scrim);
   $$('[data-close]', m).forEach(b => b.onclick = () => scrim.remove());
-  fixTerms(scrim);                       // 용어 통일(데이터 모델링→데이터 모델 등)은 모달에도 (v2.5)
+  fixTerms(scrim);
   return { scrim, m, close: () => scrim.remove() };
 }
 

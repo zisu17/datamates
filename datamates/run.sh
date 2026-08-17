@@ -3,8 +3,7 @@
 #
 #   ./datamates/run.sh              # http://localhost:8000  (문서: /docs)
 #
-# env.sh 를 먼저 읽는 이유: 이 서버가 dbt 를 서브프로세스로 부르기 때문이다.
-# DBT_PROFILES_DIR / JAVA_HOME / SPARK_HOME 이 없으면 dbt parse 가 실패한다.
+# 서버가 호출하는 dbt의 프로젝트와 실행 환경을 env.sh에서 설정한다.
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

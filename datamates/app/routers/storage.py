@@ -1,25 +1,20 @@
 """저장소 사용량 — 객체 저장소(MinIO)를 직접 세어 실제 바이트를 낸다.
 
 **행 수(/catalog/volume)와 다른 질문이다.** 행 수는 «데이터가 얼마나 있나», 여기는
-«디스크를 얼마나 쓰고 있나» 다. 둘은 비례하지 않는다 — 같은 186,065 행이 현재
-스냅샷으로는 3.9MB 인데 버킷에서는 35MB 를 차지한다(옛 스냅샷).
+«디스크를 얼마나 쓰고 있나» 다. 이전 스냅샷과 고아 파일이 남을 수 있어 둘은 비례하지 않는다.
 
 재는 방법
   · **점유(bytes)** — S3 ListObjectsV2 로 버킷을 훑어 접두사별로 더한다.
-    옛 스냅샷·고아 파일까지 전부 세려면 저장소 자체를 봐야 한다.
-    실측 9,740개 객체에 0.7초.
+    이전 스냅샷·고아 파일까지 세려면 저장소 자체를 봐야 한다.
   · **현재(liveBytes)** — 지금 스냅샷이 가리키는 데이터 파일만 골라
-    (warehouse.data_files) 위에서 얻은 크기를 맞춰 더한다. 실측 15개 테이블에 0.5초.
+    (warehouse.data_files) 위에서 얻은 크기를 맞춰 더한다.
 
-둘의 차이가 곧 «정리하면 회수되는 양» 이다(옛 스냅샷 만료 · 고아 파일 정리).
+둘의 차이가 곧 스냅샷 만료와 고아 파일 정리로 회수할 수 있는 용량이다.
 
 카탈로그를 거치지 않고 S3 를 직접 보는 이유는, 카탈로그가 아는 것은 등록된
 테이블뿐이라 지워진 테이블의 잔여 파일과 관측(Elementary) 테이블이 빠지기
 때문이다. 저장소 사용량은 «남아 있는 전부» 를 말해야 쓸모가 있다.
 
-(DuckLake 이관 메모) warehouse.file_sizes() 를 쓰면 카탈로그 메타데이터만으로
-현재 용량을 셀 수 있다 — DuckLake 가 파일 크기를 들고 있어서다. 다만 위 이유로
-버킷 훑기는 여전히 필요하므로, 지금은 S3 크기를 그대로 쓴다.
 """
 
 from __future__ import annotations
@@ -99,11 +94,7 @@ _TMP_SUFFIX = "__dbt_tmp"
 def _split(key: str) -> tuple[str, str, str] | None:
     """객체 키 → (schema, table, area). 못 가르면 None(테이블 파일이 아니다).
 
-    레이아웃 두 가지를 모두 읽는다. 이관 도중에는 한 버킷에 둘이 섞여 있고,
-    Iceberg 만 알던 시절의 파서는 DuckLake 파일을 통째로 «ducklake» 라는 이름의
-    스키마 하나로 접어 버렸다 — 그러면 카탈로그와 대조되지 않아 **살아 있는
-    데이터 전부가 「고아」로 잡힌다.** (실측: 라이브 98MB 가 고아로, 어제 죽은
-    Iceberg 잔여 490MB 가 「지금 쓰는 데이터」로 표시됐다.)
+    Iceberg와 DuckLake 레이아웃을 모두 지원한다.
 
       Iceberg   <schema>/<table>/{data,metadata}/…
       DuckLake  ducklake/<schema>/<table>/<파일>.parquet
@@ -126,9 +117,6 @@ def _split(key: str) -> tuple[str, str, str] | None:
 def _kind(schema: str, table: str, phys: str, known: set[str]) -> str:
     if phys in known:
         return "catalog"
-    # Elementary 는 실행마다 dbt_tests__tmp_<타임스탬프> 를 만들고 지우지 않는다.
-    # 관측 본체와 같은 스키마에 있지만 성격이 다르다 — 섞어 세면 «관측 테이블
-    # 441개» 처럼 읽혀서 숫자가 뜻을 잃는다(실측: 410개가 임시 테이블).
     if "__tmp_" in table:
         return "temp"
     if schema in OBSERVABILITY:
@@ -163,12 +151,6 @@ def storage(refresh: bool = Query(False, description="캐시를 무시하고 다
         t["objects"] += 1
         t["dataBytes" if area == "data" else "metadataBytes"] += size
 
-    # 현재 스냅샷 크기는 카탈로그에 등록된 테이블만 낸다. 지워진 테이블은 카탈로그가
-    # 모르니 스냅샷을 물어볼 대상 자체가 없다 — 그 경우 liveBytes 는 null 이다.
-    #
-    # 크기는 **카탈로그가 들고 있는 값**을 쓴다(warehouse.file_sizes). 예전에는 파일
-    # 경로를 버킷 목록과 맞췄는데, 그 방식은 경로가 한 글자만 어긋나도 조용히 0 이
-    # 되어 «지금 쓰는 데이터 0MB» 가 된다 — 없는 것과 못 맞춘 것을 구별할 수 없다.
     for phys, e in entries.items():
         t = tables.get(phys)
         if t is None:
@@ -191,7 +173,6 @@ def storage(refresh: bool = Query(False, description="캐시를 무시하고 다
             "name": e["name"] if e else t["table"],
             "group": e["group"] if e else None,
             "liveBytes": live,
-            # 회수 가능한 양 — 옛 스냅샷과 고아 파일. 현재를 모르면 이것도 모른다.
             "staleBytes": None if live is None else max(0, t["bytes"] - live),
         })
     items.sort(key=lambda x: -x["bytes"])
@@ -240,9 +221,6 @@ def storage(refresh: bool = Query(False, description="캐시를 무시하고 다
         # 카탈로그 테이블 기준. 저장소 전체가 아니라 «지금 쓰이는 데이터» 다.
         "liveBytes": live_total,
         "staleBytes": stale,
-        # 정리하면 실제로 비는 양. 셋은 지우는 방법이 서로 다르므로 나눠서 낸다 —
-        # 옛 스냅샷은 만료(expire_snapshots), 임시·잔여는 테이블째 drop 이다.
-        # 합계만 주면 «어떻게 지우나» 가 화면에서 사라진다.
         "reclaimable": {
             "stale": stale,
             "temp": total_of("temp")["bytes"],

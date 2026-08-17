@@ -1,487 +1,105 @@
-# 다른 맥에서 처음부터 구축하기
+# Data Mates 설치
 
-이 프로젝트를 새 맥에 그대로 올리는 절차. Apple Silicon / Intel 모두 동작하도록
-경로는 전부 동적으로 잡히게 해두었다.
+Data Mates는 Docker Compose로 애플리케이션, Airflow, DuckLake 저장소와 Superset을 실행합니다.
 
-전체 구성은 [README.md](../README.md) 를 보면 된다. 여기는 **설치 절차만** 다룬다.
+## 준비 사항
 
----
+- Docker와 Docker Compose
+- Git
+- 연결할 dbt 프로젝트
+- 호스트에서 개발 서버를 실행할 경우 Python 3.11
 
-## 0. 옮길 것과 옮기지 말 것
+현재 배포 이미지는 `linux/arm64`를 지원합니다.
 
-프로젝트 디렉터리를 복사하거나 git clone 한다. 아래는 **절대 옮기지 않는다** —
-전부 현재 맥 전용이거나 재생성되는 것들이다 ([.gitignore](../.gitignore) 에 이미 들어 있다).
+## dbt 프로젝트 연결
 
-```
-.venv/            macOS 바이너리. 새 맥에서 다시 만든다
-.iceberg-rest/    구 카탈로그 sqlite (지금은 Postgres 를 쓴다)
-.spark-warehouse/ 구 로컬 웨어하우스 (지금은 MinIO 를 쓴다)
-.spark-events/    Spark 이벤트 로그
-dbt_packages/     dbt deps 로 재생성 (dbt 프로젝트 안)
-target/ logs/     빌드 산출물 (dbt 프로젝트 안)
-edr_target/       Elementary 리포트
-.datamates/runs/  dbt 실행 산출물. 수백 MB 인데 다시 실행하면 쌓인다
-```
-
-옮겨야 하는 것은 화면·API 인 `datamates/ ui/` 와
-`dags/ scripts/ docker/ requirements.txt env.sh` 이다 (compose 파일은 `docker/` 안에 있다).
-
-**dbt 프로젝트는 이 저장소에 없다.** 콘솔이 제품이고 dbt 프로젝트는 그 제품이 다루는
-데이터라 저장소를 갈랐다. 새 맥에서는 dbt 프로젝트를 따로 받아 두고 `DBT_PROJECT_DIR`
-로 가리킨다 — 그 한 줄이 제품과 데이터의 경계다.
+dbt 프로젝트 경로를 환경변수로 지정합니다. 지정하지 않으면 저장소의 `dbt/` 디렉터리를 사용합니다.
 
 ```bash
-git clone git@github.com:zisu17/dbt-projects.git ~/PycharmProjects/dbt-projects
-export DBT_PROJECT_DIR=~/PycharmProjects/dbt-projects/realestate-gap
+export DBT_PROJECT_DIR=/absolute/path/to/your-dbt-project
 ```
 
-`~/.zshrc` 에 넣어 두면 매번 치지 않아도 된다. 지정하지 않으면 관례상 저장소 안의
-`dbt/` 를 보므로, 거기에 두거나 심볼릭 링크를 걸어도 된다. 경로에 `dbt_project.yml`
-이 없으면 `env.sh` 가 경고한다.
+지정한 디렉터리에는 `dbt_project.yml`과 `profiles/`가 있어야 합니다.
 
-`.datamates/datamates.db` 는 **선택**이다. 파이프라인 정의·수집 작업·폴더 배치·변경 이력이
-들어 있는 메타스토어라, 가져가면 그 화면들이 그대로 이어지고 안 가져가면 빈 화면에서
-시작한다. `dags/datamates_*.py` 는 안 옮겨도 된다 — API 서버가 기동할 때 메타스토어를
-보고 다시 만든다.
+## 전체 스택 실행
 
----
-
-## 1. 전제 도구
-
-```bash
-brew install python@3.11 openjdk@17 colima docker docker-compose
-```
-
-| 도구 | 왜 |
-| --- | --- |
-| **python@3.11** | dbt-core 1.12 + pyspark 4.0 이 지원하는 버전. 3.12 도 되지만 검증한 건 3.11 |
-| **openjdk@17** | Spark 4.0 은 Java **17/21 만** 지원. 23 이면 기동 실패 |
-| **colima** | macOS 용 컨테이너 런타임 (Docker Desktop 대체) |
-| **docker / docker-compose** | CLI. colima 가 데몬 역할 |
-
-`openjdk@17` 은 `/Library/Java/JavaVirtualMachines` 에 심볼릭 링크를 만들지 않는다
-(그건 sudo 가 필요하다). 그래서 `/usr/libexec/java_home` 에 안 잡히는데, `env.sh` 가
-brew 경로를 직접 찾으므로 링크를 만들 필요 없다.
-
----
-
-## 2. Python 환경
-
-프로젝트 루트에서:
-
-```bash
-python3.11 -m venv .venv && .venv/bin/pip install --upgrade pip
-```
-
-```bash
-.venv/bin/pip install -r requirements.txt -r datamates/requirements.txt
-```
-
-`requirements.txt` 는 dbt 실행에 필요한 상위 패키지만 고정해 둔다. 나머지는 pip 이 해결한다.
-
-```
-dbt-core==1.12.0
-dbt-duckdb==1.11.0
-duckdb==1.5.5
-elementary-data==0.25.1
-dbt-spark==1.11.0
-pyspark==4.0.4
-```
-
-기본 타깃 `local` 이 DuckLake 라 `dbt-duckdb` 가 실제로 쓰이는 어댑터다. `dbt-spark`/`pyspark`
-는 롤백 타깃(`DBT_TARGET=spark_local`) 전용으로 호스트에만 남겨 두었다 — 컨테이너 이미지에는
-없다.
-
-`datamates/requirements.txt` 는 화면·API 쪽이다. `duckdb`/`pyarrow` 는 데이터 수집이
-Spark 를 띄우지 않고 DuckLake 에 직접 쓰는 데 필요하고(호출마다 JVM 기동 15초를 안 낸다),
-`python-multipart` 는 파일 올리기의 multipart 파싱에 필요하다 — 없으면 서버가
-`RuntimeError: Form data requires "python-multipart"` 로 **기동 자체를 못 한다**.
-`duckdb` 는 미리보기·이력 조회의 읽기 엔진이고, `sqlglot` 은 컬럼 계보를 SQL AST 로 뽑는다.
-
-이 둘이 dbt 쪽이 아니라 여기 있어야 하는 이유는 컨테이너다. 이미지에서는 dbt 와 앱이 서로
-다른 venv 에 들어가고, 이것들을 import 하는 것은 앱 프로세스다 — 저쪽에 두면 앱 이미지에
-설치되지 않아 해당 화면만 조용히 죽는다.
-
-> **pyspark 를 4.0.x 로 고정한 이유** — 최신은 4.2 지만 Iceberg 는 **Spark 4.0 용 런타임만**
-> 배포한다. `iceberg-spark-runtime-4.1_2.13` / `4.2_2.13` 은 Maven Central 에 없다.
-> 4.2 를 쓰면 Iceberg 를 못 붙인다.
-
-`dbt-spark` 는 `[session]` extra 없이도 pyspark 를 위에서 따로 설치하므로 동작한다.
-
-확인:
-
-```bash
-source ./env.sh
-```
-
-이렇게 나와야 한다.
-
-```
-dbt env ready  |  target=local  schema=analytics  java=openjdk.jdk
-               |  spark=4.0.4  SPARK_HOME=.venv/lib/python3.11/site-packages/pyspark
-```
-
-`java=` 가 17 이 아니거나 `spark=` 가 4.0.x 가 아니면 3번 항목(함정)을 보라.
-
----
-
-## 3. 컨테이너 런타임
-
-```bash
-colima start --cpu 6 --memory 8
-```
-
-측정 기준 전체 스택 피크가 **3.4 GB / 8 GiB (41%)** 이므로 8 GiB 로 충분하다.
-BI 나 Airflow 병렬 실행을 추가하면 12 GiB 이상으로 올린다.
-
-`docker compose` 플러그인이 없으면 standalone 바이너리를 쓴다. 이 문서의 명령은
-전부 플러그인 형태(`docker compose`)로 적었다 — 하이픈 형태로 바꿔 써도 같다.
-
-```bash
-docker compose version || which docker-compose
-```
-
----
-
-## 4. 스택 기동
-
-**저장소 루트에서** 실행한다 — 이 문서의 `-f docker/compose.yml` 이 루트 기준 경로다.
-
-compose 파일 안의 상대경로는 `${PWD}` 가 아니라 **첫 `-f` 파일이 있는 디렉터리**(`docker/`)를
-기준으로 풀린다. 저장소 루트를 거는 마운트가 `../` 로 시작하는 이유다. 다른 데서 부르려면
-`-f` 에 그 파일의 경로만 맞춰 주면 된다.
-
-먼저 카탈로그 볼륨을 만든다. **이걸 빼면 다음 명령이 바로 실패한다.**
+저장소 루트에서 실행합니다.
 
 ```bash
 docker volume create iceberg-catalog
+docker compose -f docker/compose.yml -f docker/compose.superset.yml up -d
+./scripts/bootstrap_catalog.sh
 ```
 
-`iceberg-catalog` 만 `external: true` 다 — compose 가 알아서 만들지 않는다. 없는 상태로
-올리면 `external volume "iceberg-catalog" not found` 로 스택이 통째로 안 뜬다.
-카탈로그를 Postgres 로 옮긴 뒤로 이 볼륨을 **마운트하는 서비스는 없다.** 이관 전 상태로
-되돌릴 유일한 원본이라 선언만 남겨 뒀다(40KB).
+주요 서비스 주소는 다음과 같습니다.
+
+| 서비스 | 주소 |
+| --- | --- |
+| Data Mates | http://localhost:8000 |
+| API 문서 | http://localhost:8000/docs |
+| Airflow | http://localhost:8080 |
+| MinIO 콘솔 | http://localhost:9001 |
+
+`iceberg-catalog`는 Compose 파일에 외부 볼륨으로 선언되어 있어 최초 한 번 직접 생성해야 합니다.
+
+상태와 로그는 다음 명령으로 확인합니다.
 
 ```bash
-docker compose -f docker/compose.yml pull
-docker compose -f docker/compose.yml up -d
+docker compose -f docker/compose.yml -f docker/compose.superset.yml ps
+docker compose -f docker/compose.yml -f docker/compose.superset.yml logs -f
 ```
 
-MinIO, Iceberg REST, Airflow, Data Mates 네 개가 올라온다. 이미지는 도커허브에서 받는다.
-compose 에 `build:` 를 두지 않았으므로 `up` 이 빌드를 시작하는 일은 없다.
+Airflow는 첫 실행 때 메타데이터 데이터베이스를 초기화하므로 준비에 시간이 걸릴 수 있습니다.
 
-이미지는 **하나**다 — `zisu17/datamates:1.0.0`. Airflow, Data Mates, Superset 세 서비스가
-같은 이미지를 서로 다른 command 로 돌린다. 받을 것이 하나뿐이고, 세 쪽의 dbt·DuckDB 버전이
-구조적으로 어긋날 수 없다.
+## dbt 초기화
 
-| 계층 | 위치 | 안에 든 것 |
-| --- | --- | --- |
-| Airflow | (base) | Airflow 3.2.2 |
-| dbt | `/opt/dbt-venv` | dbt-core 1.12.0 · dbt-duckdb 1.11.0 · DuckDB 1.5.5 · Elementary 0.25.1 |
-| Data Mates | `/opt/datamates-venv` | FastAPI 0.121.2 · DuckDB 1.5.5 · psycopg 3.2.10 · sqlglot 30.14.0 |
-| Superset | `/opt/superset-venv` | Superset 5.0.0 · duckdb-engine 0.17.0 · psycopg2 2.9.12 |
+처음 연결한 dbt 프로젝트는 의존성과 기본 테이블을 준비합니다.
 
-venv 를 네 개로 가르는 것은 타협이 아니라 제약이다. Airflow 3 은 자기 API 서버를 FastAPI 로
-만들어 fastapi·pydantic 을 고정하고, Superset 은 Flask 계열 전체와 **자기 버전의
-pyarrow(14.0.2)·sqlglot(26.33)** 을 고정한다 — 앱이 쓰는 25.0.0 / 30.14.0 과 정면으로
-충돌한다. 한 환경에 합치는 것은 불가능하다. 네 쪽이 서로를 import 하지 않고 프로세스로만
-갈라져 있으므로 잃는 것은 없다.
+```bash
+source ./env.sh
+dbt deps
+dbt run --select elementary
+dbt build --full-refresh
+```
 
-태그는 개별 도구 버전이 아니라 스택 버전이다. Airflow 는 3.2.2 이고 Superset 은 5.0.0 인데
-이미지가 하나이므로 어느 쪽 버전도 태그가 될 수 없다.
+## 호스트에서 애플리케이션 개발
 
-Airflow 는 health check 를 통과할 때까지 1~2분 걸린다(첫 기동은 메타DB 마이그레이션까지
-한다). Data Mates 는 그 뒤에 뜬다 — 기동할 때 admin 비밀번호 파일을 읽어야 하기 때문이다.
+코드 변경을 자동으로 반영하려면 Data Mates 컨테이너만 중지하고 호스트 개발 서버를 실행합니다.
 
-이미지를 직접 다시 만들려면 다음 명령을 쓴다. 빌드 컨텍스트가 저장소 루트인 이유는
-`datamates/requirements.txt` 와 `docker/superset/requirements-local.txt` 를 읽어야 해서다.
-그래서 `-f` 로 Dockerfile 을 지정한다.
+```bash
+python3.11 -m venv .venv
+.venv/bin/pip install --upgrade pip
+.venv/bin/pip install -r requirements.txt -r datamates/requirements.txt
+docker compose -f docker/compose.yml -f docker/compose.superset.yml stop datamates
+./datamates/run.sh
+```
+
+`run.sh`는 `env.sh`를 읽고 `DBT_PROJECT_DIR`, 데이터베이스 연결 정보와 dbt 실행 환경을 설정합니다.
+
+## 이미지 빌드
+
+Data Mates, Airflow와 Superset은 같은 이미지를 서로 다른 명령으로 실행합니다.
 
 ```bash
 docker build -f docker/datamates/Dockerfile -t zisu17/datamates:1.0.0 .
 ```
 
-amd64 와 arm64 를 함께 담아 올릴 때는 buildx 를 쓴다. 기본 빌더는 `docker` 드라이버라
-여러 아키텍처를 한 번에 만들거나 `--push` 를 쓸 수 없어서 `docker-container` 드라이버를
-먼저 만든다.
+다중 아키텍처 이미지는 Buildx로 빌드합니다.
 
 ```bash
 docker buildx create --name datamates --driver docker-container --bootstrap --use
-docker buildx build --platform linux/amd64,linux/arm64 -t zisu17/datamates:1.0.0 --push -f docker/datamates/Dockerfile .
-```
-Apple Silicon 에서 amd64 는 에뮬레이션으로 만들어지므로 시간이 오래 걸린다.
-
-네임스페이스 부트스트랩:
-
-```bash
-./scripts/bootstrap_catalog.sh
-```
-
-> **왜 별도 스크립트인가** — elementary 패키지의 `on-run-start` 훅이 대상 스키마가
-> 이미 있다고 가정하고 `listTables` 를 호출한다. 빈 웨어하우스에서는 dbt 가 모델 실행
-> 전에 죽는다. 루트 프로젝트에 훅을 걸어도 안 되는데, **패키지 훅이 루트 훅보다 먼저**
-> 실행되기 때문이다. 그래서 dbt 바깥에서 미리 만든다.
-
-상태 확인:
-
-```bash
-docker ps --format '{{.Names}}\t{{.Status}}'
-```
-
----
-
-## 5. dbt 초기화
-
-```bash
-dbt deps
-```
-
-```bash
-dbt run --select elementary
-```
-
-Elementary 의 결과 적재 테이블을 먼저 만든다. 이걸 건너뛰면 `on-run-end` 훅이 쓸 대상이
-없어서 실패한다. **최초 1회만** 필요하다.
-
-```bash
-dbt build --full-refresh
-```
-
-기대 결과:
-
-```
-Done. PASS=75 WARN=1 ERROR=0 SKIP=0 TOTAL=76
-```
-
-`WARN=1` 은 의도한 것이다 — 익명 이벤트의 `user_id` null 을 error 가 아닌 warn 으로 두었다.
-
----
-
-## 6. Data Mates 화면 기동
-
-4단계에서 이미 컨테이너로 떠 있다. http://localhost:8000 이 화면, `/docs` 가 API 다.
-
-화면이나 API 코드를 고치면서 개발할 때는 호스트에서 띄우는 편이 편하다 — `--reload` 가
-붙어서 컨테이너를 다시 만들 필요가 없다. 포트가 겹치므로 컨테이너 쪽을 먼저 멈춘다.
-
-```bash
-docker compose -f docker/compose.yml stop datamates
-./datamates/run.sh
-```
-
-`run.sh` 가 `env.sh` 를 먼저 읽는다 — 이 서버가 `dbt parse` 를 서브프로세스로 부르기
-때문에 `DBT_PROFILES_DIR` / `JAVA_HOME` / `SPARK_HOME` 이 필요하다. 컨테이너에서는 그 역할을
-이미지의 `DATAMATES_DBT_BIN`(이미지 안 dbt venv)과 compose 의 환경변수가 대신한다.
-
-두 방식을 번갈아 써도 된다. 생성되는 DAG 은 앱이 기동할 때 자기 기준으로 다시 쓰므로,
-수집 DAG 이 부르는 API 주소(`host.docker.internal` ↔ `datamates`)가 자동으로 맞춰진다.
-
-기동할 때 서버가 두 가지를 스스로 맞춘다. 손으로 할 일은 없다.
-
-- **`iceberg_write` 풀 생성** (슬롯 2). 수집과 파이프라인은 **서로 다른 DAG** 이라
-  `max_active_tasks` 로는 서로를 못 막는다 — DAG 을 가로질러 조이는 수단은 풀뿐이다.
-  카탈로그가 SQLite 였을 때는 슬롯이 1이어야 했고(동시 커밋이 깨졌다), Postgres 로
-  옮긴 뒤로는 카탈로그가 아니라 메모리가 상한이라 2 로 둔다.
-- **DAG 파일 재생성**. 메타스토어의 파이프라인·수집 작업을 보고 `dags/datamates_*.py` 를
-  다시 쓴다. 그래서 `.datamates/datamates.db` 만 가져오면 DAG 은 따라온다.
-
-Airflow 가 아직 안 떠 있으면 풀 생성만 건너뛰고 기동은 계속한다. 그 상태로 파이프라인을
-돌리면 태스크가 큐에서 안 나오니, Airflow 를 올린 뒤 서버를 한 번 다시 띄운다.
-컨테이너로 띄울 때는 이 상황이 없다 — compose 가 Airflow 의 health check 를 기다린 뒤에야
-Data Mates 를 올린다.
-
----
-
-## 7. 확인
-
-**데이터가 MinIO 에 들어갔는지**
-
-```bash
-docker run --rm --network dbt_default --entrypoint sh minio/mc:latest -c "mc alias set L http://minio:9000 minioadmin minioadmin >/dev/null && mc du L/warehouse"
-```
-
-**Airflow**
-
-```bash
-open http://localhost:8080
-```
-
-```bash
-docker exec airflow cat /opt/airflow/simple_auth_manager_passwords.json.generated
-```
-
-**컨테이너와 호스트가 같은 웨어하우스를 보는지** — 가장 중요한 검증이다.
-
-```bash
-docker exec -w /opt/project/dbt airflow /opt/dbt-venv/bin/dbt build
-```
-
-> **dbt 프로젝트를 옮긴 직후 한 번은** 컨테이너가 «depends on a node named ... which was
-> not found» 로 죽는다. 컨테이너의 `DBT_TARGET_PATH`(/opt/airflow/dbt/target) 에 남은
-> 부분 파싱 캐시(partial_parse.msgpack)가 옛 경로 기준이고, dbt 가 이걸 스스로
-> 무효화하지 않기 때문이다. 한 번만 캐시를 무시해 주면 다시 써지고 이후로는 정상이다.
->
-> ```bash
-> docker exec -w /opt/project/dbt airflow /opt/dbt-venv/bin/dbt parse --no-partial-parse
-> ```
-
-그다음 호스트에서 같은 결과가 나오면 성공이다.
-
-```bash
-dbt show --inline "select count(*) as rows from {{ ref('stg_apt_trade') }}"
-```
-
-**MinIO 콘솔** — http://localhost:9001 (minioadmin / minioadmin)
-
----
-
-## 이미 쌓인 데이터까지 옮기려면
-
-위 절차는 **빈 웨어하우스에서 시작**한다. `dbt build` 가 seed 로 테이블을 다시 만들기
-때문에 대개 그걸로 충분하다. 원래 맥의 데이터를 그대로 가져가려면 볼륨 두 개를 함께
-옮긴다 — **반드시 둘 다** 다. 카탈로그는 테이블이 어디 있는지를 가리키는 포인터라,
-한쪽만 옮기면 없는 파일을 가리키게 된다.
-
-| 볼륨 | 무엇 | 크기(예) |
-| --- | --- | --- |
-| `dbt_minio-data` | Iceberg 데이터 파일 본체 | 113M |
-| `postgres-data` | 메타스토어 · Airflow 메타DB · 카탈로그 포인터 | 60M |
-| `iceberg-catalog` | 이관 전 카탈로그 (SQLite, 지금은 미사용) | 40K |
-| `dbt_airflow-home` | 실행 이력·Airflow 비밀번호 (선택) | 37M |
-
-내보내기 — 원래 맥에서, **스택을 내린 뒤에** 한다. 켜 둔 채로 뜨면 쓰다 만 SQLite 를 뜬다.
-
-```bash
-docker compose -f docker/compose.yml down
-```
-
-```bash
-for v in dbt_minio-data iceberg-catalog; do docker run --rm -v $v:/src:ro -v "$HOME/dm-backup:/out" alpine tar czf /out/$v.tgz -C /src .; done
-```
-
-> 내보낼 위치는 **홈 디렉터리 아래**여야 한다. colima 는 `/Users/<사용자>` 만 VM 에
-> 물려주므로 `/tmp` 같은 경로를 주면 tar 가 VM 안에만 쓰고 끝나 — 오류 없이
-> 호스트에 파일이 안 생긴다.
-
-가져오기 — 새 맥에서, `docker compose -f docker/compose.yml up` **전에** 한다.
-
-```bash
-docker volume create iceberg-catalog && docker volume create dbt_minio-data
-```
-
-```bash
-for v in dbt_minio-data iceberg-catalog; do docker run --rm -v $v:/dst -v "$HOME/dm-backup:/src:ro" alpine tar xzf /src/$v.tgz -C /dst; done
-```
-
-이 경로로 가면 5번(dbt 초기화)의 `dbt build --full-refresh` 는 건너뛰어도 된다.
-`dbt deps` 만 하면 된다 — `dbt_packages/` 는 어차피 안 옮긴다.
-
----
-
-## 함정
-
-여기서 막히는 경우가 대부분이다.
-
-### 1. `~/.zshrc` 의 SPARK_HOME 충돌
-
-다른 Spark 배포판을 쓰는 맥이면 `~/.zshrc` 에 `SPARK_HOME` 이 있을 수 있다. PySpark 는
-그걸 우선하므로 **Python 쪽 4.0.4 + JVM 쪽 다른 버전** 조합이 되어 이렇게 죽는다.
-
-```
-py4j.Py4JException: Method sql([String, Object[]]) does not exist
-```
-
-`env.sh` 가 `SPARK_HOME` 을 venv 의 pyspark 로 덮고 `HADOOP_CONF_DIR` 을 떼어내므로,
-**항상 `source ./env.sh` 를 먼저** 하면 된다. `~/.zshrc` 는 건드리지 않으니 다른
-프로젝트에는 영향이 없다.
-
-### 2. Java 버전
-
-Spark 4.0 은 Java 17/21 만 지원한다. 기본 `java` 가 23 이어도 `env.sh` 가 17 을 찾아
-바꿔준다. 못 찾으면 경고가 뜨니 `brew install openjdk@17` 을 하면 된다.
-
-### 3. 컨테이너 안에서 `source env.sh` 금지
-
-`env.sh` 는 호스트용이다. 컨테이너에서 실행하면 `SPARK_HOME` 을 macOS 경로로 덮어
-Spark 가 안 뜬다. 컨테이너 환경변수는 `docker/compose.yml` 이 이미 주입한다.
-DAG 에서는 `/opt/dbt-venv/bin/dbt` 를 절대경로로 부른다.
-
-### 4. 이미지 pull 실패 (사내망/VPN)
-
-colima VM 안에서 DNS 가 안 풀리면 이렇게 실패한다.
-
-```
-dial tcp: lookup registry-1.docker.io on 192.168.5.1:53: i/o timeout
-```
-
-호스트 리졸버를 찾아 물려준다.
-
-```bash
-scutil --dns | grep -m4 'nameserver\[' | awk '{print $3}' | sort -u
-```
-
-```bash
-colima stop && colima start --dns <위에서 나온 주소>
-```
-
-이 설정은 lima 인스턴스 설정에 저장되므로 이후 `colima start` 만으로 유지된다.
-**네트워크를 옮기면 그 리졸버에 못 닿을 수 있으니** 그때 다시 잡아야 한다.
-
-### 5. 마운트된 디렉터리를 `rm -rf` 하지 말 것
-
-colima 는 호스트 디렉터리를 통째로 지우고 다시 만들면 파일 공유가 깨져
-`SQLITE_CANTOPEN` 같은 에러가 난다. 초기화할 때는 **내용만** 지운다.
-
-```bash
-docker compose -f docker/compose.yml down && find .iceberg-rest -mindepth 1 -delete
-```
-
-### 6. `docker compose` vs `docker-compose`
-
-colima 환경에서 `docker compose` 플러그인이 안 잡히는 경우가 있다. 그때는
-standalone `docker-compose` 를 쓴다. 기능은 같다.
-
----
-
-## 정리 (전체 순서)
-
-```bash
-brew install python@3.11 openjdk@17 colima docker docker-compose
-```
-
-```bash
-python3.11 -m venv .venv && .venv/bin/pip install --upgrade pip && .venv/bin/pip install -r requirements.txt -r datamates/requirements.txt
-```
-
-```bash
-colima start --cpu 6 --memory 8
-```
-
-```bash
-docker volume create iceberg-catalog
-```
-
-```bash
-docker compose -f docker/compose.yml up -d && ./scripts/bootstrap_catalog.sh
-```
-
-```bash
-source ./env.sh && dbt deps && dbt run --select elementary && dbt build --full-refresh
-```
-
-```bash
-./datamates/run.sh
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -t zisu17/datamates:1.0.0 \
+  --push \
+  -f docker/datamates/Dockerfile .
 ```
 
 ## 종료
 
 ```bash
-docker compose -f docker/compose.yml down
+docker compose -f docker/compose.yml -f docker/compose.superset.yml down
 ```
 
-```bash
-colima stop
-```
-
-데이터는 named volume(`minio-data`, `airflow-home`, `postgres-data`)에 남으므로
-다시 올리면 그대로 이어진다. 완전히 지우려면 `docker compose -f docker/compose.yml down -v` 를 쓴다.
+데이터는 `minio-data`, `postgres-data`, `airflow-home` 등의 named volume에 유지됩니다.
+볼륨까지 삭제하려면 데이터가 더 필요하지 않은지 확인한 뒤 `down -v`를 사용합니다.

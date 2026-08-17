@@ -32,35 +32,15 @@ FREQ_CRON: dict[str, str | None] = {
 # API 가 같은 파일을 읽는다.
 CONTAINER_RUNS_DIR = "/opt/datamates/runs"
 
-# 한 파이프라인 안에서 동시에 돌릴 태스크 수.
-#
-# **1 이어야 한다.** 이유가 두 번 바뀌었으니 이력을 남긴다.
-#
-#   ① Iceberg + SQLite 카탈로그  — 동시 커밋이 SQLITE_BUSY 로 깨졌다
-#      (측정: 순차 3회 = 오류 0건 / 병렬 2개 = 매번 14건)
-#   ② 카탈로그를 Postgres 로 옮긴 뒤 — 잠금 문제가 사라졌다고 보고 2로 올렸다
-#   ③ DuckLake 로 옮긴 뒤 — **다시 1이다.** 이유가 잠금이 아니라 «낙관적 동시성» 이다.
-#
-# DuckLake 는 커밋할 때 다른 트랜잭션이 같은 테이블을 건드렸는지 확인하고, 겹치면
-# 뒤에 온 쪽을 거부한다. 잠금으로 기다리게 하는 방식이 아니라서 busy_timeout 같은
-# 완화책이 없다. dbt 는 elementary 훅이 매 실행마다 같은 관측 테이블에 쓰기 때문에
-# **서로 다른 모델을 빌드해도 커밋 대상이 겹친다.**
-#
-#   실측 증상: 모델 빌드 자체는 PASS=15 로 성공한 뒤 커밋에서만 실패한다
-#   "TransactionContext Error: Failed to commit DuckLake transaction.
-#    Transaction conflict - attempting to insert into table with index 33
-#    - but another transaction has deleted inlined data from it"
-#
-# 재시도로 넘길 수는 있지만(retry_delay 5분) 파이프라인이 몇 배로 늘어진다.
-# 순차로 돌려도 전체 빌드가 23초라 잃는 것이 거의 없다.
+# DuckLake 커밋 충돌을 방지하기 위해 파이프라인 안의 dbt 태스크를 순차 실행한다.
+# Elementary 훅이 실행마다 같은 관측 테이블을 갱신하므로 모델이 달라도 충돌할 수 있다.
 MAX_ACTIVE_TASKS = 1
 
 # 위의 제한은 «한 DAG 안»에서만 통한다. 데이터 수집은 별도 DAG 이라 그것만으로는
 # 파이프라인 빌드와 동시에 커밋할 수 있다. DAG 을 가로질러 막는 수단은 풀뿐이라
 # 빌드 태스크도 수집과 같은 풀에 넣는다. (ingestdag.POOL 과 같은 값)
 #
-# 풀은 남긴다 — 카탈로그가 Postgres 라도 동시 커밋 수를 한곳에서 조일 수 있는
-# 유일한 손잡이라, 슬롯만 넓히고 구조는 그대로 둔다(main.py 의 ensure_pool).
+# 풀의 슬롯 수는 main.py의 ensure_pool에서 관리한다.
 POOL = "iceberg_write"
 
 # run_id 에는 ':' 와 '+' 가 들어간다(manual__2026-08-07T02:30:00+00:00).
@@ -134,21 +114,12 @@ def _check_pipeline_result(**context):
     «리프 태스크» 로 판정하는데, 빌드가 실패하면 all_success 인 pipeline_done 이
     skipped 가 되고 skipped 리프는 성공으로 취급된다. 중간에 failed 가 있어도
     리프가 아니면 보지 않는다.
-      (실측: 12개 중 1개 failed · 1개 skipped 인데 dag_run.state = success)
 
     판정 기준은 **pipeline_done 이 성공했는가** 하나다. pipeline_done 은 모든 빌드
     태스크를 상류로 갖는 all_success 태스크라, 그것이 성공했다는 것은 곧 전부
     성공했다는 뜻이고, skipped 라면 어딘가 실패·건너뜀이 있었다는 뜻이다.
 
-    세 번 헛짚었으니 왜 이 모양인지 남긴다.
-      · trigger_rule="one_failed" 감시 태스크 → fail_fast DAG 이 거부한다
-        (FailFastDagInvalidTriggerRule: ALL_SUCCESS/ALL_DONE_SETUP_SUCCESS 만 허용)
-      · 평범한 태스크 안에서 검사 → 상류가 실패하면 그 태스크 자체가 skipped 라
-        콜백이 돌지 않는다. 검사할 기회가 없다.
-      · dag_run.get_task_instances() → Airflow 3 태스크 런타임의 dag_run 은 경량
-        객체(pydantic)라 그 메서드가 없다. AttributeError 로 **거짓 실패** 를 냈다.
-
-    그래서 XCom 도 DB 도 아닌 «상류 태스크의 ti 상태» 만 본다. teardown 은 상류
+    XCom의 완료 표식으로 상류 태스크 상태를 판정한다. teardown 은 상류
     성패와 무관하게 돌고, on_failure_fail_dagrun=True 가 그 실패를 DAG 까지 올린다.
     """
     ti = context["task_instance"]
@@ -196,10 +167,7 @@ with DAG(
     # on_failure_fail_dagrun 이 그 실패를 DAG 상태까지 올린다.
     # 이것 없이는 실패한 실행이 success 로 보인다 — _check_pipeline_result 참고.
     #
-    # trigger_rule 을 명시하지 않는다. as_teardown() 이 알아서 all_done 계열로
-    # 잡아 주고, 여기에 all_done_setup_success 를 손으로 걸면 «setup 이 없는»
-    # teardown 이 되어 Airflow 가 pipeline_done 쪽을 건너뛴다
-    # (실측: 빌드 12개 전부 success 인데 pipeline_done 이 skipped → 거짓 실패).
+    # trigger_rule은 as_teardown()이 설정한다.
     tasks["_verdict"] = PythonOperator(
         task_id="pipeline_verdict",
         python_callable=_check_pipeline_result,
@@ -279,10 +247,6 @@ def render(pipeline: dict[str, Any], flow: dict[str, Any]) -> str:
     order: list[str] = flow["order"]
     env_target = pipeline.get("env") or "local"
 
-    # **Task 그래프를 그대로 옮긴다.** 예전에는 여기서 모델 간선을 다시 걸러
-    # 태스크 의존을 만들었는데, 화면은 화면대로 같은 일을 따로 해서 둘이 어긋날
-    # 자리가 있었다(특히 task_mode=single 은 화면에 열두 칸, DAG 에 태스크 하나).
-    # graph.tasks_of 하나가 정본이고 화면과 DAG 이 그것을 함께 읽는다.
     tasks_spec: list[dict[str, Any]] = flow.get("tasks") or []
     task_edges: list[dict[str, str]] = flow.get("task_edges") or []
 
@@ -297,10 +261,6 @@ def render(pipeline: dict[str, Any], flow: dict[str, Any]) -> str:
         lines.append(
             f'    tasks[{t["key"]!r}] = BashOperator(\n'
             f'        task_id={("build__all" if t["key"] == "all" else task_id_of(t["key"]))!r},\n'
-            # **선행이 실패하면 후행은 돌지 않는다.** 예외를 두지 않는다 —
-            # 상류가 실패한 채로 하류를 돌리면 옛 데이터 위에 새 결과가 얹혀
-            # 「성공한 파이프라인」이 틀린 값을 남긴다. 옆가지는 그대로 진행되므로
-            # (Airflow 의 기본 동작) 실패가 무관한 Task 까지 막지는 않는다.
             f'        trigger_rule="all_success",\n'
             f'        bash_command={_bash(" ".join(models), env_target)!r},\n'
             f'        pool={POOL!r},\n'

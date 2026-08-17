@@ -15,11 +15,6 @@
 # 웨어하우스(minio · iceberg-rest)는 같은 프로젝트의 기본 네트워크에 있으므로
 # 서비스 이름으로 바로 부른다 — external 네트워크 선언이 필요 없다.
 #
-# ── P0 에서만 8088 을 호스트에 연다 ────────────────────────────
-# 설계의 전제는 「Superset 은 주소도 포트도 갖지 않는다」다. 하지만 P0 은 관리 화면과
-# REST API 로 확인하는 단계이므로 임시로 연다. P2(리버스 프록시)에서 ports 블록을 지운다.
-# 그때가 요구사항이 실제로 충족되는 시점이다.
-
 services:
   superset-db:
     image: postgres:16-alpine
@@ -78,17 +73,12 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
       DBT_SCHEMA: analytics
-      # 플랫폼(warehouse.py)과 같은 값이어야 한다 — 리스크 2.
-      # 한쪽만 바꾸면 차트 축과 미리보기의 시각이 어긋난다.
+      # 플랫폼 미리보기와 차트의 시간대를 맞춘다.
       DATAMATES_DUCKDB_TIMEZONE: ${DATAMATES_DUCKDB_TIMEZONE:-Asia/Seoul}
-      # 임베디드 SDK(게스트 토큰) 경로. P2 에서 확인한 바로는 이 플래그를 꺼도
-      # 일반 대시보드 경로를 iframe 에 넣으면 차트 그리드가 렌더되지 않는다.
-      # 즉 플래그는 원인이 아니고, 대시보드 임베드는 SDK 의 /embedded/ 경로가
-      # 정식 길이다. 그쪽으로 갈 것이므로 켜 둔다.
+      # 임베디드 SDK와 게스트 토큰 엔드포인트를 활성화한다.
       SUPERSET_EMBEDDED: ${SUPERSET_EMBEDDED:-1}
     volumes:
-      # 파일 하나만 마운트한다. 폴더를 통째로 걸면 Dockerfile 까지 pythonpath 에 들어간다.
-      # 파일로 두면 재빌드 없이 설정을 고쳐 P0 을 반복할 수 있다.
+      # 설정 파일만 Python 경로에 마운트한다.
       - ./superset/superset_config.py:/opt/superset/pythonpath/superset_config.py:ro
     # 들여쓰기를 한 칸도 더 넣지 말 것.
     #
@@ -140,8 +130,7 @@ services:
     volumes:
       - ./superset/superset_config.py:/opt/superset/pythonpath/superset_config.py:ro
     # 이미지의 부트스트랩 스크립트에 의존하지 않고 gunicorn 을 직접 부른다.
-    # 워커 4개는 의도적이다 — 워커마다 DuckDB 인스턴스가 따로 생기므로
-    # P0 ③(동시 질의)에서 그 영향을 실제로 보게 된다.
+    # 워커마다 독립된 DuckDB 인스턴스를 사용한다.
     command: >
       /opt/superset-venv/bin/gunicorn
       --bind 0.0.0.0:8088

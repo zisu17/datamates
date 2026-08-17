@@ -44,4 +44,3 @@ function qualityCard(t, tech) {
 }
 
 /* ── 6. 설정 ── */
-/* 시작은 v1.2 확장 블록 끝에서 수행한다 */

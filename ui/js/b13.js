@@ -1,18 +1,11 @@
-/* ── b13 — ── b13 — v2.1 — 데이터 모델링: 정의만. 실행 기능은 파이프라인으로 옮긴다. ── (index.html 블록에서 기계적 추출, 동작 불변) */
 
-/* ============================================================
-   v2.1 — 데이터 모델링: 정의만. 실행 기능은 파이프라인으로 옮긴다.
-   ============================================================ */
-/* 하단 독의 SQL · 품질 규칙 본문.
-   원래는 정의 화면 오른쪽 패널(mpView)의 6탭 본문이었지만, v2.2.1 이 mpView 를
-   빈 조각으로 만들고 v5.1~5.6 이 정의 화면을 하단 독으로 옮기면서
-   실제로 불리는 자리는 독의 두 탭(api 의 dockView)뿐이다.
-   그래서 기본 정보 · 입력 데이터 · 변환 · 컬럼 갈래는 도달하지 않는다 —
-   브라우저 실측으로도 이 함수는 S.mTab 이 'SQL' 또는 '품질 규칙' 일 때만 불렸다. */
+
+
+
 function mpBody(b, n, d) {
   if (S.mTab === 'SQL') {
     if (!d.sql) { b.appendChild(el(`<div class="empty">${ic('db')}<span class="empty-t">원천 데이터는 SQL이 없습니다.</span></div>`)); return; }
-    /* 문장·CTE 요약을 맨 위에 (v2.6 이 나중에 끼워 넣던 줄) */
+
     const a = sqlAudit(d.sql);
     b.appendChild(el(`<div class="rule q">${ic14('info')}<span>문장 ${a.stmts}개 · CTE ${a.cte}개${a.cteNames.length ? ` (${a.cteNames.join(', ')})` : ''} · 출력 테이블 1개.
       ${MODEL_RULE}</span></div>`));

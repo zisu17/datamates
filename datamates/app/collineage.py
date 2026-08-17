@@ -35,9 +35,7 @@ from . import manifest
 _lock = threading.Lock()
 _cache: dict[str, Any] = {"fp": None, "data": None}
 
-# 모델 SQL 의 방언. 웨어하우스 엔진과 같아야 한다 — dbt-spark 시절에는 "spark"
-# 였고, DuckLake(dbt-duckdb)로 옮기면서 "duckdb" 가 됐다. 어긋나면 파싱이
-# 조용히 실패해 컬럼 계보가 «없음» 으로 비어 버린다(예외를 삼키는 자리가 많다).
+# SQL 파서의 방언은 현재 웨어하우스 엔진과 같아야 한다.
 SQL_DIALECT = "duckdb"
 
 _RE_CONFIG = re.compile(r"\{\{-?\s*config\(.*?\}\}", re.S)

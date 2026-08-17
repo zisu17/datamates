@@ -23,7 +23,7 @@
 
   let cur = null;        // 지금 주소에 반영해 둔 경로
   let applying = false;  // 주소 → 상태 복원 중 (그동안은 주소를 쓰지 않는다)
-  let restored = false;  // 첫 진입의 주소를 한 번 되살렸는가
+  let restored = false;
   /* 주소를 상태로 옮기는 동안의 render 를 삼킨다. applyRoute 는 go() 를 거치고
      go() 는 끝에서 render() 를 부르는데, 옮기는 중에 그리면 같은 화면을 두 번
      그린다. 삼켜 두고 바깥에서 한 번만 그린다. */
@@ -130,16 +130,7 @@
   window.addEventListener('popstate', onNav);
   window.addEventListener('hashchange', onNav);
 
-  /* render 를 감싸 앞뒤로 주소를 다룬다. 이 파일은 마지막에 실려 가장 바깥이다.
 
-     **첫 그리기 «전에» 주소를 상태로 옮긴다.** 예전에는 반대였다 — 먼저 그리고
-     나서 주소를 읽었다. S.page 기본값이 'home' 이라(b00), #/modeling 으로 들어와도
-     홈이 한 번 그려지고 홈의 요청이 나간 뒤에야 모델 화면으로 넘어갔다. 브라우저의
-     출처당 동시 연결은 여섯이라(HTTP/1.1), 정작 사용자가 보려는 화면의 요청이 그
-     줄 뒤에서 기다렸다. 순서를 뒤집으면 홈은 아예 그려지지 않는다.
-
-     되살리는 시점이 여기인 것은 그대로다 — 데이터가 들어온 뒤라야 «그 파이프라인»
-     을 찾을 수 있고, boot() 이 데이터를 채운 뒤 render() 를 부른다. */
   render = (function (base) {
     return function () {
       // 주소를 옮기는 중에 go() 가 부른 render — 바깥에서 한 번만 그린다

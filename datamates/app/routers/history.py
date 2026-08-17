@@ -25,17 +25,6 @@ router = APIRouter(prefix="/history", tags=["history"])
 
 EL = "ice.analytics_elementary"
 
-# 시각 컬럼은 VARCHAR 다. 매번 쓰기 번거로워 표현을 하나로 모은다.
-#
-# **오프셋이 붙어 있으므로 그대로 읽는다.** 예전에는
-# `CAST(... AS TIMESTAMP) AT TIME ZONE 'UTC'` 였다 — 시간대 표시가 없는 UTC
-# 문자열이라는 전제였는데, 실제 값은 `2026-08-14T16:47:18+09:00` 처럼 오프셋을
-# 달고 온다. TIMESTAMP 로 캐스팅하는 순간 그 +09:00 이 잘려 나가고, 남은 naive
-# 값을 다시 UTC 로 선언하니 **모든 시각이 9시간 뒤로 밀렸다.**
-# (증상: 오늘 16:47 의 검사가 내일 01:47 로 잡혀 일자별 추이에 «내일» 이 생겼다.)
-#
-# TIMESTAMPTZ 로 캐스팅하면 오프셋이 있으면 그것을, 없으면 세션 시간대를 쓴다 —
-# 두 형태가 섞여 들어와도 맞는 순간을 가리킨다.
 TS = "(CAST({} AS TIMESTAMPTZ))"
 # execution_time 은 FLOAT 라 그대로 반올림하면 17.9 가 17.90999984741211 로 나온다.
 SEC = "CAST({} AS DOUBLE)"

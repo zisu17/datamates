@@ -28,8 +28,6 @@ from . import client
 
 logger = logging.getLogger(__name__)
 
-# Superset 이 쓰는 스키마 문자열. P0 에서 확인했다 — 「카탈로그.스키마」 형태다.
-# ice 는 warehouse.py 의 ALIAS 이고, superset_config.py 의 ICEBERG_ALIAS 와 같다.
 CATALOG = "ice"
 
 
@@ -45,8 +43,7 @@ def _sup_schema(phys: str) -> tuple[str, str]:
 def _database_id() -> int:
     """분석용 DuckDB 연결의 id. 없으면 만든다.
 
-    P2 까지는 사람이(스크립트가) 만들었다. 여기서 만들게 두면 설치 직후
-    첫 동기화만으로 분석 기능이 준비된다 — 수동 준비 단계가 사라진다.
+    없으면 첫 동기화에서 생성해 별도의 수동 준비 없이 분석 기능을 사용할 수 있게 한다.
     """
     from ..config import SUPERSET_PREFIX      # noqa: F401 — 문서용 참조
     name = "Data Mates 웨어하우스"
@@ -163,9 +160,7 @@ def sync_one(model_id: str, entry: dict[str, Any], db_id: int) -> dict[str, Any]
 def sync_all(*, prune: bool = True) -> dict[str, Any]:
     """DATA MART 를 데이터셋에 반영한다. 기동 때와 마트 지정 뒤에 부른다.
 
-    **마트만 내보낸다.** 예전에는 카탈로그 전체를 데이터셋으로 만들었는데,
-    그러면 분석에서 원천과 중간 모델까지 고를 수 있어 «무엇을 분석에 쓸 것인가»
-    라는 결정이 사라진다. 지금은 그 결정이 마트 지정 하나다.
+    **마트만 내보낸다.** 분석 대상으로 지정한 모델만 Superset 데이터셋으로 만든다.
 
     prune — 마트가 아니게 됐거나 manifest 에서 사라진 모델의 매핑을 정리한다.
     Superset 데이터셋 자체는 지우지 않는다. 차트가 붙어 있으면 화면이 깨지고,

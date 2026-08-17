@@ -11,9 +11,7 @@ moreMenu = function (anchor, canEdit) {
     items.push(['sep']);
   }
   if (graph) {
-    /* 옛 캔버스(자동 정렬·정의 화면·연결 삭제·캔버스에서 제거)는 계보 화면과
-       안 맞아 걷어냈다 — 배치는 항상 자동이고, 간선은 SQL 의 ref() 사실이며,
-       정의는 하단 독에 있다. 남는 것은 배율과 진짜 모델 삭제뿐이다. */
+
     items.push(['eye', '화면에 맞추기', '', () => { const b = $('#linZFit'); if (b) b.click(); }, false]);
     items.push(['search', '배율 100%', '', () => { S.erdZoom = 1; render(); }, false]);
     items.push(['sep']);

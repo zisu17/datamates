@@ -1,14 +1,6 @@
 /* ── b35 — 파이프라인 하단 상세 — 빌드 정보 · 품질 결과 · 이력 · 로그 ── */
 
-/* 하단 상세 독.
-   v6.2 에서 역할을 갈랐다 — 위(실행 흐름 캔버스)는 파이프라인을 «보고 조작하는» 곳,
-   아래(이 독)는 고른 것의 «결과를 읽는» 곳이다. 그래서 여기서는 아무것도 고치지 않는다.
-   설정을 바꾸는 길은 흐름도의 파이프라인 노드 우클릭 → 실행 설정(모달) 하나뿐이다.
 
-   탭은 보는 대상이 두 층위로 나뉜다 —
-     파이프라인 단위 : 이력                 (모델을 고르지 않아도 보인다)
-     모델 단위      : 빌드 정보 · 품질 결과 · 로그 (고른 모델이 있어야 한다)
-   높이·접기·자동 맞춤은 pipeDockChrome 이 맡는다 (두 반환 지점 모두 거친다). */
 const PDOCK_TABS = ['빌드 정보', '품질 결과', '이력', '로그'];
 const PDOCK_MODEL_TABS = ['빌드 정보', '품질 결과', '로그'];
 
@@ -56,17 +48,14 @@ function pipeDock(pp) {
   const b = el('<div class="dock-b col g12"></div>');
 
   if (S.pipeTab === '이력') {
-    /* 이력은 원래 상단 뷰였다. 파이프라인 단위 조회라 이 독으로 내렸다.
-       historyView 는 api.js 가 정의한다 — 없으면 그 층이 아직 안 붙은 것이다. */
+
     if (typeof historyView === 'function') b.appendChild(historyView());
     else b.appendChild(el(`<div class="empty">${ic('clock')}<span class="empty-t">실행 이력을 불러올 수 없습니다.</span></div>`));
   } else if (!d) {
     b.appendChild(el(`<div class="empty">${ic('model')}
       <span class="empty-t">흐름도에서 모델을 선택해 주세요.</span></div>`));
   } else if (S.pipeTab === '빌드 정보') {
-    /* 이 모델이 어떻게 만들어졌는가 — 결과(상태·시간·행 수)와 그것을 만든 SQL.
-       예전에는 SQL 이 별도 탭이었는데, «이 모델의 빌드» 라는 한 가지 질문을
-       탭 두 개로 갈라 놓은 것이라 여기로 합쳤다(SQL 은 접어 둔다). */
+
     b.style.display = 'grid'; b.style.gridTemplateColumns = 'repeat(auto-fit,minmax(240px,1fr))';
     /* 세 칸의 높이를 맞춘다(stretch) — 실행 SQL 상자가 그 높이를 채우고 스스로 스크롤해서,
        독 바깥으로 넘쳐 스크롤이 두 겹이 되는 것을 막는다. */
@@ -106,9 +95,7 @@ function pipeDock(pp) {
     }
     b.appendChild(sqlWrap);
   } else if (S.pipeTab === '로그') {
-    /* 본문은 api.js 가 서버에서 받아 채운다. 여기서는 자리만 잡는다.
-       예전에는 그럴듯한 로그를 지어 그렸는데, 그러면 «실행하지 않았다» 와
-       «로그를 받지 못했다» 를 구별할 수 없다. 받지 못했으면 받지 못했다고만 적는다. */
+
     const wait = rn.st === 'wait' ? '아직 실행하지 않았습니다.'
       : rn.st === 'skip' ? '앞 단계가 실패해 실행하지 않았습니다. (SKIP)'
       : '로그를 불러오는 중…';
@@ -137,11 +124,7 @@ function pipeDock(pp) {
 /* (실행 정보 — 파이프라인 단위 조회 탭이었다. 제거.
    실행 대상·SOURCE·실행 방식·환경·예약은 흐름도 노드 우클릭 → 실행 설정에서 본다) */
 
-/* 독의 틀 — 접기 · 높이 · 그립 · 자동 맞춤.
-   원래 v2.9.1(접기·DOCK_MIN/MAX)과 v2.9.2(파이프라인 전용 높이·자동 맞춤)가
-   같은 자리를 겹쳐 썼다. 뒤 층이 높이와 그립을 매번 다시 쓰므로 앞 층에서
-   살아남는 것은 min 클래스 · 접기 버튼 · (접혔을 때) 그립 제거 뿐이었다.
-   상수도 파이프라인 쪽(PDOCK_*)만 실제로 쓰인다. */
+
 function pipeDockChrome(p) {
   p.classList.toggle('min', S.pdockMin);
   const head = $('.dock-h', p);
@@ -198,21 +181,7 @@ function pipeDockChrome(p) {
   return p;
 }
 
-/* 실행 설정 — 하나의 파이프라인을 «읽고 고치는» 관리 화면.
 
-   v6.1 재구성. 예전에는 큰 카드 안에 모델 카드가 12개 반복되고, 정작 바꾸는 값
-   (일정·환경·재시도·알림)은 그 아래로 밀려 있었다. 설정 페이지인데 실행 대상
-   목록이 화면의 주인이었다. 뒤집는다 —
-
-     · 실행 대상 은 «구성이 정해 준 결과» 라 참고 정보다. 접어서 6줄만 보인다.
-     · 실제로 바꾸는 값이 화면의 주인이다. 섹션 제목 + 구분선 + 설정 행.
-     · 저장은 맨 위 오른쪽. 값을 고치고 아래까지 내려갈 일이 없어야 한다.
-
-   뒤에 오는 층이 붙잡는 자리(계약)는 그대로 둔다 —
-     #pcF #pcE #pcR #pcS #pcN #pcOk #pcGo 와, 각 층이 내용을 넣는 슬롯
-     #pcSlotTrig(실행 방식) #pcSlotSched(예약) #pcSlotFail(실패 처리).
-   버튼 순서는 CSS order 로 [구성 열기][삭제][설정 저장] 이다 — 삭제는 뒤 층이
-   #pcOk 다음에 끼워 넣으므로 DOM 순서로는 맞출 수 없다. */
 function pipeCfg(pp, r) {
   const c = pcfg2(pp), can = r.canPipeEdit;
   const g = pgraph(pp);
@@ -222,8 +191,7 @@ function pipeCfg(pp, r) {
   const w = el('<div class="def pcfg"><div class="def-in"></div></div>');
   const inn = $('.def-in', w);
 
-  /* 머리 — 한 줄 안내와 페이지 동작. 예전의 파란 배너는 이미 파이프라인 안에
-     들어와 있는 사람에게 SOURCE·DATA MODEL 을 다시 설명하고 있었다. */
+
   const head = el(`<div class="pcfg-top">
     <span class="pcfg-hint">${ic14('info', 'fnt')}저장하면 다음 실행부터 적용됩니다.</span>
     <div class="row g6 pcfg-act">
@@ -233,9 +201,7 @@ function pipeCfg(pp, r) {
   inn.appendChild(head);
   $('#pcGo', head).onclick = () => { S.pipeView = 'build'; render(); };
 
-  /* (실행 대상 목록 — v6.2 에서 하단 «실행 정보» 탭으로 옮겼다.
-     설정 모달은 «바꾸는 값» 만 담는다. 실행 대상은 구성이 정한 결과라 조회 쪽이 맞다.
-     뒤 층(api.js)의 조회 전용 표기는 #pcTgtN·[data-ordn] 가 없으면 그냥 넘어간다) */
+
 
   /* ── 실행 방식 — 내용은 뒤 층(api.js)이 이 슬롯에 넣는다 */
   inn.appendChild(el(`<section class="pcfg-s" id="pcSecTrig">

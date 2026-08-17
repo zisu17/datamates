@@ -19,4 +19,3 @@ function stBadge(st) { const s = RUNST[st] || RUNST.wait; return `<span class="b
 /* (pagePipeline + 별칭 _pagePipelineBase — 감싸던 원본이 뒤에서 전면 교체됐다. 죽은 층 제거) */
 /* ── 파이프라인 상세 — 실행 흐름도 ── */
 /* (pipeFlow — 이후 정의가 값 캡처 없이 전면 교체. 죽은 층 제거) */
-/* 시작은 v1.3 블록 끝에서 수행한다 */

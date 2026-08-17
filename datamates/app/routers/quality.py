@@ -170,8 +170,6 @@ def dashboard() -> dict[str, Any]:
     warn = sum(1 for r in rs if r["status"] == "warn")
     affected = sorted({r["modelId"] for r in rs if r["status"] in ("err", "warn")})
     entries = manifest.all_entries()
-    # 오류 행도 «잰 규칙» 만 센다. 지난 실행의 잔존값을 현재 수치로 내보내면
-    # 실패 0건인데 오류 행 7,151 같은 조합이 나온다(실제로 그랬다).
     err_rows = sum(int(r.get("cnt") or 0) for r in known if r["status"] in ("err", "warn"))
     return {
         "score": round(passed / len(known) * 100, 1) if known else None,
@@ -237,14 +235,9 @@ def backfill(days: int = Query(90, ge=1, le=365)) -> dict[str, Any]:
 
 @router.get("/trend")
 def trend(days: int = Query(7, ge=1, le=90)) -> dict[str, Any]:
-    """최근 N일 **검증 통과율**.
+    """최근 N일 검증 통과율.
 
-    예전에는 Airflow dag_run 의 성공 여부를 세었다. 그건 «파이프라인이 끝까지
-    돌았나» 이지 «데이터가 규칙을 지켰나» 가 아니다. 제목만 통과율이라 KPI 옆에
-    나란히 놓이면 같은 지표의 추이로 읽혔고, 실제로 100% 와 90.4% 가 한 화면에
-    함께 떴다.
-
-    지금은 규칙 결과 이력(store.rule_result)을 날짜로 묶는다. 결과가 남지 않은
+    규칙 결과 이력(store.rule_result)을 날짜로 묶는다. 결과가 남지 않은
     날은 항목을 만들지 않는다 — 0 으로 채우면 «그날 전부 실패» 로 읽힌다.
     """
     # 지금 카탈로그에 있는 규칙만 센다 — 그래야 오늘 점이 KPI 와 같은 분모가 된다.

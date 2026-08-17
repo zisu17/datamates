@@ -25,12 +25,10 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 def _model_index() -> tuple[dict[int, dict[str, Any]], dict[str, dict[str, Any]]]:
     """(데이터셋id → 모델, 모델id → 모델).
 
-    P3 부터 **매핑 테이블로 잇는다.** P2 까지는 물리명 문자열로 맞췄는데,
-    그 방식은 모델의 물리 위치가 바뀌는 순간 조용히 끊긴다 —
-    화면에는 「모델 연결 없음」으로만 나와서 원인을 알기 어렵다.
+    데이터셋과 모델은 매핑 테이블로 연결한다. 물리 위치가 바뀌어도 연결을 유지한다.
 
     매핑에 없는 데이터셋은 이어 붙이지 않는다. 그게 「플랫폼이 만들지 않은
-    데이터셋」이라는 사실 자체가 드러나야 하는 정보다(설계서 리스크 6).
+    데이터셋」이라는 사실 자체가 드러나야 하는 정보다.
     """
     by_id = {e["id"]: e for e in manifest.all_entries().values()}
     by_ds = {ds_id: by_id[mid]
@@ -39,18 +37,10 @@ def _model_index() -> tuple[dict[int, dict[str, Any]], dict[str, dict[str, Any]]
 
 
 def _load_time_sql(where_phys: str | None = None) -> str:
-    """테이블별 마지막 적재 시각 SQL — DuckLake 메타데이터를 한 번에 훑는다.
-
-    Iceberg 시절에는 테이블마다 iceberg_snapshots(...) 를 부르고 UNION ALL 로
-    이어 붙였다. DuckLake 는 스냅샷·파일·테이블·스키마가 카탈로그(Postgres)의
-    표라서, 조인 한 번이면 전체 테이블의 최신 적재 시각이 한 결과로 나온다.
-    카탈로그가 커져도 왕복이 늘지 않는다.
-
-    시간대 처리도 단순해졌다 — snapshot_time 이 이미 timestamptz 라서
-    Iceberg 의 `AT TIME ZONE 'UTC'` 보정이 필요 없다.
+    """DuckLake 메타데이터에서 테이블별 마지막 적재 시각을 조회한다.
 
     end_snapshot IS NULL 은 «지금 살아 있는 판» 이라는 뜻이다. 빼면 이름이 바뀌거나
-    지워진 옛 항목까지 섞여 든다.
+    지워진 항목까지 섞여 든다.
     """
     a = warehouse.ALIAS
     # DuckLake 는 ATTACH 할 때 메타데이터 표를 별도 카탈로그에 붙인다 —
@@ -264,21 +254,6 @@ def assets() -> dict[str, Any]:
             "modelId": m["id"] if m else None,
         })
 
-    # 최근 사용한 분석 — **대시보드만** 담는다. 층을 섞지 않는다.
-    #
-    # 전에는 대시보드와 그 안의 분석을 한데 섞어 수정 시각 순으로 줬다. 그러면
-    # 「전세가율 · 갭 리스크」와 그 대시보드 안의 「분양권 지역별 추이」가 같은
-    # 층으로 나란히 놓인다 — 상위와 하위가 같은 목록에 있으니 같은 내용이 두 번
-    # 보이고, 무엇을 고르는 목록인지 흐려진다.
-    #
-    # 목록 화면에서 고르는 단위는 대시보드 하나다. 아래 「전체 대시보드」와 같은
-    # 층이고, 눌렀을 때 열리는 것도 대시보드 탭이다. 분석 하나를 눌러도 결국
-    # 그것이 올라간 대시보드를 열 뿐이므로, 하위를 따로 늘어놓을 이유가 없다.
-    #
-    # 곁따라 해결되는 것 — 대시보드를 지워도 그 안의 분석은 남는데(같은 분석이
-    # 다른 대시보드에도 올라가 있을 수 있어 Superset 이 함께 지우지 않는다),
-    # 예전에는 그 남은 분석이 최근 목록 맨 위에 계속 떴다. 열 대시보드가 없어
-    # 눌러도 반응이 없었다.
     recent = sorted(dashboards_out,
                     key=lambda x: x.get("changedAt") or "", reverse=True)[:6]
     return {"recent": recent, "dashboards": dashboards_out, "charts": charts_out,
@@ -443,12 +418,6 @@ def build_columns(model_id: str) -> dict[str, Any]:
 
     ds_id = store.ds_all().get(model_id, {}).get("datasetId")
 
-    # 타입은 **Superset 데이터셋** 에서 가져온다.
-    #
-    # manifest 의 컬럼 타입은 dbt catalog(dbt docs generate)에서 오는데 그게 없으면
-    # 비어 있다. 실제로 이 프로젝트의 모델 대부분이 비어 있었고, 그러면 화면이
-    # 차원·측정값 후보를 나눌 수 없다. 데이터셋 쪽은 reflection 으로 채워져 있고
-    # (P3 의 DESCRIBE 덕분에) Superset 이 질의할 때 쓰는 것과 같은 타입이다.
     types: dict[str, str] = {}
     if ds_id:
         try:
@@ -600,10 +569,7 @@ def model_analyses(model_id: str) -> dict[str, Any]:
 
 @router.get("/models/{model_id}/usage")
 def model_usage(model_id: str) -> dict[str, Any]:
-    """이 모델을 쓰는 대시보드 — 화면 D(분석 사용처)의 뼈대.
-
-    지금은 대시보드 단위까지다. 차트·컬럼 단위는 P5 에서 매핑 테이블을 놓고 채운다.
-    """
+    """이 모델을 사용하는 대시보드를 조회한다."""
     by_ds, by_id = _model_index()
     if model_id not in by_id:
         return {"modelId": model_id, "dashboards": [], "known": False}

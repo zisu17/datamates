@@ -1,21 +1,10 @@
-/* ── b51 — ── b51 — v3.2 — 카탈로그 좌측을 논리 폴더 탐색기 로 ── (index.html 블록에서 기계적 추출, 동작 불변) */
 
-/* ============================================================
-   v3.2 — 카탈로그 좌측을 논리 폴더 탐색기 로
-   · 폴더는 사용자가 분류·탐색하려고 만든 논리 폴더다.
-     데이터베이스 스키마·테이블 경로·저장 위치와는 무관하며,
-     폴더를 옮기거나 이름을 바꿔도 데이터와 모델은 그대로다.
-   · 폴더별 표시/숨김을 개인 설정으로 저장한다 (브라우저 저장).
-   ============================================================ */
+
+
 (function () {
   const LSK = 'datamates.catalog.tree.v1';
 
-  /* 폴더는 서버가 준다 — api.js 가 부팅 때 /bootstrap 의 folders 로 FOLDERS 를
-     통째로 교체하고, 모델의 folder 값도 서버 값을 그대로 쓴다.
-     예전에는 여기서 예시 트리를 넣고 모델마다 폴더를 붙였는데, 그러면
-     ① 서버가 폴더를 주기 전 한 프레임 동안 없는 폴더가 보였다 사라지고
-     ② `D.forEach(d => d.folder = SEED_A[d.id] || null)` 이 서버가 준 폴더까지
-        null 로 덮어쓸 위험이 있었다. 지금은 손대지 않는다. */
+
 
   let HID = new Set(), FAV = new Set();
   S.fdrOpen = {}; S.grpOpen = { SOURCE: true, 'DATA MODEL': true, 'DATA MART': true };
@@ -50,12 +39,7 @@
     .sort((a, b) => (FAV.has(b.id) - FAV.has(a.id)) || a.name.localeCompare(b.name, 'ko'));
   function subtree(fid) { const out = [fid]; for (let i = 0; i < out.length; i++)
     FOLDERS.forEach(f => { if ((f.parent || null) === out[i]) out.push(f.id); }); return out; }
-  /* 항목이 실제로 놓이는 폴더.
-     구분(SOURCE·DATA MODEL·DATA MART)은 상태에 따라 바뀐다 — 모델을 DATA MART 로
-     지정하면 그 순간 영역이 옮겨진다. 그런데 폴더는 예전 영역(DATA MODEL)의
-     것이라 그대로 두면 새 영역의 어느 폴더에도 속하지 않아 트리에서 사라진다.
-     맞지 않는 폴더는 «미분류» 로 본다 — 배치는 지우지 않으므로 마트 지정을
-     해제하면 원래 폴더로 돌아온다. */
+
   const folderOf = (d) => {
     if (!d.folder) return null;
     const f = F(d.folder);
@@ -536,8 +520,7 @@
     return left;
   };
 
-  /* 앞선 층들이 items[1] 만 갈아끼워 와서 목록이 뒤섞여 있었다.
-     여기가 마지막 층이므로 전체를 한 번에 확정한다. */
+
   HELP.modeling.items = [
     '하나의 SQL로 하나의 데이터 모델을 정의합니다. 출력 테이블도 하나입니다.',
     '입력은 데이터 수집이 만든 SOURCE 또는 앞서 만든 DATA MODEL 입니다.',

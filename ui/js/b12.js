@@ -1,9 +1,6 @@
-/* ── b12 — ── b12 — v2.1 — 메뉴 4개 구조 · 카탈로그 제거 · 품질 규칙 공유 ── (index.html 블록에서 기계적 추출, 동작 불변) */
 
-/* ============================================================
-   v2.1 — 메뉴 4개 구조 · 카탈로그 제거 · 품질 규칙 공유
-   (첨부 파일을 그대로 두고 필요한 부분만 덧씌운다)
-   ============================================================ */
+
+
 
 /* ── 품질 규칙: 기존 TESTS 를 하나의 공유 객체로 승격 ── */
 const QTYPES = {
@@ -19,7 +16,7 @@ const KIND2TYPE = { '필수값': 'notnull', '중복': 'unique', '기준값': 'ac
 const QRULES = TESTS.map(t => ({
   id: t.id, name: t.title + ' · ' + t.col, type: KIND2TYPE[t.kind] || 'notnull',
   model: t.target, col: t.col, cond: t.dbt, sev: t.sev === 'error' ? 'error' : 'warn',
-  active: true, 
+  active: true,
   status: t.status, cnt: t.cnt, plain: t.plain, impact: t.impact, rows: t.rows || [],
   lastRun: '오늘 05:19', firstSeen: '07.31 05:19',
   pipe: (PIPES.find(p => ((p.canvas ? p.canvas.order : p.targets) || []).includes(t.target)) || {}).id || null,

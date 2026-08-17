@@ -15,7 +15,7 @@ CREATE DATABASE datamates;
 CREATE DATABASE airflow;
 
 -- Iceberg JDBC 카탈로그. 표는 iceberg_tables · iceberg_namespace_properties 둘뿐이고
--- Iceberg 가 기동 때 알아서 만든다. (DuckLake 이관 후에는 롤백 경로로만 남는다)
+-- Iceberg REST 카탈로그 데이터베이스.
 CREATE DATABASE iceberg;
 
 -- DuckLake 카탈로그. 웨어하우스의 진짜 메타데이터가 여기 있다 — 스냅샷·스키마·

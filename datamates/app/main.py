@@ -141,9 +141,7 @@ def _sync_analytics_datasets() -> None:
 def _regenerate_dags() -> None:
     """저장돼 있는 파이프라인·수집 작업의 DAG 파일을 다시 쓴다.
 
-    DAG 파일은 생성물이라 사람이 고치지 않는다는 전제인데, 생성기가 바뀌면
-    이미 저장된 파일은 옛 모양 그대로 남는다(예: 새로 들어온 pool 지정).
-    저장을 다시 해야만 고쳐지는 상태를 두지 않도록 기동 때 한 번 맞춘다.
+    DAG 파일은 생성물이므로 애플리케이션을 시작할 때 현재 정의로 갱신한다.
     """
     from . import daggen, dbtproj, graph, ingest, ingestdag
     try:
@@ -252,11 +250,7 @@ UI_DIR = PROJECT_DIR / "ui"
 class _FreshStatic(StaticFiles):
     """UI 파일은 매번 재검증하게 한다.
 
-    기본값으로는 브라우저가 메모리 캐시의 api.js 를 그대로 재사용해서,
-    파일을 고쳐도 옛 코드가 계속 돌았다(문서를 새로 고쳐도 <script src> 는
-    캐시에서 나온다). 화면이 코드와 다르게 동작하는 원인을 찾는 데 시간이 든다.
-
-    no-cache 는 캐시하지 말라가 아니라 쓰기 전에 물어보라다.
+    no-cache는 캐시된 파일을 사용하기 전에 서버에서 변경 여부를 확인하게 한다.
     ETag 가 같으면 304(본문 없음)라 비용은 사실상 없다.
     """
 

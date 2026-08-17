@@ -1,10 +1,6 @@
-/* ── b17 — ── b17 — v2.2 — 역할 분리를 화면 구조에 반영 ── (index.html 블록에서 기계적 추출, 동작 불변) */
 
-/* ============================================================
-   v2.2 — 역할 분리를 화면 구조에 반영
-   · 모델링  : 모델 하나의 정의가 기본, 전체 의존 관계는 관계 보기에서
-   · 파이프라인 : 실행 설정(대상·일정·환경) + 모델 의존성으로 계산된 읽기 전용 흐름
-   ============================================================ */
+
+
 Object.assign(S, { mView: 'def', pipeView: 'flow' });
 
 /* 모델 의존 관계 — SQL 의 ref()/source() 가 사실상의 정의다 */
@@ -15,8 +11,7 @@ function modelDeps(id) {
 /* 실행 대상만 주면 순서·흐름은 의존 관계로 계산한다 */
 /* ────────────────── 데이터 모델링 ────────────────── */
 pageModeling = function () {
-  /* 정의(def) 화면은 하단 독으로 합쳐졌다(v5.1). 옛 의도는 목적지 탭으로 번역하고
-     화면은 항상 관계 그래프다. */
+
   if (S.mView === 'def') {
     S.dockTab = S.mTab === 'SQL' ? 'sql' : S.mTab === '품질 규칙' ? 'quality' : 'info';
     S.dockMin = false;
@@ -58,7 +53,7 @@ pageModeling = function () {
   on('mNew', openNewModel);
   on('mMore', (ev) => moreMenu(ev.currentTarget, canEdit));
 
-  /* 관계도에서 모델을 골라 파이프라인 만들기 (v5.5) — ⌘/Ctrl 클릭 다중 선택 */
+
   const btnRow = $('.mod-bar .row.g6.sp', p);
   if (btnRow && R().canPipeEdit) {
     const st = pselState();
@@ -102,7 +97,7 @@ pageModeling = function () {
     };
   }
 
-  /* 저장 — 대기 중인 변경(설명)을 확정한다. 저장하면 이력이 자동 기록된다(v5.7) */
+
   const sb = $('#mSaveAll', p);
   if (sb) {
     const dirty = S.sel && S.__dirty[S.sel];

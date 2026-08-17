@@ -1,10 +1,6 @@
 /* ── b00 — ── b00 — Data Mates — 데이터 플랫폼 ── (index.html 블록에서 기계적 추출, 동작 불변) */
 
-/* ============================================================
-   Data Mates — 데이터 플랫폼
-   dbt 를 실행 엔진으로 쓰는 데이터 플랫폼. 역할별로 메뉴와 기능이 달라진다.
-   데이터는 파일 끝 v4.0 — API 연결 블록이 서버에서 받아 채운다.
-   ============================================================ */
+
 const $ = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 const el = (h) => { const t = document.createElement('template'); t.innerHTML = h.trim(); return t.content.firstElementChild; };

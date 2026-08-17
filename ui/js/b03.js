@@ -8,7 +8,7 @@ const NW = 186, NH = 74;
 const MAT_KO = { 'View': '뷰', 'Table': '테이블', 'Incremental': '증분', 'Ephemeral': '임시' };
 function matKo(m) { return MAT_KO[m] || m || '—'; }
 function rebuildEdges() {
-  const keep = {};                       // 연결 설정은 다시 만들어도 그대로 (v2.0)
+  const keep = {};
   S.edges.forEach(e => { if (e.cfg) keep[edgeKey(e)] = e.cfg; });
   const ids = S.nodes.map(n => n.id);
   const auto = [];
@@ -50,8 +50,7 @@ function wireGrips() {
   /* (오른쪽 상세 패널 그립 #gripR — .panel 도 #gripR 도 만드는 곳이 없어졌다. 제거) */
   if (dock) dock.style.transition = 'none';
 
-  /* 도크 높이 — v2.9.1 한계값(DOCK_MIN/MAX)과 transition 복원까지.
-     원래는 여기서 한 번 연결한 뒤 v2.9.1 층이 통째로 다시 연결하고 있었다. */
+
   const g = $('#gripH');
   if (g && dock) g.onmousedown = (ev) => {
     ev.preventDefault(); g.classList.add('on');

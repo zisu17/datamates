@@ -1,44 +1,11 @@
-/* ── b56 — 데이터 파이프라인 개편 (v2) ───────────────────────────────────
-   ============================================================
-   claude.ai/design 프로젝트 «데이터 파이프라인 페이지 리디자인» 의 v2
-   (데이터 파이프라인 v2.dc.html)를 옮긴다. v1 은 이미 화면에 들어와 있었고
-   (좌측 두 영역 · 카드 + 배지 · 상태 요약 줄), v2 가 바꾼 것만 여기서 갈아끼운다.
 
-   ── v1 → v2 로 달라진 것 ─────────────────────────────────────
-   ① 좌측 목록 — 수집/가공 → INGEST/TRANSFORM. 한 줄에 이름 하나와 상태 점만 둔다.
-      예약 스위치·요약 문장·배지를 뺐다. 목록은 «무엇이 있고 지금 어떤가» 만 답하고,
-      조작은 고른 뒤 아래 상세에서 한다. 대신 이름 검색과 영역 접기를 새로 둔다.
-   ② 흐름도 — 카드의 색 띠가 «상태» 가 아니라 «단계» 를 뜻한다(수집 초록 · 가공 남색).
-      상태는 점과 오른쪽 문구가 말한다. v1 은 띠도 배지도 상태여서 같은 말을 두 번
-      했고, 그래서 «이게 수집인가 가공인가» 는 부제를 읽어야 알 수 있었다.
-   ③ 선택 ≠ 열기 — 카드를 누르면 아래 상세가 열린다. 탭으로 여는 것은 «상세 열기» 다.
-      v1 은 한 번 누르면 곧바로 탭이 열려서, 훑어보는 동안 탭이 쌓였다.
-   ④ 연결 편집 — 포트와 연결 라벨을 상시 노출하지 않는다. «연결 편집» 을 켠 동안만
-      끌어 잇고 끊을 수 있다. 읽는 화면이 기본이고, 고치는 것은 들어가는 모드다.
-   ⑤ 상세 — 수집은 실패 안내 + 실행 이력 표, 가공은 모델 카드 + 빌드 결과 + 추이.
-
-   ── 마크업 규칙 ──────────────────────────────────────────────
-   데이터 품질 화면(b14)과 같다. 레이아웃 골격은 앱 어휘(.mod · .mod-l · .dock)를
-   그대로 쓰고, 잎사귀 부품만 DS 컴포넌트 층(.wc-btn · .wc-badge · .wc-table)을 쓴다.
-   아이콘은 원본의 Tabler CDN 마스크 대신 앱 스프라이트(#i-*, ic/ic14)다 — 한 화면에
-   아이콘 소스가 두 벌이 되고 오프라인에서 아이콘만 사라지는 것을 막는다.
-
-   ── 지어내지 않은 자리 ───────────────────────────────────────
-   · «오늘 실행 28» — 수집과 가공을 합쳐 하루치 실행 횟수를 세는 곳이 서버에 없다
-     (/history 는 dbt 호출 단위라 수집이 빠지고, 파이프라인별 실행 목록을 다 훑으면
-     요약 한 줄에 요청이 N개 나간다). 아는 것만 적는다 — 전체·실패·실행 중 개수와
-     이 흐름을 받아온 시각.
-   · 폴더 «+ · 0 of 0» — 파이프라인에는 폴더가 없다(카탈로그의 논리 폴더는 카탈로그
-     항목의 개인 설정이다). 원본의 값도 0 of 0 이라 근거가 없는 자리다. 같은 줄에서
-     실제로 쓸 수 있는 것 — 이름 검색과 영역 접기 — 만 가져왔다.
-   ============================================================ */
 (function () {
 
   /* ============================================================
      1. 공통 조각
      ============================================================ */
 
-  /* 단계. **색이 뜻하는 것은 상태가 아니라 이것이다** (v2 의 핵심 변경). */
+
   const STAGE = {
     ingest:    { label: 'INGEST',    color: 'var(--accents-green)',  icon: 'tbl',  word: '수집' },
     transform: { label: 'TRANSFORM', color: 'var(--accents-indigo)', icon: 'cube', word: '가공' },
@@ -290,8 +257,7 @@
       <span class="pl-r-i">${ic14(STAGE[kind].icon, 'fnt')}</span>
       <span class="pl-r-n trunc">${esc(item.name)}</span>
       ${plDot(st, item.paused)}</div>`);
-    /* 목록에서 고르면 흐름도의 선택이 된다 — 탭을 열지 않는다(v2 ③).
-       이미 탭으로 열어 둔 항목이면 그 탭으로 옮긴다. */
+
     row.onclick = () => {
       if (S.openPipes.includes(item.id)) { S.openPipe = item.id; S.pipe = item.id; render(); return; }
       S.openPipe = 'deps'; S.plSel = item.id; render();
@@ -370,8 +336,7 @@
       if (!pp) return;
       const st = ig ? runState(pp.lastRun) : pp.status;
       const t = tabBtn({ label: pp.name, on: S.openPipe === pid, closable: true });
-      /* 아이콘 자리에 상태 점을 끼운다 — 탭이 여럿 열린 채로 훑을 때 어느 것이
-         실패했는지가 탭 줄에서 바로 읽혀야 한다(원본 v2 의 변경). */
+
       t.insertBefore(el(plDot(st, pp.paused)), t.firstChild);
       t.onclick = (ev) => {
         if (ev.target.closest('.ptab-x')) { closePipeTab(pid); return; }
@@ -386,7 +351,7 @@
      4. 파이프라인 흐름 — 두 단계를 열로 나눈 DAG + 하단 상세
      ============================================================ */
 
-  S.plEdit = !!S.plEdit;                 /* 연결 편집 모드 (v2 ④) */
+  S.plEdit = !!S.plEdit;
   S.plDockTab = S.plDockTab || 'info';   /* info | alert | link */
 
   /* 상자 크기. 원본은 270 · 290 인데 그 폭은 «오전 9:41» 같은 짧은 시각을 전제한다.
@@ -446,9 +411,7 @@
     return { ing, tr, pos, w, h, maxCol, upOf };
   }
 
-  /* 연결선 색 — 고른 카드를 기준으로 상류(선행)와 하류(후속)를 가른다.
-     v1 은 성공/실패로 칠했는데, 그건 카드가 이미 말하고 있었다. 흐름도에서 선이
-     답해야 할 질문은 «이것이 무엇을 기다리고, 무엇을 깨우나» 다. */
+
   const E_UP = 'rgba(52,199,89,.8)', E_DOWN = 'rgb(255,141,40)', E_OFF = 'var(--w-border)';
   const edgeColor = (e, sel) => (sel && e.from === sel ? E_DOWN : sel && e.to === sel ? E_UP : E_OFF);
 
@@ -549,8 +512,7 @@
       const s = stageOf(n), st = n.status || 'wait';
       const off = !!n.paused && st === 'wait';
       const w = plWhen(n, st);
-      /* 띠는 단계를 뜻하지만 실패한 것만은 붉게 올린다(원본 v2 도 그렇다).
-         목록을 훑을 때 «어느 단계인가» 보다 «무엇이 깨졌나» 를 먼저 찾기 때문이다. */
+
       const card = el(`<div class="pl-n pf-n ${n.id === sel ? 'sel' : ''} ${off ? 'off' : ''} ${st === 'err' ? 'bad' : ''}"
           data-pf="${esc(n.id)}" style="left:${p.x}px;top:${p.y}px;width:${p.w}px"
           title="${esc(n.name)}\n${esc(plWhat(n))}\n${esc(plTrigger(n))}">
@@ -654,7 +616,7 @@
     render();
   }
 
-  /* 연결 편집 — 포트를 끌어 «선행 완료 후», 라벨을 눌러 해제. v1 의 동작 그대로다. */
+
   function plWireEdit(wrap, c, svg, d, L) {
     const setTrigger = async (pid, body, msg) => {
       try {
@@ -1050,9 +1012,7 @@
      6. 가공 파이프라인 탭 — 모델 카드 + 빌드 결과
      ============================================================ */
 
-  /* 모델 카드. 원본 v2 는 색 띠 + 이름(mono) + 저장 위치 + 소요다.
-     띠 색은 구분(SOURCE·DATA MODEL·DATA MART)이고, 상태는 점이 말한다.
-     상자 크기(PW·PH)는 서버가 계산한 좌표(graph.py COL_W·ROW_H)와 짝이라 그대로 둔다. */
+
   pnodeEl = function (pp, n, runs, edit) {
     const md = byId(n.id);
     const marker = n.kind === 'marker';
@@ -1065,10 +1025,7 @@
     const src = d.kind === 'source';
     const seq = n.seq != null ? n.seq : execSeq(pp)[n.key];
     const st = rn ? rn.st : 'wait';
-    /* 조회 전용 — 적재는 이 모델을 소유한 다른 파이프라인이 한다. 여기서는 읽기만
-       하므로 상태·소요를 달지 않는다(남의 실행 상태를 내 카드에 적지 않는다).
-       예전에는 api.js 가 이 함수를 감싸 표시를 입혔는데, 이 파일이 본체를 갈아끼우고
-       마크업도 달라져 그 래퍼가 붙을 자리가 없다 — 여기서 함께 그린다. */
+
     const ro = !!n.ro;
     const owner = ro ? PIPES.find(x => x.id !== pp.id && x.__flow
       && (x.__flow.order || []).includes(n.id)) : null;
@@ -1103,7 +1060,7 @@
 
   pipeDock = function (pp) {
     const g = pgraph(pp), runs = runsG(pp), r = R();
-    /* 옛 상태(한글 탭 이름)가 남아 있으면 옮겨 준다 — 주소(?tab=)로도 들어온다 */
+
     if (MTAB_KO[S.pipeTab]) S.pipeTab = MTAB_KO[S.pipeTab];
     if (!MTABS.some(([k]) => k === S.pipeTab)) S.pipeTab = 'result';
 
@@ -1170,9 +1127,7 @@
       grid.appendChild(left);
       grid.appendChild(plModelTrend(d));
     } else if (S.pipeTab === 'log') {
-      /* 로그는 여기서 직접 받는다. 예전에는 api.js 가 b35 의 pipeDock 을 감싸
-         채워 줬는데, 이 파일이 pipeDock 을 통째로 갈아끼우면서 그 래퍼가 함께
-         빠졌다 — 감싼 층을 대체할 때는 그 층이 하던 일을 옮겨 와야 한다. */
+
       const wait = rn.st === 'wait' ? '아직 실행하지 않았습니다.'
         : rn.st === 'skip' ? '앞 단계가 실패해 실행하지 않았습니다. (SKIP)'
         : '로그를 불러오는 중…';
@@ -1203,8 +1158,7 @@
           <tbody></tbody></table></div></div>`);
         const tb = $('tbody', t);
         rs.forEach(x => {
-          /* 규칙 이름이 이미 «유형 · 컬럼» 이라 그 아래에 유형·컬럼을 한 번 더 적지
-             않는다(예전 마크업은 «필수값 · deal_ym» 이 두 줄로 겹쳐 보였다). */
+
           const tr = el(`<tr style="cursor:pointer">
             <td><span class="t13 trunc">${esc(x.name)}</span></td>
             <td><span class="t11 mono fnt trunc">${esc(x.cond)}</span></td>
@@ -1318,7 +1272,7 @@
       <span>${esc(day(o.items[0]))}</span>
       <span>${esc(day(o.items[o.items.length - 1]))}</span></div>`));
 
-    /* 마지막 회차가 중앙값의 1.5배를 넘겼을 때만 한 줄 덧붙인다 */
+
     if (lastI != null && mid && vals[lastI] > mid * 1.5) {
       t.appendChild(el(`<span class="t11 num" style="color:var(--w-warning);font-weight:var(--fw-med)">
         마지막 회차가 중앙값의 ${esc((vals[lastI] / mid).toFixed(1))}배입니다.</span>`));
@@ -1326,11 +1280,7 @@
     return t;
   }
 
-  /* ── 모델 사이 선 — 고른 모델 기준의 상류·하류 ─────────────────
-     v1(b43)은 «양 끝이 모두 성공했나» 로 칠했다. 그건 카드의 점이 이미 말하고 있어서,
-     선이 답할 수 있는 질문 — «이 모델은 무엇을 기다리고, 무엇을 망가뜨리나» — 이
-     비어 있었다. 흐름도(4절)와 같은 규칙으로 맞춘다: 상류 초록 · 하류 주황.
-     구성 편집 모드는 선을 눌러 지우는 자리라 예전 그리기를 그대로 쓴다. */
+
   const _drawPEdges = drawPEdges;
   drawPEdges = function (pp, host, svg, edit, gOv) {
     if (edit) return _drawPEdges(pp, host, svg, edit, gOv);
@@ -1464,16 +1414,7 @@
       .finally(() => { PF.loading = false; render(); });
   };
 
-  /* ── 배경 갱신 — 「불러오는 중」 없이 값만 바꿔 끼운다 ──────────────
-     예전에는 5초마다 PF.data 를 «비우고» 다시 받았다. 비우는 순간 캔버스가
-     빈 화면이 되어 「파이프라인 흐름을 불러오는 중…」 이 뜨고, 응답이 오면
-     다시 그려졌다. 5초마다 흐름도가 사라졌다 나타나니 실행이 잘 되고 있어도
-     오류가 난 것처럼 보였다.
 
-     추적은 «이미 보고 있는 화면을 최신으로 맞추는 일» 이다. 받아오기 전에
-     보던 것을 치울 이유가 없다. 그래서 여기서는 받아온 다음에 바꿔 끼우고,
-     실제로 달라졌을 때만 다시 그린다 — 같은 값으로 다시 그리면 보고 있던
-     자리(선택·스크롤)가 5초마다 흔들린다. */
   function pdagSig(d) {
     return JSON.stringify((d.nodes || []).map(n => [n.id, n.status])
       .concat((d.edges || []).map(e => [e.from, e.to])));
@@ -1496,8 +1437,7 @@
       .finally(() => { PF.loading = false; });
   }
 
-  /* 5초마다 스스로 다음 차례를 잡는다. 예전에는 그리기(render)가 타이머를
-     다시 걸어서, «바뀐 게 없어 다시 그리지 않은» 순간 추적이 끊겼다. */
+
   function pdagTick() {
     clearTimeout(PF.__t);
     PF.__t = setTimeout(async () => {

@@ -5,7 +5,6 @@
   1. DuckDB 접속 초기화 — Iceberg REST 카탈로그를 접속마다 ATTACH 한다.
      이 설계에서 **직접 만들어야 하는 유일한 배관**이다.
   2. 임베드 준비 — 게스트 토큰과 프록시 뒤에서 도는 설정.
-     P0 에서는 쓰지 않지만, 값이 없으면 P2 에서 다시 뒤져야 하므로 미리 둔다.
 
 플랫폼 쪽 대응 코드는 datamates/app/warehouse.py 다. 같은 카탈로그에 같은 방식으로
 붙으므로, 한쪽의 ATTACH 인자를 바꾸면 다른 쪽도 같이 바꿔야 한다.
@@ -54,11 +53,10 @@ EXPLORE_FORM_DATA_CACHE_CONFIG = {**CACHE_CONFIG, "CACHE_REDIS_DB": 4}
 
 # 차트 데이터 캐시를 60초로 짧게 둔다.
 # 파이프라인이 돌면 값이 바뀌는데 기본값(24시간)이면 낡은 숫자가 오래 남는다.
-# 근본 대응은 파이프라인 완료 시 캐시 무효화지만, 그건 P2 이후다.
 
 
 # ─────────────────────────────────────────────────────────────
-# 임베드 — P2 에서 사용. 지금 켜 두어도 P0 검증에 영향이 없다.
+# 임베드
 # ─────────────────────────────────────────────────────────────
 
 FEATURE_FLAGS = {
@@ -76,21 +74,7 @@ GUEST_TOKEN_JWT_EXP_SECONDS = 300      # SDK 가 자동 갱신한다
 # FastAPI 리버스 프록시(/superset/*) 뒤에서 돌 때 리다이렉트 주소를 바로 만들게 한다.
 ENABLE_PROXY_FIX = True
 
-# ── 서브패스 배포는 쓰지 않는다 ─────────────────────────────────
-#
-# 처음에는 /superset 접두사로 붙이려 했고 두 가지를 시도했다. 둘 다 5.0.0 에서
-# 실패했다 — Superset 이 만드는 절대 경로 27개 전부 접두사가 붙지 않았다.
-#
-#   X-Forwarded-Prefix 헤더  → 효과 없음
-#   SUPERSET_APP_ROOT 설정   → 효과 없음 (5.0 에서 BETA 이고 알려진 버그가 있다)
-#
-# 그래서 접두사를 포기하고 **경로를 바꾸지 않는 프록시**로 갔다.
-# 플랫폼 서버가 Superset 의 경로(/static/… · /superset/… · /explore/…)를 같은
-# 이름으로 중계하므로 생성된 절대 경로가 그대로 맞는다. 자세히는
-# datamates/app/analytics/proxy.py 의 FORWARD 주석.
-#
-# 6.0 에서 서브패스가 안정화되면 접두사 방식으로 되돌리는 것을 검토한다 —
-# 그때는 플랫폼과 Superset 의 URL 이름공간이 겹치지 않게 할 수 있다.
+# Superset이 생성하는 절대 경로를 그대로 프록시한다.
 
 # 같은 오리진으로 프록시하면 기본값(SAMEORIGIN)으로도 iframe 이 뜬다.
 # 프록시 경로가 달라질 경우를 대비해 비워 둔다.
@@ -109,10 +93,7 @@ TALISMAN_ENABLED = False
 # 가드가 중요하다. 전역 리스너는 **메타DB(Postgres) 접속에도 걸린다.**
 # 거기서 ATTACH 를 실행하면 Superset 이 부팅부터 깨진다.
 #
-# 판별 기준은 실측으로 정했다. duckdb-engine 이 넘기는 DBAPI 객체는
-# duckdb.DuckDBPyConnection 이 **아니라** duckdb_engine.ConnectionWrapper 다.
-# 클래스 이름으로 거르면 조용히 건너뛰어 ATTACH 가 안 걸린다(증상: 테이블 0개).
-# 모듈 최상위 이름으로 판별한다.
+# duckdb-engine의 DBAPI 래퍼를 모듈 이름으로 판별한다.
 #
 #   type(dbapi_conn).__module__  ==  "duckdb_engine"
 #   type(dbapi_conn).__name__    ==  "ConnectionWrapper"
@@ -128,23 +109,11 @@ POSTGRES_PORT = _env("POSTGRES_PORT", "5432")
 POSTGRES_USER = _env("POSTGRES_USER", "datamates")
 POSTGRES_PASSWORD = _env("POSTGRES_PASSWORD", "datamates")
 
-# 카탈로그 별칭. 이름이 `ice` 인 것은 Iceberg 시절의 잔재지만 **바꾸면 안 된다** —
-# 이미 만들어진 Superset 데이터셋이 ice.analytics.<표> 로 저장돼 있어서
-# 바꾸는 순간 기존 차트가 전부 끊긴다. warehouse.py 의 ALIAS 와 같은 값이어야 한다.
+# 카탈로그 별칭은 warehouse.py의 ALIAS와 같아야 한다.
 ICEBERG_ALIAS = "ice"
 ICEBERG_DEFAULT_SCHEMA = _env("DBT_SCHEMA", "analytics")
 
-# 세션 TimeZone 을 고정한다. 리스크 2 의 실체가 여기다.
-#
-# 컨테이너의 기본 TimeZone 은 UTC 이고, 개발자 맥에서 도는 플랫폼은 호스트 로컬
-# (예: Asia/Seoul) 이다. 같은 DuckDB 라이브러리를 쓰더라도 이 값이 다르면
-# timestamptz 컬럼이 두 화면에서 다른 시각을 가리킨다 — 값은 같지만 표기가 갈린다.
-#
-# 플랫폼 쪽(datamates/app/warehouse.py 의 connect())도 같은 값으로 고정돼 있다.
-# 한쪽만 바꾸면 어긋난다 — 검증은 scripts/p0_duckdb_check.py 의 ⑤-0 이 한다.
-#
-# GLOBAL 로 건다. 플랫폼 쪽에서는 cursor() 가 별도 커넥션이라 세션 SET 이 전파되지
-# 않아 GLOBAL 이 필수였고, 여기서도 같은 문장을 쓰는 편이 두 곳을 대조하기 쉽다.
+# 플랫폼과 Superset의 timestamptz 표시를 맞추기 위해 세션 시간대를 고정한다.
 DUCKDB_TIMEZONE = _env("DATAMATES_DUCKDB_TIMEZONE", "Asia/Seoul")
 
 
@@ -182,18 +151,7 @@ def _attach_sql() -> list[str]:
     ]
 
 
-# ── 컬럼 해석: DuckLake 에서는 필요 없다 ──────────────────────
-#
-# Iceberg 시절에는 여기서 테이블마다 DESCRIBE 를 한 바퀴 돌려야 했다. ATTACH 직후
-# information_schema 에 «__ / UNKNOWN» 컬럼 하나만 들어 있어서, 그 상태로 데이터셋을
-# 만들면 껍데기가 되고 시간 컬럼이 없어 시계열 차트를 못 만들었기 때문이다.
-#
-# DuckLake 는 스키마를 카탈로그(Postgres)에 들고 있어 ATTACH 직후 바로 나온다.
-# 실측(fct_apt_trade): Iceberg 1컬럼 → DuckLake 31컬럼, 시간 컬럼 11개.
-# 커넥션마다 테이블 수만큼 돌던 비용도 함께 사라졌다.
-#
-# 남은 것은 기본 카탈로그·스키마 이동뿐이다. 이걸 빼면 Superset 의 스키마 목록에
-# 붙은 카탈로그가 나오지 않아 데이터셋을 만들 수 없다.
+# Superset이 데이터셋 스키마를 조회할 수 있도록 기본 카탈로그와 스키마를 선택한다.
 
 RESOLVE_SCHEMAS = [s.strip() for s in
                    _env("DATAMATES_RESOLVE_SCHEMAS", ICEBERG_DEFAULT_SCHEMA).split(",")
@@ -220,7 +178,7 @@ def _register_duckdb_init() -> None:
             except Exception:      # noqa: BLE001
                 # 한 문장이 실패해도 나머지를 시도한다. 여기서 예외를 올리면
                 # 커넥션 생성 자체가 실패해 화면이 통째로 500 이 된다.
-                # 무엇이 실패했는지는 로그로 남겨 P0 에서 잡는다.
+                # 실패한 초기화 문장은 로그로 남긴다.
                 logger.exception("DuckDB ATTACH 실패: %s", stmt[:80])
         try:
             _resolve_columns(cur)

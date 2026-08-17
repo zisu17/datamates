@@ -4,9 +4,9 @@ dbt 프로젝트 파일이 단일 진실 원천(SSoT)이므로, 이 모듈이 �
 플랫폼이 다루는 세계의 경계다. 메타스토어(Postgres)는 dbt 가 모르는 것만 담는다
 — 파이프라인·수집 커넥터·폴더·마트 지정·변경 이력.
 
-Postgres 인스턴스 하나가 DB 네 개를 나눠 쓴다:
+Postgres 인스턴스 하나가 데이터베이스를 나눠 쓴다:
   datamates  메타스토어        ducklake  웨어하우스 카탈로그(DuckLake)
-  airflow    Airflow 메타DB    iceberg   이관 전 카탈로그(롤백용)
+  airflow    Airflow 메타DB    iceberg   Iceberg REST 카탈로그
 
 경로는 두 뿌리로 갈린다.
   PROJECT_DIR  저장소 루트. 플랫폼이 소유하는 것 — 화면·DAG·메타스토어·venv.
@@ -14,10 +14,8 @@ Postgres 인스턴스 하나가 DB 네 개를 나눠 쓴다:
 manifest 가 돌려주는 경로(`models/...`)는 전부 DBT_DIR 기준이고,
 dbt 서브프로세스도 DBT_DIR 에서 돌려야 dbt_project.yml 을 찾는다.
 
-DBT_DIR 은 이 저장소 안이 아니어도 된다. 콘솔은 제품이고 dbt 프로젝트는 그 제품이
-다루는 데이터라, 한 저장소에 묶을 이유가 없다. 경계는 DBT_PROJECT_DIR 환경변수다
-— dbt CLI 가 쓰는 것과 같은 변수라 따로 배울 것이 없다. 지정하지 않으면 관례상
-저장소 안의 dbt/ 를 본다(거기에 두거나 심볼릭 링크를 걸어도 된다).
+DBT_DIR은 저장소 밖의 경로도 사용할 수 있다. `DBT_PROJECT_DIR`을 지정하지 않으면
+저장소 안의 dbt/를 사용한다.
 """
 
 from __future__ import annotations
@@ -56,12 +54,7 @@ CATALOG_PATH = TARGET_DIR / "catalog.json"
 # (dbt clean 이 target/ 을 통째로 지운다).
 DATA_DIR = PROJECT_DIR / ".datamates"
 
-# 메타스토어 접속. 예전에는 이 자리에 SQLite 파일 경로(DB_PATH)가 있었다.
-#
-# Postgres 로 옮긴 이유는 동시 쓰기다 — SQLite 는 writer 가 하나뿐이라 수집·파이프라인이
-# 겹치면 뒤에 온 쪽이 기다린다. Airflow 메타DB·Iceberg 카탈로그와 같은 인스턴스를 쓴다
-# (docker/compose.yml 의 postgres 서비스, DB 이름만 다르다).
-#
+# 메타스토어는 Airflow 메타DB와 카탈로그가 사용하는 Postgres 인스턴스에 연결한다.
 # 서버는 호스트에서 도는데(datamates/run.sh) 컨테이너 안에서 돌릴 때도 있어서
 # 호스트 이름을 환경변수로 뺀다 — 컨테이너에서는 postgres, 호스트에서는 localhost.
 DATABASE_URL = os.environ.get(
@@ -177,7 +170,7 @@ def dbt_env() -> dict[str, str]:
     env.setdefault("POSTGRES_PORT", "5432")
     env.setdefault("POSTGRES_USER", "datamates")
     env.setdefault("POSTGRES_PASSWORD", "datamates")
-    # 롤백 타깃(spark_local/local_heavy)이 쓰는 Iceberg REST 카탈로그.
+    # Spark 호환 타깃이 사용하는 Iceberg REST 카탈로그.
     env.setdefault("ICEBERG_REST_URI", "http://localhost:8181")
     # 익명 통계 수집이 켜져 있으면 profiles 디렉터리에 .user.yml 을 쓰려 든다.
     env["DO_NOT_TRACK"] = "1"

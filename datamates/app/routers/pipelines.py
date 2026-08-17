@@ -139,15 +139,7 @@ def _sync_dag(p: dict[str, Any]) -> dict[str, Any]:
 
 @router.get("")
 def list_pipelines() -> list[dict[str, Any]]:
-    """목록 — **실행 상태를 함께 내려보낸다.**
-
-    예전에는 snapshot 에서 paused 만 꺼내 쓰고 status·latestRun 을 버렸다. 화면은
-    그 둘을 읽게 돼 있어서(toPipe) 목록만으로는 언제나 «대기» 였고, 실제 상태는
-    사용자가 연 파이프라인 하나만 폴링으로 따라잡았다. 그래서 파이프라인 흐름
-    화면이 실패한 실행을 계속 붙들고 있었다 — 그 사이 성공했는데도.
-
-    비용은 없다. snapshot 이 이미 계산해 캐시해 둔 값을 그대로 옮기는 것뿐이다.
-    """
+    """파이프라인 목록과 캐시된 최신 실행 상태를 반환한다."""
     snap = {x["id"]: x for x in state.snapshot()["pipelines"]}
     out = []
     for p in store.pipelines():

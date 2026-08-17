@@ -368,11 +368,7 @@ def update_job(job_id: str, body: JobIn) -> dict[str, Any]:
     target = fields.get("target") or job["target"]
     if target != job["target"]:
         _target_conflict(target, job_id)
-        # 이름을 옮기면 옛 원천 등록이 사라진다. 그걸 참조하는 모델이 있으면
-        # 통째로 파싱이 깨지므로 먼저 막는다 — dbt 오류로 알게 하지 않는다.
         _users_block(job["target"], "옮길")
-        # 예전 테이블은 그대로 남긴다. 이미 그 위에 무엇이 서 있을지 모르고,
-        # 삭제는 되돌릴 수 없다.
 
     merged = {**job, **fields, "id": job_id}
     others = [j for j in store.ingest_jobs() if j["id"] != job_id]

@@ -69,18 +69,7 @@ RUN python -m venv /opt/superset-venv \
 # === 최종 =================================================================
 FROM apache/airflow:3.2.2-python3.11
 
-# ---------------------------------------------------------------------------
-# DuckLake 이관으로 이 이미지에서 사라진 것들:
-#   · openjdk-17 (Spark 4.0 요구)  · pyspark  · dbt-spark  · elementary[spark]
-#   · /opt/spark-events, ~/.ivy2.5.2 (Spark 이벤트 로그 · Ivy 캐시)
-# dbt 가 DuckDB 로 도니 JVM 이 필요 없다. 이미지가 크게 줄고, 태스크마다 JVM 이
-# 뜨지 않으므로 동시 실행 상한도 메모리가 아니라 CPU 기준으로 잡을 수 있다.
-#
-# 롤백(DBT_TARGET=spark_local)이 필요하면 이 파일을 git 이력에서 되살려야 한다 —
-# 롤백 경로는 프로필에만 남겨 두었고 이미지에는 남기지 않았다(이미지 크기 때문).
-#
-# libpq5 는 Superset 이 Postgres 메타DB 에 붙는 데 필요하다(런타임 라이브러리만).
-# ---------------------------------------------------------------------------
+# libpq5는 Superset이 Postgres 메타DB에 연결할 때 사용하는 런타임 라이브러리다.
 USER root
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
@@ -129,10 +118,8 @@ COPY datamates/requirements.txt /tmp/requirements-app.txt
 RUN python -m venv /opt/datamates-venv \
  && /opt/datamates-venv/bin/pip install --upgrade pip \
  && /opt/datamates-venv/bin/pip install -r /tmp/requirements-app.txt \
- # DuckDB 확장은 첫 조회 때 인터넷에서 받아 온다. 빌드 시점에 받아 이미지에 넣어야
- # 폐쇄망에서도 미리보기가 뜨고, 첫 조회만 유난히 느려지는 일도 없다.
- # ducklake·postgres 는 warehouse.py·ingest.py 가 카탈로그에 ATTACH 할 때 쓰고,
- # httpfs 는 s3:// 를 읽을 때 자동 로드된다. Superset 쪽 DuckDB 도 같은 캐시를 쓴다.
+ # DuckDB 확장을 빌드할 때 설치해 런타임 다운로드와 첫 조회 지연을 방지한다.
+ # ducklake·postgres는 카탈로그 연결에, httpfs는 s3:// 조회에 사용한다.
  && /opt/datamates-venv/bin/python -c "import duckdb; c = duckdb.connect(); \
 c.execute('INSTALL ducklake'); c.execute('INSTALL postgres'); c.execute('INSTALL httpfs'); \
 c.execute('LOAD ducklake'); c.execute('LOAD httpfs')" \

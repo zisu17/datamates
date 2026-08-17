@@ -4,14 +4,8 @@
 담지 않는 것: 모델 SQL·컬럼·설명·의존관계. 그건 전부 dbt 프로젝트 파일에 있고
 manifest.json 을 통해 읽는다. 두 곳에 같은 사실을 두면 반드시 어긋난다.
 
-저장소는 Postgres 다(docker/compose.yml 의 postgres 서비스). 원래는 컨테이너를
-늘리지 않으려고 SQLite 였는데, 동시 쓰기가 늘어 옮겼다 — SQLite 는 writer 가
-하나뿐이라 수집과 파이프라인 저장이 겹치면 뒤에 온 쪽이 기다린다.
-Airflow 메타DB·Iceberg 카탈로그도 같은 인스턴스를 쓴다(DB 이름만 다르다).
-
-드라이버는 psycopg 3 이다. `conn.execute(...).fetchone()` 과 dict 행 접근을
-그대로 쓸 수 있어 SQLite 시절 호출부를 손대지 않고 넘어올 수 있었다
-(psycopg 2 는 커서를 따로 떠야 해서 51곳을 전부 고쳐야 했다).
+저장소는 docker/compose.yml의 Postgres 서비스를 사용한다. Airflow 메타DB와
+카탈로그도 같은 인스턴스에서 별도 데이터베이스로 관리한다.
 """
 
 from __future__ import annotations
@@ -96,8 +90,7 @@ CREATE TABLE IF NOT EXISTS model_transform (
 
 -- 품질 규칙의 실행 결과. dbt 는 실행 하나의 결과만 run_results.json 에 남기고
 -- 지난 실행 것은 덮어쓴다. 그래서 결과를 «가장 최근 실행 1건» 에서만 읽으면,
--- 모델 하나만 다시 돌린 순간 나머지 규칙 전부가 «아직 안 돌았음» 이 된다
--- (실측: 52개 중 51개가 그렇게 사라져 통과율이 100%로 표시됐다 — 분모가 0이라).
+-- 모델 하나만 다시 돌린 순간 나머지 규칙 전부가 «아직 안 돌았음» 이 된다.
 --
 -- 그래서 읽을 때마다 여기에 쌓는다. (규칙, 실행) 을 키로 두어 같은 실행을 몇 번
 -- 읽어도 한 줄이고, 규칙별 «마지막 결과» 와 «날짜별 통과율» 이 둘 다 나온다.
@@ -171,13 +164,7 @@ CREATE TABLE IF NOT EXISTS ingest_version (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_ingest_version ON ingest_version(job_id, ver);
 
--- 자격증명 — 커넥터가 원천에 붙을 때 쓰는 비밀 값을 한곳에 모은다.
---
--- 예전에는 커넥터 config.auth 안에 값이 직접 들어 있었다. 그러면 같은 서비스 키를
--- 쓰는 커넥터가 셋이면 사본이 셋이고, 키를 갱신할 때 하나를 빠뜨리면 그 커넥터만
--- 조용히 실패한다. 만료일을 둔 이유도 같다 — 만료는 키의 속성이지 커넥터의 속성이
--- 아니라서, 커넥터마다 적어 두면 어느 것이 진짜인지 알 수 없다.
---
+-- 자격증명은 여러 커넥터가 공유할 수 있으며 만료일을 함께 관리한다.
 -- secret 은 여기서만 읽고 응답에는 절대 싣지 않는다(라우터의 _cred_view).
 CREATE TABLE IF NOT EXISTS credential (
     id         TEXT PRIMARY KEY,
@@ -563,8 +550,7 @@ def rule_results_daily(days: int = 7,
     0 으로 채우면 «그날 전부 실패» 로 읽힌다 — 실제로는 아무것도 안 돌린 날이다.
 
     only 를 주면 그 규칙들만 센다. 지금 카탈로그에 있는 규칙 목록을 넘기는 자리다 —
-    이력에는 지우거나 이름을 바꾼 옛 규칙도 남아 있어서, 그대로 세면 오늘 점이
-    KPI 와 어긋난다(실측: 55개로 세어 87.3%, KPI 는 52개로 92.3%).
+    이력에는 지우거나 이름을 바꾼 규칙도 남아 있으므로 현재 규칙만 집계한다.
     """
     since = time.time() - days * 86400
     with db() as conn:

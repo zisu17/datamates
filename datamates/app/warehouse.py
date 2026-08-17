@@ -28,10 +28,7 @@ from .errors import ApiError
 _lock = threading.Lock()          # 커넥션 생성 보호
 _con: Any = None
 
-# 카탈로그 별칭. 이름이 `ice` 인 것은 Iceberg 시절의 잔재지만 그대로 둔다 —
-# Superset 데이터셋이 `ice.analytics.<표>` 로 저장돼 있어서(store 의 superset_dataset
-# 매핑), 별칭을 바꾸면 이미 만들어진 차트가 전부 끊긴다.
-# 같은 이유로 superset_config.py 의 ICEBERG_ALIAS 와 항상 같아야 한다.
+# 카탈로그 별칭은 기존 Superset 데이터셋과 superset_config.py의 설정에 맞춘다.
 ALIAS = "ice"
 
 
@@ -74,21 +71,6 @@ def connect() -> Any:
         host, ssl = _endpoint(env.get("MINIO_ENDPOINT", "http://localhost:9000"))
         con = duckdb.connect()
 
-        # 시간대를 명시로 고정한다. 없으면 DuckDB 가 «호스트의 로컬 시간대» 를 쓰는데,
-        # 그러면 같은 테이블의 timestamptz 컬럼이 개발자 맥(Asia/Seoul)과
-        # 컨테이너(UTC)에서 다른 시각으로 보인다. 값은 같고 표기만 갈리므로
-        # 테스트로는 잡히지 않고 화면에서만 드러난다.
-        #
-        # 분석 화면(Superset)도 같은 값으로 고정한다 —
-        # docker/superset/superset_config.py 의 DUCKDB_TIMEZONE. 한쪽만 바꾸면 어긋난다.
-        #
-        # **GLOBAL 이 아니면 효과가 없다.** 이 모듈의 모든 조회는 cursor() 를 거치는데,
-        # cursor() 는 별도 커넥션이라 세션 SET 이 전파되지 않는다(실측):
-        #
-        #   SET TimeZone='UTC'         → 루트 UTC / cursor 는 그대로 Asia/Seoul
-        #   SET GLOBAL TimeZone='UTC'  → 루트·cursor 모두 UTC (기존 cursor 까지)
-        #
-        # 그래서 평범한 SET 을 넣으면 조용히 아무 일도 일어나지 않는다.
         con.execute(
             f"SET GLOBAL TimeZone = '{env.get('DATAMATES_DUCKDB_TIMEZONE', 'Asia/Seoul')}';")
 
@@ -208,8 +190,8 @@ def data_files(phys: str) -> list[str] | None:
     """지금 스냅샷이 가리키는 데이터 파일 경로.
 
     저장소가 «얼마나 차지하고 있나» 와 «지금 쓰이는 것은 얼마인가» 를 가르는 데 쓴다.
-    덮어쓸 때 옛 파일을 지우지 않고 스냅샷만 새로 가리키므로, 버킷을 세면 지난 판본이
-    전부 섞여 든다(실측: 카탈로그 402MB 중 현재 스냅샷은 70MB). 두 값을 나눠 보여줘야
+    덮어쓸 때 이전 파일을 지우지 않고 스냅샷만 새로 가리키므로, 버킷을 세면 지난 판본이
+    전부 섞여 든다. 두 값을 나눠 보여줘야
     «정리하면 얼마가 빠지는지» 를 말할 수 있다.
 
     ducklake_list_files 는 현재 스냅샷의 파일만 돌려준다 — Iceberg 의 iceberg_metadata
@@ -228,9 +210,7 @@ def data_files(phys: str) -> list[str] | None:
 
 
 def file_sizes(phys: str) -> dict[str, int] | None:
-    """데이터 파일 경로 → 바이트. DuckLake 가 메타데이터에 크기를 들고 있어서
-    객체 목록과 대조하지 않고도 «현재 스냅샷이 쓰는 용량» 을 바로 셀 수 있다
-    (Iceberg 시절에는 경로만 나와 storage.py 가 버킷 목록과 맞춰야 했다)."""
+    """DuckLake 메타데이터에서 현재 데이터 파일별 바이트를 조회한다."""
     schema, _, table = phys.partition(".")
     if not table:
         return None

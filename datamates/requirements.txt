@@ -6,8 +6,7 @@ httpx==0.28.1
 python-multipart==0.0.20
 ruamel.yaml==0.18.16
 
-# 데이터 수집이 원본을 Arrow 테이블로 만들어 DuckDB 에 넘긴다.
-# 적재 엔진 자체는 아래 duckdb 다 — DuckLake 이관 전에는 pyiceberg 가 그 자리였다.
+# 데이터 수집이 원본을 Arrow 테이블로 만들어 DuckDB에 넘긴다.
 pyarrow==25.0.0
 
 # 웨어하우스 엔진. 세 가지 일을 한다 — 미리보기·이력 조회(warehouse.py),
@@ -22,7 +21,5 @@ duckdb==1.5.5
 # 앱 프로세스다. 저쪽에 두면 앱 이미지에 설치되지 않아 계보 API 만 ImportError 로 죽는다.
 sqlglot==30.14.0
 
-# 메타스토어 드라이버. psycopg 2 가 아니라 3 인 것이 중요하다 — 3 은 커넥션에서
-# 바로 execute 하고 그 결과를 fetch 할 수 있어(conn.execute(...).fetchone())
-# SQLite 시절 호출부를 그대로 쓴다. 2 였다면 51곳에서 커서를 따로 떠야 했다.
+# PostgreSQL 메타스토어 드라이버.
 psycopg[binary]==3.2.10

@@ -101,8 +101,7 @@ def known_columns(model_id: str) -> dict[str, str]:
     그 상태로 검증하면 event_ts 같은 실재 컬럼을 「이 모델의 컬럼이 아니다」 로
     거부한다 — 사용자는 눈에 보이는 컬럼을 못 쓰게 되고 이유를 알 수 없다.
 
-    데이터셋 쪽은 reflection 으로 채워져 있고(P3 의 DESCRIBE 덕분에)
-    Superset 이 질의할 때 쓰는 것과 같은 목록이다.
+    데이터셋은 reflection으로 채워져 있어 Superset이 질의할 때 쓰는 컬럼 목록과 같다.
     """
     from . import client
     try:
