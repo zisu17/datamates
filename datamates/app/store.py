@@ -1,6 +1,7 @@
 """메타스토어 — dbt 가 모르는 것만 담는다.
 
-담는 것: 파이프라인 정의, 카탈로그 폴더, 실행 트리거 기록.
+담는 것: 파이프라인 정의, 카탈로그 폴더, 실행 트리거 기록,
+Semantic Model의 비즈니스 정의·지표·용어 연결.
 담지 않는 것: 모델 SQL·컬럼·설명·의존관계. 그건 전부 dbt 프로젝트 파일에 있고
 manifest.json 을 통해 읽는다. 두 곳에 같은 사실을 두면 반드시 어긋난다.
 
@@ -202,6 +203,74 @@ CREATE TABLE IF NOT EXISTS superset_dataset (
 );
 CREATE INDEX IF NOT EXISTS idx_superset_dataset_id
     ON superset_dataset(dataset_id);
+
+-- Semantic Layer. model_id 와 column_name 은 dbt 원본의 복제본이 아니라
+-- manifest 항목을 가리키는 참조 키다. 물리명·타입·dbt 설명은 저장하지 않고
+-- 조회할 때 manifest/catalog 와 합친다.
+CREATE TABLE IF NOT EXISTS semantic_model (
+    model_id               TEXT PRIMARY KEY,
+    business_name          TEXT NOT NULL,
+    description            TEXT NOT NULL DEFAULT '',
+    default_time_dimension TEXT,
+    created_at             DOUBLE PRECISION NOT NULL,
+    updated_at             DOUBLE PRECISION NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS semantic_field (
+    id             TEXT PRIMARY KEY,
+    model_id       TEXT NOT NULL REFERENCES semantic_model(model_id) ON DELETE CASCADE,
+    kind           TEXT NOT NULL CHECK (kind IN ('entity', 'dimension', 'measure')),
+    column_name    TEXT,
+    business_name  TEXT NOT NULL,
+    description    TEXT NOT NULL DEFAULT '',
+    dimension_type TEXT NOT NULL DEFAULT 'general'
+                   CHECK (dimension_type IN ('general', 'time')),
+    granularities  TEXT NOT NULL DEFAULT '[]',
+    aggregation    TEXT,
+    display_format TEXT NOT NULL DEFAULT 'number',
+    created_at     DOUBLE PRECISION NOT NULL,
+    updated_at     DOUBLE PRECISION NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_semantic_field_model
+    ON semantic_field(model_id, kind);
+
+CREATE TABLE IF NOT EXISTS semantic_metric (
+    id             TEXT PRIMARY KEY,
+    metric_key     TEXT NOT NULL UNIQUE,
+    display_name   TEXT NOT NULL,
+    description    TEXT NOT NULL DEFAULT '',
+    model_id       TEXT NOT NULL REFERENCES semantic_model(model_id) ON DELETE CASCADE,
+    measure_id     TEXT NOT NULL REFERENCES semantic_field(id) ON DELETE RESTRICT,
+    display_format TEXT NOT NULL DEFAULT 'number',
+    unit           TEXT NOT NULL DEFAULT '',
+    created_at     DOUBLE PRECISION NOT NULL,
+    updated_at     DOUBLE PRECISION NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_semantic_metric_model
+    ON semantic_metric(model_id);
+
+CREATE TABLE IF NOT EXISTS business_glossary (
+    id         TEXT PRIMARY KEY,
+    term       TEXT NOT NULL UNIQUE,
+    definition TEXT NOT NULL,
+    synonyms   TEXT NOT NULL DEFAULT '[]',
+    domain     TEXT NOT NULL DEFAULT '',
+    created_at DOUBLE PRECISION NOT NULL,
+    updated_at DOUBLE PRECISION NOT NULL
+);
+
+-- target_id 는 대상 종류에 따라 model_id, "model_id.column", semantic_field.id,
+-- semantic_metric.id 중 하나다. 외부 원본(manifest)까지 FK로 흉내 내지 않고
+-- 서비스가 저장 시 검증하며, 내부 대상 삭제 때 함께 정리한다.
+CREATE TABLE IF NOT EXISTS glossary_link (
+    glossary_id TEXT NOT NULL REFERENCES business_glossary(id) ON DELETE CASCADE,
+    target_type TEXT NOT NULL CHECK (
+        target_type IN ('model', 'column', 'dimension', 'measure', 'metric')),
+    target_id   TEXT NOT NULL,
+    PRIMARY KEY (glossary_id, target_type, target_id)
+);
+CREATE INDEX IF NOT EXISTS idx_glossary_link_target
+    ON glossary_link(target_type, target_id);
 """
 
 
@@ -771,6 +840,251 @@ def ds_set(model_id: str, dataset_id: int, phys: str, state: str = "ok") -> None
 def ds_delete(model_id: str) -> None:
     with db() as conn:
         conn.execute("DELETE FROM superset_dataset WHERE model_id = %s", (model_id,))
+
+
+# ---------------------------------------------------------------- Semantic Layer
+
+_SEM_MODEL_COLS = ("model_id", "business_name", "description",
+                   "default_time_dimension", "created_at", "updated_at")
+_SEM_FIELD_COLS = ("id", "model_id", "kind", "column_name", "business_name",
+                   "description", "dimension_type", "granularities",
+                   "aggregation", "display_format", "created_at", "updated_at")
+_METRIC_COLS = ("id", "metric_key", "display_name", "description", "model_id",
+                "measure_id", "display_format", "unit", "created_at", "updated_at")
+
+
+def _semantic_field_row(r: dict[str, Any]) -> dict[str, Any]:
+    out = dict(r)
+    out["granularities"] = json.loads(out.get("granularities") or "[]")
+    return out
+
+
+def semantic_model_ids() -> set[str]:
+    with db() as conn:
+        return {r["model_id"] for r in conn.execute(
+            "SELECT model_id FROM semantic_model")}
+
+
+def semantic_models() -> list[dict[str, Any]]:
+    with db() as conn:
+        return [dict(r) for r in conn.execute(
+            f"SELECT {', '.join(_SEM_MODEL_COLS)} FROM semantic_model "
+            "ORDER BY business_name, model_id")]
+
+
+def semantic_model_get(model_id: str) -> dict[str, Any] | None:
+    with db() as conn:
+        row = conn.execute(
+            f"SELECT {', '.join(_SEM_MODEL_COLS)} FROM semantic_model WHERE model_id = %s",
+            (model_id,)).fetchone()
+        if not row:
+            return None
+        out = dict(row)
+        out["fields"] = [_semantic_field_row(r) for r in conn.execute(
+            f"SELECT {', '.join(_SEM_FIELD_COLS)} FROM semantic_field "
+            "WHERE model_id = %s ORDER BY kind, created_at, id", (model_id,))]
+        return out
+
+
+def semantic_measure_metric_refs(field_ids: list[str]) -> list[dict[str, Any]]:
+    if not field_ids:
+        return []
+    with db() as conn:
+        return [dict(r) for r in conn.execute(
+            "SELECT id, metric_key, display_name, measure_id FROM semantic_metric "
+            "WHERE measure_id = ANY(%s) ORDER BY display_name", (field_ids,))]
+
+
+def semantic_model_put(model_id: str, values: dict[str, Any],
+                       fields: list[dict[str, Any]]) -> dict[str, Any]:
+    """시멘틱 정의 전체를 한 트랜잭션으로 맞춘다.
+
+    호출부가 measure 참조 여부를 먼저 검사한다. 여기서는 남은 필드의 id를
+    유지해 Metric·Glossary 연결이 단순한 설명 수정으로 끊기지 않게 한다.
+    """
+    now = time.time()
+    with db() as conn:
+        old = conn.execute(
+            "SELECT created_at FROM semantic_model WHERE model_id = %s", (model_id,)
+        ).fetchone()
+        conn.execute(
+            """INSERT INTO semantic_model
+                 (model_id, business_name, description, default_time_dimension,
+                  created_at, updated_at)
+               VALUES (%s, %s, %s, %s, %s, %s)
+               ON CONFLICT(model_id) DO UPDATE SET
+                 business_name=excluded.business_name,
+                 description=excluded.description,
+                 default_time_dimension=excluded.default_time_dimension,
+                 updated_at=excluded.updated_at""",
+            (model_id, values["business_name"], values.get("description") or "",
+             values.get("default_time_dimension"), old["created_at"] if old else now, now))
+
+        existing = {r["id"]: r for r in conn.execute(
+            "SELECT id, created_at FROM semantic_field WHERE model_id = %s", (model_id,))}
+        keep: list[str] = []
+        for f in fields:
+            fid = f["id"]
+            keep.append(fid)
+            conn.execute(
+                """INSERT INTO semantic_field
+                     (id, model_id, kind, column_name, business_name, description,
+                      dimension_type, granularities, aggregation, display_format,
+                      created_at, updated_at)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                   ON CONFLICT(id) DO UPDATE SET
+                     column_name=excluded.column_name,
+                     business_name=excluded.business_name,
+                     description=excluded.description,
+                     dimension_type=excluded.dimension_type,
+                     granularities=excluded.granularities,
+                     aggregation=excluded.aggregation,
+                     display_format=excluded.display_format,
+                     updated_at=excluded.updated_at""",
+                (fid, model_id, f["kind"], f.get("column_name"), f["business_name"],
+                 f.get("description") or "", f.get("dimension_type") or "general",
+                 json.dumps(f.get("granularities") or [], ensure_ascii=False),
+                 f.get("aggregation"), f.get("display_format") or "number",
+                 existing[fid]["created_at"] if fid in existing else now, now))
+
+        removed = [fid for fid in existing if fid not in keep]
+        if removed:
+            conn.execute(
+                "DELETE FROM glossary_link WHERE target_type IN ('dimension', 'measure') "
+                "AND target_id = ANY(%s)", (removed,))
+            conn.execute("DELETE FROM semantic_field WHERE id = ANY(%s)", (removed,))
+    return semantic_model_get(model_id)  # type: ignore[return-value]
+
+
+def semantic_model_delete(model_id: str) -> bool:
+    """정의·Metric과 그 대상을 가리키는 Glossary link를 함께 지운다."""
+    with db() as conn:
+        field_ids = [r["id"] for r in conn.execute(
+            "SELECT id FROM semantic_field WHERE model_id = %s", (model_id,))]
+        metric_ids = [r["id"] for r in conn.execute(
+            "SELECT id FROM semantic_metric WHERE model_id = %s", (model_id,))]
+        conn.execute(
+            "DELETE FROM glossary_link WHERE "
+            "(target_type = 'model' AND target_id = %s) OR "
+            "(target_type = 'column' AND target_id LIKE %s)",
+            (model_id, model_id + ".%"))
+        if field_ids:
+            conn.execute("DELETE FROM glossary_link WHERE target_id = ANY(%s)", (field_ids,))
+        if metric_ids:
+            conn.execute("DELETE FROM glossary_link WHERE target_id = ANY(%s)", (metric_ids,))
+        # semantic_field.measure 를 가리키는 FK는 RESTRICT다. 같은 model delete의
+        # cascade 순서에 기대지 않고 Metric을 먼저 지워 삭제 의미를 명확히 한다.
+        conn.execute("DELETE FROM semantic_metric WHERE model_id = %s", (model_id,))
+        cur = conn.execute("DELETE FROM semantic_model WHERE model_id = %s", (model_id,))
+        return bool(cur.rowcount)
+
+
+def metrics() -> list[dict[str, Any]]:
+    with db() as conn:
+        return [dict(r) for r in conn.execute(
+            f"SELECT {', '.join(_METRIC_COLS)} FROM semantic_metric "
+            "ORDER BY display_name, metric_key")]
+
+
+def metric_get(metric_id: str) -> dict[str, Any] | None:
+    with db() as conn:
+        r = conn.execute(
+            f"SELECT {', '.join(_METRIC_COLS)} FROM semantic_metric WHERE id = %s",
+            (metric_id,)).fetchone()
+        return dict(r) if r else None
+
+
+def metric_by_key(metric_key: str) -> dict[str, Any] | None:
+    with db() as conn:
+        r = conn.execute(
+            f"SELECT {', '.join(_METRIC_COLS)} FROM semantic_metric WHERE metric_key = %s",
+            (metric_key,)).fetchone()
+        return dict(r) if r else None
+
+
+def metric_put(metric_id: str, values: dict[str, Any]) -> dict[str, Any]:
+    now = time.time()
+    old = metric_get(metric_id)
+    with db() as conn:
+        conn.execute(
+            """INSERT INTO semantic_metric
+                 (id, metric_key, display_name, description, model_id, measure_id,
+                  display_format, unit, created_at, updated_at)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+               ON CONFLICT(id) DO UPDATE SET
+                 metric_key=excluded.metric_key, display_name=excluded.display_name,
+                 description=excluded.description, model_id=excluded.model_id,
+                 measure_id=excluded.measure_id,
+                 display_format=excluded.display_format, unit=excluded.unit,
+                 updated_at=excluded.updated_at""",
+            (metric_id, values["metric_key"], values["display_name"],
+             values.get("description") or "", values["model_id"], values["measure_id"],
+             values.get("display_format") or "number", values.get("unit") or "",
+             old["created_at"] if old else now, now))
+    return metric_get(metric_id)  # type: ignore[return-value]
+
+
+def metric_delete(metric_id: str) -> bool:
+    with db() as conn:
+        conn.execute("DELETE FROM glossary_link WHERE target_type = 'metric' AND target_id = %s",
+                     (metric_id,))
+        cur = conn.execute("DELETE FROM semantic_metric WHERE id = %s", (metric_id,))
+        return bool(cur.rowcount)
+
+
+def glossary() -> list[dict[str, Any]]:
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT id, term, definition, synonyms, domain, created_at, updated_at "
+            "FROM business_glossary ORDER BY term").fetchall()
+        out = []
+        for row in rows:
+            item = dict(row)
+            item["synonyms"] = json.loads(item.get("synonyms") or "[]")
+            item["links"] = [dict(r) for r in conn.execute(
+                "SELECT target_type, target_id FROM glossary_link "
+                "WHERE glossary_id = %s ORDER BY target_type, target_id", (item["id"],))]
+            out.append(item)
+        return out
+
+
+def glossary_get(glossary_id: str) -> dict[str, Any] | None:
+    return next((g for g in glossary() if g["id"] == glossary_id), None)
+
+
+def glossary_by_term(term: str) -> dict[str, Any] | None:
+    return next((g for g in glossary() if g["term"] == term), None)
+
+
+def glossary_put(glossary_id: str, values: dict[str, Any],
+                 links: list[dict[str, str]]) -> dict[str, Any]:
+    now = time.time()
+    old = glossary_get(glossary_id)
+    with db() as conn:
+        conn.execute(
+            """INSERT INTO business_glossary
+                 (id, term, definition, synonyms, domain, created_at, updated_at)
+               VALUES (%s, %s, %s, %s, %s, %s, %s)
+               ON CONFLICT(id) DO UPDATE SET
+                 term=excluded.term, definition=excluded.definition,
+                 synonyms=excluded.synonyms, domain=excluded.domain,
+                 updated_at=excluded.updated_at""",
+            (glossary_id, values["term"], values["definition"],
+             json.dumps(values.get("synonyms") or [], ensure_ascii=False),
+             values.get("domain") or "", old["created_at"] if old else now, now))
+        conn.execute("DELETE FROM glossary_link WHERE glossary_id = %s", (glossary_id,))
+        for link in links:
+            conn.execute(
+                "INSERT INTO glossary_link (glossary_id, target_type, target_id) "
+                "VALUES (%s, %s, %s)",
+                (glossary_id, link["target_type"], link["target_id"]))
+    return glossary_get(glossary_id)  # type: ignore[return-value]
+
+
+def glossary_delete(glossary_id: str) -> bool:
+    with db() as conn:
+        cur = conn.execute("DELETE FROM business_glossary WHERE id = %s", (glossary_id,))
+        return bool(cur.rowcount)
 
 
 # ---------------------------------------------------------------- 설정
