@@ -2,8 +2,8 @@
 
 원칙 하나: dbt 프로젝트 파일이 단일 진실 원천이다.
 모델의 SQL·컬럼·설명·의존관계는 models/ 아래 파일에만 있고, API 는 그 파일을
-쓰고 manifest.json 을 읽어 화면 모양으로 바꿔 줄 뿐이다. 메타스토어(SQLite)에는
-dbt 가 모르는 것 — 파이프라인·폴더·설정 — 만 둔다.
+쓰고 manifest.json 을 읽어 화면 모양으로 바꿔 줄 뿐이다. 메타스토어(Postgres)에는
+dbt 가 모르는 것 — 파이프라인·폴더·설정·비즈니스 시멘틱 정의 — 만 둔다.
 
 인터페이스는 API 인터페이스 설계서(2026-08-07)를 따른다.
 """
@@ -22,7 +22,7 @@ from .analytics import proxy as superset_proxy
 from .routers import (analytics, bootstrap, catalog, credentials, history, home,
                       ingest,
                       lineage, mart, models, models_extra, pipelines,
-                      pipelines_extra, quality, storage)
+                      pipelines_extra, quality, semantic, storage)
 
 API_PREFIX = "/api/v1"
 
@@ -227,7 +227,7 @@ for r in (bootstrap.router,
           pipelines_extra.router, pipelines.router,
           ingest.router, catalog.router, quality.router, history.router,
           home.router, credentials.router,
-          lineage.router, analytics.router, storage.router):
+          lineage.router, semantic.router, analytics.router, storage.router):
     app.include_router(r, prefix=API_PREFIX)
 
 
