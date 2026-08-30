@@ -81,7 +81,7 @@ const MYTASKS = [];
    전부 지어낸 값이었고, 화면에서 버튼을 감추는 것 말고는 아무 것도 강제하지 못했다.
    R() 은 모두 사용 가능을 돌려주고, 호출부는 그대로 둔다 —
    나중에 인증을 붙이면 여기만 실제 권한으로 바꾸면 된다. */
-const CAPS = { menus: ['home', 'ingest', 'modeling', 'pipeline', 'quality', 'analytics'],
+const CAPS = { menus: ['home', 'ingest', 'modeling', 'pipeline', 'quality', 'metadata', 'analytics'],
                canModel: true, canPipeEdit: true, admin: false, tech: true };
 
 /* 전역 네비게이션 순서 그대로다. 홈은 브랜드(Data Mates)가 맡으므로
@@ -92,6 +92,7 @@ const MENUS = [
   { id:'modeling', label:'데이터 모델', icon:'model' },
   { id:'pipeline', label:'데이터 파이프라인', icon:'pipe' },
   { id:'quality', label:'데이터 품질', icon:'shield' },
+  { id:'metadata', label:'메타 관리', icon:'book' },
   { id:'analytics', label:'데이터 분석', icon:'chart' },
 ];
 

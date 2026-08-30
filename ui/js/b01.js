@@ -168,6 +168,7 @@ function pageView() {
 
     case 'pipeline': return pagePipeline();
     case 'quality': return pageQuality();
+    case 'metadata': return pageMetadata();
     /* 분석은 b53.js 가 정의한다 — 파일이 없으면 메뉴도 없으므로 여기 오지 않는다 */
     case 'analytics': return pageAnalytics();
   }

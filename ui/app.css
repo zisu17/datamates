@@ -1319,6 +1319,57 @@ html,body{overflow:hidden}
 .seg button:focus-visible,.tgl:focus-visible,.lp:focus-visible,.hmrow:focus-visible{
   outline:2px solid var(--pri);outline-offset:2px;border-radius:6px}
 .inp:focus-visible{outline:2px solid var(--pri);outline-offset:0}
+
+/* ── 메타 관리 ────────────────────────────────────────────────
+   문서형 화면의 폭·카드·표·버튼 토큰은 기존 규칙을 그대로 쓰고, 이 화면에
+   필요한 목록/상세 배치와 필드 행만 정의한다. */
+.meta-page{display:flex;flex-direction:column;gap:16px;max-width:none;overflow:hidden}
+.meta-page>.page-h{margin-bottom:0}
+.meta-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;flex:none}
+.meta-kpis .kpi{padding:10px 13px}
+.meta-kpis .kpi-v{font-size:22px}
+.meta-work{display:grid;grid-template-columns:288px minmax(0,1fr);min-height:0;flex:1;
+  border:1px solid var(--line);border-radius:var(--r-m);overflow:hidden;background:var(--surface)}
+.meta-left{min-height:0;border-right:1px solid var(--line);display:flex;flex-direction:column;background:var(--surface)}
+.meta-left-h{height:44px;padding:0 12px;display:flex;align-items:center;gap:7px;border-bottom:1px solid var(--line)}
+.meta-search{margin:10px 10px 6px;width:auto}.meta-search input{height:30px}
+.meta-list{overflow:auto;padding:3px 6px 8px}
+.meta-item{width:100%;min-height:50px;border:0;border-radius:var(--r-s);background:none;padding:7px 8px;
+  display:flex;align-items:center;gap:8px;text-align:left;color:var(--text);cursor:pointer}
+.meta-item:hover{background:var(--hover-o)}.meta-item.on{background:var(--sel-o)}
+.meta-detail{min-width:0;min-height:0;overflow:auto}.meta-editor{min-width:760px}
+.meta-detail-h{height:56px;padding:0 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line);
+  position:sticky;top:0;background:var(--surface);z-index:3}
+.meta-detail-t{font-size:var(--fs-strong);font-weight:var(--fw-semi);color:var(--ink)}
+.meta-form-grid,.meta-modal-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 14px;padding:16px}
+.meta-form-grid label,.meta-modal-form label{display:flex;flex-direction:column;gap:5px;font-size:var(--fs-sm);color:var(--muted)}
+.meta-form-grid .wide,.meta-modal-form .wide{grid-column:1/-1}.meta-modal-form{padding:0}
+.meta-fields{margin:0 16px 16px;border:1px solid var(--line);border-radius:var(--r-m);overflow:hidden}
+.meta-fields-h{min-height:48px;padding:8px 12px;display:flex;align-items:center;gap:8px;background:var(--surface-2);
+  border-bottom:1px solid var(--line)}
+.meta-field-list{display:flex;flex-direction:column}
+.meta-field-row{display:grid;grid-template-columns:minmax(130px,1.05fr) minmax(130px,1fr) minmax(160px,1.25fr)
+  minmax(92px,.65fr) minmax(100px,.7fr) 30px;gap:7px;padding:8px 10px;border-bottom:1px solid var(--line);align-items:center}
+.meta-field-row:last-child{border-bottom:0}.meta-field-row>.inp{height:30px;font-size:var(--fs-sm)}
+.meta-field-row>.meta-grans{grid-column:1/-1;display:flex;gap:12px;padding:2px 2px 0;font-size:var(--fs-cap);color:var(--muted)}
+.meta-grans label{display:flex;align-items:center;gap:4px}.meta-field-x{width:28px;height:28px}
+.meta-field-empty,.meta-empty{padding:30px;text-align:center;color:var(--muted);font-size:var(--fs-sm)}
+.meta-tab-body{min-height:0;overflow:auto;display:flex;flex-direction:column;gap:12px}
+.meta-tab-head{display:flex;align-items:center;gap:12px;min-height:48px}.meta-tab-head>.btn{margin-left:auto}
+.meta-two{display:grid;grid-template-columns:minmax(680px,1fr) 320px;gap:12px;align-items:start}
+.meta-metric-table .th,.meta-metric-table .tr{--cols:1.1fr 1.45fr 1fr 1fr .65fr}
+.meta-glossary-table .th,.meta-glossary-table .tr{--cols:1fr 1.8fr .8fr .45fr}
+.meta-metric-table .tr,.meta-glossary-table .tr{width:100%;border-left:0;border-right:0;border-top:0;
+  background:var(--surface);text-align:left;color:var(--text);font-size:var(--fs-sm)}
+.meta-metric-table .tr.on,.meta-glossary-table .tr.on{background:var(--sel-o)}
+.meta-side-detail{position:sticky;top:0}.meta-label{display:block;margin-bottom:4px;font-size:var(--fs-cap);color:var(--muted)}
+.meta-tech{display:flex;align-items:center;gap:6px;padding:10px;border-radius:var(--r-s);background:var(--surface-2);
+  font-size:var(--fs-sm);flex-wrap:wrap}.meta-tech .ic{color:var(--faint)}
+.meta-links{display:flex;gap:6px;flex-wrap:wrap}.meta-links .tag{height:auto;min-height:24px;padding:3px 7px;white-space:normal}
+.meta-definition{line-height:1.65}.meta-link-select{height:auto!important;padding:4px;background-image:none!important}
+.meta-link-select option{padding:6px;border-radius:3px}.meta-link-select option:checked{background:var(--sel-o)}
+@media(max-width:1180px){.meta-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.meta-two{grid-template-columns:1fr}.meta-side-detail{position:static}}
+@media(max-width:900px){.meta-work{grid-template-columns:230px minmax(0,1fr)}.meta-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 /* 클릭 영역 · 컴포넌트 크기 통일 */
 .lp-add{width:24px;height:24px}
 .pn-x{width:22px;height:22px;top:-9px;right:-9px}
