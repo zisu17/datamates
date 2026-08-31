@@ -146,6 +146,13 @@ def unmark_mart(model_id: str) -> dict[str, Any]:
     if model_id not in store.marts():
         return mart_status(model_id)
 
+    if store.semantic_model_get(model_id):
+        raise ApiError(
+            "SEMANTIC_MODEL_IN_USE",
+            "Semantic Model이 정의되어 있어 DATA MART 지정을 해제할 수 없습니다. "
+            "메타 관리에서 시멘틱 정의를 먼저 삭제해 주세요.",
+            {"modelId": model_id}, status=409)
+
     usage = mart_usage(model_id, True)
     if not usage["canUnmark"]:
         raise ApiError(
