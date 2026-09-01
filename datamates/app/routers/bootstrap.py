@@ -49,6 +49,7 @@ def bootstrap() -> dict[str, Any]:
     entries = manifest.all_entries()
     placed = store.model_folders()
     marts = store.marts()
+    semantic_models = store.semantic_model_ids()
     snap = state.snapshot()
     rs = state.rules()
 
@@ -62,6 +63,7 @@ def bootstrap() -> dict[str, Any]:
             # 카탈로그에서는 DATA MART 영역에 놓인다 — 상태가 곧 위치다.
             "group": "DATA MART" if is_mart else e["group"],
             "baseGroup": e["group"], "isMart": is_mart,
+            "semanticDefined": e["id"] in semantic_models,
             "kind": e["kind"], "dbtType": e["dbt_type"],
             "layer": _layer(e, is_mart), "desc": e["desc"], "mat": e["mat"],
             "tags": e["tags"], "path": e["path"], "folderId": placed.get(e["id"]),

@@ -207,6 +207,12 @@ def delete_model(model_id: str) -> dict[str, Any]:
         raise ApiError("MODEL_IN_USE",
                        f"{model_id} 은(는) 파이프라인 {', '.join(used)} 이(가) 사용 중입니다. "
                        "먼저 실행 대상에서 빼 주세요.", {"pipelines": used})
+    if store.semantic_model_get(model_id):
+        raise ApiError(
+            "SEMANTIC_MODEL_IN_USE",
+            f"{model_id} 에 Semantic Model이 정의되어 있습니다. "
+            "메타 관리에서 시멘틱 정의를 먼저 삭제해 주세요.",
+            {"modelId": model_id}, status=409)
     # 마트는 분석이 물고 있을 수 있다. 삭제 경로에서도 같은 규칙을 적용한다 —
     # 해제는 막고 삭제는 되면 규칙이 없는 것과 같다.
     if model_id in store.marts():

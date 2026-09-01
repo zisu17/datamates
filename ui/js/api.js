@@ -53,6 +53,7 @@
       /* DATA MART 지정 — 별도 객체가 아니라 이 모델에 붙은 상태다.
          카탈로그 구분(grpOf)·분석 노출·입력 사용 가능 여부가 전부 여기서 갈린다. */
       isMart: !!it.isMart,
+      semanticDefined: !!it.semanticDefined,
       team: '', freq: '', rows: '—',
       updated: it.run ? '최근 실행됨' : '—',
       quality: it.quality, certified: false, usable: true, fav: false,
@@ -2289,6 +2290,7 @@
     delete MART.by[id];
     BUILD.opts = null;                 // 분석의 데이터 선택 목록
     ANA.data = null;                   // 분석 자산 목록
+    if (typeof metaInvalidate === 'function') metaInvalidate();
     await boot({ keep: true });
     loadMart(id, render);
     render();
@@ -2469,6 +2471,8 @@
         <span class="swatch" style="background:${grpColor(d)};width:9px;height:9px"></span>
         <h2 class="dk-name">${esc(d.name)}</h2>
         ${grpTag(d, 'flex:none')}
+        ${d.isMart && d.semanticDefined ? `<button class="tag" id="dkSemantic"
+          title="메타 관리에서 시멘틱 정의를 엽니다.">${ic14('book')}시멘틱 정의됨</button>` : ''}
         <button class="dk-phys" id="dkCopy" title="저장 위치를 복사합니다.">
           <span class="mono">${esc(d.phys)}</span>${ic14('doc', 'fnt')}</button>
         <span class="dk-title-act" id="dkAct"></span>
@@ -2478,6 +2482,9 @@
     /* 설명 — 모델은 여기서 바로 고친다(저장 안 된 변경은 점으로 표시).
        원천은 우리가 쓰는 값이 아니라 읽어 온 값이라 읽기 전용이다. */
     const db = $('#dkDescBox', box);
+    if ($('#dkSemantic', box)) $('#dkSemantic', box).onclick = () => {
+      S.metadataModel = d.id; go('metadata');
+    };
     if (isModel) {
       /* 디자인의 설명은 입력 상자가 아니라 그냥 문단이다. 그런데 이 앱에서는
          고칠 수 있어야 하므로, **평소에는 문단으로 보이고 누르면 고쳐지는** 칸으로
