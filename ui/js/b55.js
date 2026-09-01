@@ -19,7 +19,7 @@
    replace 로 주소만 갈아 끼운다(공유·새로고침에는 그대로 반영된다). */
 
 (function () {
-  const PAGES = ['home', 'ingest', 'modeling', 'pipeline', 'quality', 'analytics'];
+  const PAGES = ['home', 'ingest', 'modeling', 'pipeline', 'quality', 'metadata', 'analytics'];
 
   let cur = null;        // 지금 주소에 반영해 둔 경로
   let applying = false;  // 주소 → 상태 복원 중 (그동안은 주소를 쓰지 않는다)
